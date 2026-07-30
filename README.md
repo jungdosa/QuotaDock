@@ -84,7 +84,7 @@ Binaries are unsigned, so SmartScreen may warn you. Verify integrity with `SHA25
 There is nothing to configure — QuotaDock discovers your already-signed-in official CLIs and
 IDE on its own.
 
-> Current version is `0.7.14`. It becomes `1.0.0` once Windows feature verification is done.
+> Current version is `0.7.15`. It becomes `1.0.0` once Windows feature verification is done.
 
 ## Design principles
 

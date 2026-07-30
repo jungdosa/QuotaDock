@@ -64,7 +64,7 @@ func TestPhase4GVersionMetadataMatchesRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if version != "0.7.14" || !strings.Contains(string(raw), `Version = "0.7.14"`) {
+	if version != "0.7.15" || !strings.Contains(string(raw), `Version = "0.7.15"`) {
 		t.Fatalf("runtime version=%q metadata=%q", version, raw)
 	}
 }
