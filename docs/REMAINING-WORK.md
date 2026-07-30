@@ -6,11 +6,19 @@
   활성화하면: 일반 모드 레인 헤더의 `크레딧 <잔액>` 메타 텍스트, 설정 CONNECTIONS의 크레딧 항목,
   설정의 제공자별 `크레딧` 토글(`ShowClaudeCredits`/`ShowCodexCredits`)이 켜진다.
 - Codex 데이터는 이미 수신 중(app-server `credits { balance, unlimited }` → `LaneState.Credits`).
-  단, 잔액과 무제한 여부만 제공되어 Claude 웹식 사용액/한도/% 게이지는 불가.
+  전작 조사 결과 app-server는 `rateLimitResetCredits.availableCount`(리셋권 개수)와
+  `hasCredits`도 준다 — QuotaDock은 아직 파싱하지 않는다. 근거는
+  `docs/reference/ai-usage-connection-notes.md` 3절.
 - 활성화 시점: **Claude 브라우저 로그인 방식**을 개발해 Claude 쪽 크레딧(사용액/한도)까지
   확보한 뒤 두 제공자를 함께 공개한다. 그전까지는 계획만 유지.
-  - 후보 확인 사항: OAuth usage API(`/api/oauth/usage`) 응답 원문에 extra-usage 필드가
-    포함되는지 라이브 덤프로 검증 (현재 파서는 5시간/주간/Fable 창만 소비).
+  - **경로가 확인됐다.** 크레딧은 OAuth usage API가 아니라 웹 세션 전용 엔드포인트
+    두 개에서 나온다: `claude.ai/api/organizations/{id}/overage_spend_limit`(사용액·한도)와
+    `.../prepaid/credits`(잔액). 필드명까지 위 조사 문서 2절에 있다.
+  - **최우선 설계 분기**: 순수 HTTP 클라이언트에 쿠키만 실어 보내는 방식은 **Cloudflare가
+    막는다.** 전작이 실제로 확인하고 폐기한 경로이며, 숨은 브라우저 창 + Chrome UA 위장으로
+    우회했다. Fyne에는 내장 웹뷰가 없으므로 착수 전에 대안을 먼저 정해야 한다
+    (웹뷰 도입 / 외부 브라우저 연동 / 다른 경로). 이 결정 없이 구현에 들어가지 말 것.
+  - 전작 조사는 정적 열람 기반이라 런타임 성공 여부는 미확인이다. 실측이 선행돼야 한다.
 
 ## 업데이트 버튼 활성화
 
