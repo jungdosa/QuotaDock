@@ -27,9 +27,13 @@ func trackedUpper(text string) string {
 
 type Toggle struct {
 	widget.BaseWidget
-	Checked   bool
-	OnChanged func(bool)
-	Colors    BrandColors
+	Checked      bool
+	OnChanged    func(bool)
+	Tooltip      string
+	Hovered      bool
+	Colors       BrandColors
+	OnHoverStart func(*Toggle)
+	OnHoverEnd   func(*Toggle)
 }
 
 func NewToggle(checked bool, onChanged func(bool), colors ...BrandColors) *Toggle {
@@ -37,7 +41,17 @@ func NewToggle(checked bool, onChanged func(bool), colors ...BrandColors) *Toggl
 	t.ExtendBaseWidget(t)
 	return t
 }
-func (t *Toggle) Tapped(*fyne.PointEvent) { t.SetChecked(!t.Checked) }
+func NewTooltipToggle(checked bool, tooltip string, onChanged func(bool), colors ...BrandColors) *Toggle {
+	t := NewToggle(checked, onChanged, colors...)
+	t.Tooltip = tooltip
+	return t
+}
+func (t *Toggle) Tapped(*fyne.PointEvent) {
+	if t.OnHoverEnd != nil {
+		t.OnHoverEnd(t)
+	}
+	t.SetChecked(!t.Checked)
+}
 func (t *Toggle) TypedKey(e *fyne.KeyEvent) {
 	if e.Name == fyne.KeySpace || e.Name == fyne.KeyEnter {
 		t.SetChecked(!t.Checked)
@@ -46,6 +60,21 @@ func (t *Toggle) TypedKey(e *fyne.KeyEvent) {
 func (t *Toggle) TypedRune(rune) {}
 func (t *Toggle) FocusGained()   { t.Refresh() }
 func (t *Toggle) FocusLost()     { t.Refresh() }
+func (t *Toggle) tooltipActive() bool  { return t.Hovered }
+func (t *Toggle) tooltipValue() string { return t.Tooltip }
+func (t *Toggle) MouseIn(*desktop.MouseEvent) {
+	t.Hovered = true
+	if t.OnHoverStart != nil {
+		t.OnHoverStart(t)
+	}
+}
+func (t *Toggle) MouseMoved(*desktop.MouseEvent) {}
+func (t *Toggle) MouseOut() {
+	t.Hovered = false
+	if t.OnHoverEnd != nil {
+		t.OnHoverEnd(t)
+	}
+}
 func (t *Toggle) SetChecked(value bool) {
 	if t.Checked == value {
 		return
@@ -56,6 +85,8 @@ func (t *Toggle) SetChecked(value bool) {
 		t.OnChanged(value)
 	}
 }
+var _ desktop.Hoverable = (*Toggle)(nil)
+
 func (t *Toggle) CreateRenderer() fyne.WidgetRenderer {
 	track := canvas.NewRectangle(t.Colors.Disconnected)
 	track.CornerRadius = 10

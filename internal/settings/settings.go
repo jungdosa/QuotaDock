@@ -93,6 +93,7 @@ type Config struct {
 	AutoStart        bool              `json:"autoStart"`
 	AlwaysOnTop      bool              `json:"alwaysOnTop"`
 	ShowInTaskbar    bool              `json:"showInTaskbar"`
+	PromoteTrayIcon  bool              `json:"promoteTrayIcon"`
 	DisplayMode      DisplayMode       `json:"displayMode"`
 	WindowX          int               `json:"windowX,omitempty"`
 	WindowY          int               `json:"windowY,omitempty"`
@@ -104,7 +105,7 @@ type Config struct {
 // violet, AG Claude slate. (An earlier W9 draft banned warm provider hues;
 // that reservation was withdrawn when defaults were matched to the logos.)
 func Default() Config {
-	return Config{SchemaVersion: CurrentSchemaVersion, Language: LanguageSystem, DateTimeFormat: Format12HourDate, Theme: ThemeLight, UsageMode: UsageUsed, RefreshSeconds: 300, WarningsEnabled: true, WarningPercent: 80, DangerPercent: 90, WarningColor: "amber", DangerColor: "red", ProviderColors: map[string]string{"claude": "orange", "codex": "gray", "antigravity": "slate", "antigravity-gemini": "violet"}, ShowClaude: true, ShowCodex: true, ShowAGGemini: true, ShowAGClaude: true, ShowClaudeCredits: true, ShowCodexCredits: true, ShowInTaskbar: true, DisplayMode: ModeNormal}
+	return Config{SchemaVersion: CurrentSchemaVersion, Language: LanguageSystem, DateTimeFormat: Format12HourDate, Theme: ThemeLight, UsageMode: UsageUsed, RefreshSeconds: 300, WarningsEnabled: true, WarningPercent: 80, DangerPercent: 90, WarningColor: "amber", DangerColor: "red", ProviderColors: map[string]string{"claude": "orange", "codex": "gray", "antigravity": "slate", "antigravity-gemini": "violet"}, ShowClaude: true, ShowCodex: true, ShowAGGemini: true, ShowAGClaude: true, ShowClaudeCredits: true, ShowCodexCredits: true, ShowInTaskbar: true, PromoteTrayIcon: false, DisplayMode: ModeNormal}
 }
 
 func (c Config) Validated() Config {

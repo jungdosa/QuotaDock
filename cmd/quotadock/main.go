@@ -63,6 +63,7 @@ func run(args []string) error {
 		return fmt.Errorf("locate current executable: %w", err)
 	}
 	auto := platform.NewAutoStartManager("QuotaDock", executable, portable)
+	trayPromotionSupported := platform.SupportsTrayIconPromotion()
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		return fmt.Errorf("locate user config: %w", err)
@@ -201,6 +202,11 @@ func run(args []string) error {
 		a.Settings().SetTheme(ui.NewBrandTheme(cfg.Theme))
 		_ = native.SetAlwaysOnTop(cfg.AlwaysOnTop)
 		_ = native.SetTaskbarVisible(cfg.ShowInTaskbar)
+		if !demo && trayPromotionSupported && tray != nil {
+			if promotionErr := platform.UpdateTrayIconPromotion(executable, previous.PromoteTrayIcon, cfg.PromoteTrayIcon); promotionErr != nil {
+				slog.Warn("tray icon promotion was not updated", "error", promotionErr)
+			}
+		}
 		refreshWindowCorners()
 		if !demo && cfg.AutoStart != previous.AutoStart {
 			if cfg.AutoStart {
@@ -247,7 +253,7 @@ func run(args []string) error {
 			refresh()
 		}()
 	}
-	actions := ui.Actions{AppVersion: version, BeginWindowDrag: func() (int, int, error) {
+	actions := ui.Actions{AppVersion: version, TrayPromotionSupported: trayPromotionSupported, BeginWindowDrag: func() (int, int, error) {
 		cursorX, cursorY, cursorErr := native.CursorPos()
 		if cursorErr != nil {
 			return 0, 0, cursorErr
@@ -327,6 +333,11 @@ func run(args []string) error {
 	)
 	if err != nil {
 		return err
+	}
+	if !demo && trayPromotionSupported && cfg.PromoteTrayIcon {
+		if promotionErr := platform.SetTrayIconPromoted(executable, true); promotionErr != nil {
+			slog.Warn("tray icon promotion was not applied after tray registration", "error", promotionErr)
+		}
 	}
 	// Fyne installs its tray toggle intercept in SetSystemTrayWindow. Restore
 	// QuotaDock's lifecycle intercept so close still saves position and trims.

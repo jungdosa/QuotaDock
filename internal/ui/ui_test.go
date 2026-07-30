@@ -1870,6 +1870,9 @@ func iconInkMatches(img image.Image, want color.NRGBA) bool {
 func TestScreenCaptureArtifacts(t *testing.T) {
 	v, w := newTestView(t)
 	defer w.Close()
+	// Captures stand in for the shipping target, Windows 11, so OS-gated
+	// settings render in their supported form rather than silently missing.
+	v.Actions.TrayPromotionSupported = true
 	outDir := os.Getenv("QUOTADOCK_SCREENSHOT_DIR")
 	saveCapture := func(name string, img image.Image) {
 		t.Helper()

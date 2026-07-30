@@ -203,3 +203,16 @@ func TestDisplayModeCyclesAndMigratesLegacyCompactSetting(t *testing.T) {
 		t.Fatalf("saved display mode keys=%s", data)
 	}
 }
+
+func TestTrayPromotionDefaultsFalseAndMissingKeyStaysFalse(t *testing.T) {
+	if Default().PromoteTrayIcon {
+		t.Fatal("tray icon promotion must be disabled by default")
+	}
+	config, err := Decode(strings.NewReader("{\"schemaVersion\":4,\"alwaysOnTop\":true}"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.PromoteTrayIcon {
+		t.Fatal("settings without promoteTrayIcon enabled tray icon promotion")
+	}
+}

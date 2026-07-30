@@ -173,8 +173,9 @@ type Actions struct {
 	CheckUpdate     func()
 	OpenURL         func(string) error
 	Activity        func()
-	AppVersion      string
-	DemoMode        bool
+	AppVersion               string
+	DemoMode                 bool
+	TrayPromotionSupported   bool
 }
 type View struct {
 	Canvas                  fyne.Canvas
@@ -483,6 +484,15 @@ func (v *View) bindTitleButton(button *SmallButton) *SmallButton {
 	button.OnHoverStart = v.scheduleTooltip
 	button.OnHoverEnd = v.dismissTooltipFor
 	return button
+}
+
+func (v *View) bindToggle(toggle *Toggle) *Toggle {
+	if toggle == nil {
+		return nil
+	}
+	toggle.OnHoverStart = func(anchor *Toggle) { v.scheduleAnchorTooltip(anchor) }
+	toggle.OnHoverEnd = func(anchor *Toggle) { v.dismissAnchorTooltip(anchor) }
+	return toggle
 }
 
 func (v *View) bindConnectionMethodButton(button *ConnectionMethodButton) *ConnectionMethodButton {
@@ -1454,7 +1464,7 @@ const (
 var settingLabelKeys = []string{
 	i18n.KeyShowClaude, i18n.KeyShowCodex, i18n.KeyShowAGGemini, i18n.KeyShowAGClaude,
 	i18n.KeyUsageMode, i18n.KeyWarnings,
-	i18n.KeyAutoStart, i18n.KeyAlwaysOnTop, i18n.KeyRefreshInterval,
+	i18n.KeyAutoStart, i18n.KeyAlwaysOnTop, i18n.KeyPromoteTray, i18n.KeyRefreshInterval,
 	i18n.KeyLanguage, i18n.KeyDateTime,
 }
 
@@ -1469,6 +1479,10 @@ func (v *View) settingLabelWidth() float32 {
 
 func (v *View) halfToggleRow(key string, value bool, labelWidth float32, set func(*settings.Config, bool)) fyne.CanvasObject {
 	return v.settingRowSized(v.text(key), NewToggle(value, func(on bool) { cfg := v.config; set(&cfg, on); v.SetConfig(cfg) }, v.colors), labelWidth, 8, 38)
+}
+func (v *View) halfTooltipToggleRow(key, tooltipKey string, value bool, labelWidth float32, set func(*settings.Config, bool)) fyne.CanvasObject {
+	toggle := NewTooltipToggle(value, v.text(tooltipKey), func(on bool) { cfg := v.config; set(&cfg, on); v.SetConfig(cfg) }, v.colors)
+	return v.settingRowSized(v.text(key), v.bindToggle(toggle), labelWidth, 8, 38)
 }
 
 // showWithCreditsRow is a provider-visibility row with a second, smaller
@@ -1652,6 +1666,12 @@ func (v *View) behaviorSettings() fyne.CanvasObject {
 		selectedRefresh = "5m"
 	}
 	refresh.SetSelected(selectedRefresh)
+	var promoteTrayIcon fyne.CanvasObject = layout.NewSpacer()
+	if v.Actions.TrayPromotionSupported {
+		promoteTrayIcon = v.halfTooltipToggleRow(i18n.KeyPromoteTray, i18n.KeyTooltipPromoteTray, v.config.PromoteTrayIcon, v.settingLabelWidth(), func(c *settings.Config, b bool) {
+			c.PromoteTrayIcon = b
+		})
+	}
 	return container.NewVBox(
 		settingsPair(
 			v.halfToggleRow(i18n.KeyAutoStart, v.config.AutoStart, v.settingLabelWidth(), func(c *settings.Config, b bool) { c.AutoStart = b }),
@@ -1662,7 +1682,7 @@ func (v *View) behaviorSettings() fyne.CanvasObject {
 			// the tray, so the entry only added noise. The stored setting and
 			// platform behaviour remain (default: visible in taskbar).
 			v.halfToggleRow(i18n.KeyAlwaysOnTop, v.config.AlwaysOnTop, v.settingLabelWidth(), func(c *settings.Config, b bool) { c.AlwaysOnTop = b }),
-			layout.NewSpacer(),
+			promoteTrayIcon,
 		),
 	)
 }
