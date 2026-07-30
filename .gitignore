@@ -13,12 +13,17 @@
 
 # 배포 산출물
 /dist/
-/build/
 *.msi
 *.dmg
 *.AppImage
 *.app/
 SHA256SUMS.txt
+
+# build/ — 릴리스 스크립트는 추적하고 산출물·중간물만 제외한다.
+# (Inno Setup 산출물은 OutputDir=..\..\dist 로 나가므로 build/ 안에 남지 않는다)
+/build/**/Output/
+/build/**/*.exe
+/build/**/*.log
 
 # Go 테스트 · 커버리지
 *.test
