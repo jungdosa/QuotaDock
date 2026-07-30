@@ -47,6 +47,8 @@ func TestUpdateURLAllowlist(t *testing.T) {
 		"https://objects.githubusercontent.com/github-production-release-asset/file",
 		"https://release-assets.githubusercontent.com/github-production-release-asset/file",
 		"https://api.github.com:443/repos/jungdosa/QuotaDock/releases/latest",
+		// A release asset's browser_download_url is served from github.com itself.
+		"https://github.com/jungdosa/QuotaDock/releases/download/v0.7.10/QuotaDock-0.7.10-win-x64-Setup.exe",
 	} {
 		if !IsAllowedUpdateURL(value) {
 			t.Errorf("expected update URL to be allowed: %s", value)
@@ -58,7 +60,8 @@ func TestUpdateURLAllowlist(t *testing.T) {
 		"http://api.github.com/repos/jungdosa/QuotaDock/releases/latest",
 		"https://api.github.com:444/repos/jungdosa/QuotaDock/releases/latest",
 		"https://user@api.github.com/repos/jungdosa/QuotaDock/releases/latest",
-		"https://github.com/jungdosa/QuotaDock/releases/latest",
+		"https://github.com.evil.com/jungdosa/QuotaDock/releases/download/v1/x.exe",
+		"https://gist.github.com/jungdosa/QuotaDock/releases/download/v1/x.exe",
 	} {
 		if IsAllowedUpdateURL(value) {
 			t.Errorf("expected update URL to be rejected: %s", value)

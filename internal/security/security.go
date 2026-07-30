@@ -42,8 +42,12 @@ var providerRequestHosts = map[string]struct{}{
 	"api.anthropic.com":   {},
 	"platform.claude.com": {},
 }
+// Exact-host matching, unlike officialDomains. github.com is required because a
+// release asset's browser_download_url is served from github.com itself; the
+// githubusercontent hosts are the CDN targets it redirects to.
 var updateRequestHosts = map[string]struct{}{
 	"api.github.com":                       {},
+	"github.com":                           {},
 	"objects.githubusercontent.com":        {},
 	"release-assets.githubusercontent.com": {},
 }
