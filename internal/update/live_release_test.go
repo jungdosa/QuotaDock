@@ -2,6 +2,7 @@ package update
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -30,8 +31,8 @@ func loadLiveRelease(t *testing.T) Release {
 
 func TestLiveReleasePayloadParses(t *testing.T) {
 	release := loadLiveRelease(t)
-	if release.TagName != "v0.7.10" {
-		t.Fatalf("tag=%q, want v0.7.10", release.TagName)
+	if _, ok := parseVersion(release.TagName); !ok {
+		t.Fatalf("live tag %q did not parse as a version", release.TagName)
 	}
 	if release.Draft || release.Prerelease {
 		t.Fatalf("published release reported draft=%v prerelease=%v", release.Draft, release.Prerelease)
@@ -47,12 +48,13 @@ func TestLiveReleasePayloadParses(t *testing.T) {
 func TestLiveReleaseSelectsVerifiableInstaller(t *testing.T) {
 	release := loadLiveRelease(t)
 
+	version := DisplayVersion(release.TagName)
 	asset, ok := SelectInstallAsset(release)
 	if !ok {
 		t.Fatal("no installer asset was selected from the live release")
 	}
-	if asset.Name != "QuotaDock-0.7.10-win-x64-Setup.exe" {
-		t.Fatalf("selected asset=%q", asset.Name)
+	if want := "QuotaDock-" + version + "-win-x64-Setup.exe"; asset.Name != want {
+		t.Fatalf("selected asset=%q, want %q", asset.Name, want)
 	}
 	if asset.Size <= 0 {
 		t.Fatalf("selected asset size=%d", asset.Size)
@@ -75,22 +77,38 @@ func TestLiveReleaseSelectsVerifiableInstaller(t *testing.T) {
 }
 
 func TestLiveReleaseDrivesCheckerDecisions(t *testing.T) {
-	fetcher := fakeReleaseFetcher{release: loadLiveRelease(t)}
+	release := loadLiveRelease(t)
+	fetcher := fakeReleaseFetcher{release: release}
+	live, ok := parseVersion(release.TagName)
+	if !ok {
+		t.Fatalf("live tag %q did not parse", release.TagName)
+	}
+	format := func(v [3]int) string {
+		return fmt.Sprintf("%d.%d.%d", v[0], v[1], v[2])
+	}
+
+	// The live patch number is >= 10, so a current version one patch behind is
+	// the case a lexicographic comparison gets wrong (0.7.9 vs 0.7.10).
+	if live[2] < 10 {
+		t.Skipf("live version %s no longer exercises the two-digit patch case", format(live))
+	}
+	behind := live
+	behind[2]--
+	ahead := live
+	ahead[1]++
 
 	tests := []struct {
 		current string
 		want    CheckStatus
 	}{
-		{"0.7.9", CheckAvailable},  // string compare would wrongly call 0.7.9 newer
-		{"0.7.8", CheckAvailable},
-		{"0.7.10", CheckUpToDate},
-		{"0.8.0", CheckUpToDate},
-		{"0.7.11", CheckUpToDate},
+		{format(behind), CheckAvailable},
+		{format(live), CheckUpToDate},
+		{format(ahead), CheckUpToDate},
 	}
 	for _, test := range tests {
 		result := Checker{Fetcher: fetcher, CurrentVersion: test.current}.Check(t.Context())
 		if result.Status != test.want {
-			t.Fatalf("current=%s status=%v, want %v", test.current, result.Status, test.want)
+			t.Fatalf("current=%s live=%s status=%v, want %v", test.current, format(live), result.Status, test.want)
 		}
 	}
 }
