@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"image/color"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -103,23 +104,56 @@ type nanoUsageState struct {
 }
 
 type connectionView struct {
-	id             model.ProviderID
-	status         *canvas.Text
-	dot            *canvas.Circle
-	detail         *canvas.Text
-	install        *fyne.Container
-	installRow     fyne.CanvasObject
-	installButton  *SmallButton
-	installVisible bool
-	testButton     *SmallButton
-	reconnect      *SmallButton
-	helpButton     *SmallButton
-	actionRow      *fyne.Container
+	id         model.ProviderID
+	status     *canvas.Text
+	dot        *canvas.Circle
+	detail     *canvas.Text
+	methods    []connectionMethodView
+	methodRow  *fyne.Container
+	panel      *fyne.Container
+	panelView  connectionPanelView
+	panelOpen  bool
+	testButton *SmallButton
+	reconnect  *SmallButton
+	helpButton *SmallButton
+	actionRow  *fyne.Container
+}
+
+type connectionMethod string
+
+const (
+	connectionMethodCLI   connectionMethod = "cli"
+	connectionMethodAuth  connectionMethod = "auth"
+	connectionMethodIDE   connectionMethod = "ide"
+	connectionMethodOther connectionMethod = "other"
+)
+
+type connectionMethodView struct {
+	method connectionMethod
+	button *ConnectionMethodButton
+}
+
+type connectionPanelSelection struct {
+	provider model.ProviderID
+	method   connectionMethod
+}
+
+type connectionPanelView struct {
+	object       fyne.CanvasObject
+	rescanButton *SmallButton
+	docsButton   *SmallButton
+	closeButton  *SmallButton
 }
 
 const (
-	claudeInstallURL = "https://code.claude.com/docs/en/quickstart"
-	codexInstallURL  = "https://developers.openai.com/codex/cli/"
+	claudeInstallURL       = "https://code.claude.com/docs/en/quickstart"
+	codexInstallURL        = "https://developers.openai.com/codex/cli/"
+	claudeOAuthTokenEnv    = "CLAUDE_CODE_OAUTH_TOKEN"
+	claudeInstallCommand   = "npm install -g @anthropic-ai/claude-code"
+	codexInstallCommand    = "npm install -g @openai/codex"
+	claudeSearchPaths      = `PATH · %USERPROFILE%\.local\bin · %LOCALAPPDATA%\Programs\Claude`
+	codexSearchPaths       = `PATH · %LOCALAPPDATA%\Programs\OpenAI\Codex\bin`
+	connectionMethodDotGap = float32(10)
 )
 
 func (v *View) renderCurrentScreen() {
@@ -912,18 +946,12 @@ func (v *View) syncConnections() {
 		setCanvasText(handles.status, v.connectionStatusText(lane), statusColor)
 		setCircleFill(handles.dot, dotColor)
 		setCanvasText(handles.detail, v.connectionDetailText(lane), v.colors.Secondary)
-		showInstall := v.connectionNeedsInstall(lane)
-		if showInstall == handles.installVisible {
-			continue
+		for _, method := range handles.methods {
+			state := v.connectionMethodState(lane, method.method)
+			method.button.SetPresentation(state, v.connectionMethodTooltip(method.button.Label, state))
 		}
-		handles.installVisible = showInstall
-		if showInstall {
-			handles.install.Objects = []fyne.CanvasObject{handles.installRow}
-		} else {
-			handles.install.Objects = nil
-		}
-		handles.install.Refresh()
 	}
+	v.syncConnectionPanels()
 }
 
 func (v *View) buildConnectionRows() {
@@ -947,11 +975,6 @@ func (v *View) buildConnectionRows() {
 				v.Actions.Reconnect(id)
 			}
 		}, v.colors)
-		installButton := NewOutlinedSmallButton(v.text(i18n.KeyInstall), v.text(i18n.KeyInstall), func() {
-			if v.Actions.OpenURL != nil {
-				_ = v.Actions.OpenURL(connectionInstallURL(id))
-			}
-		}, v.colors)
 
 		actionWidths := []float32{buttonWidthFor(testButton, 92), buttonWidthFor(reconnect, 74), 24}
 		actions := []fyne.CanvasObject{connectionButton(testButton, 92), connectionButton(reconnect, 74), connectionButton(helpButton, 24)}
@@ -971,14 +994,30 @@ func (v *View) buildConnectionRows() {
 			container.NewCenter(container.NewGridWrap(fyne.NewSize(7, 7), dot)),
 			status,
 		)
-		header := container.NewBorder(nil, nil, identity, actionRow)
-		detail := textLabel(v.connectionDetailText(lane), 9.5, v.colors.Secondary, false, false)
-		install := container.NewStack()
-		installRow := v.connectionInstallRow(id, installButton)
-		installVisible := v.connectionNeedsInstall(lane)
-		if installVisible {
-			install.Objects = []fyne.CanvasObject{installRow}
+		methodDescriptors := connectionMethodsFor(id)
+		methodViews := make([]connectionMethodView, 0, len(methodDescriptors))
+		methodObjects := make([]fyne.CanvasObject, 0, len(methodDescriptors))
+		methodWidths := make([]float32, 0, len(methodDescriptors))
+		methodGaps := make([]float32, max(0, len(methodDescriptors)-1))
+		for index := range methodGaps {
+			methodGaps[index] = 4
 		}
+		for _, descriptorMethod := range methodDescriptors {
+			method := descriptorMethod
+			label := v.text(connectionMethodLabelKey(method))
+			methodState := v.connectionMethodState(lane, method)
+			button := v.bindConnectionMethodButton(NewConnectionMethodButton(label, v.connectionMethodTooltip(label, methodState), methodState, func() {
+				v.toggleConnectionPanel(id, method)
+			}, v.colors))
+			width := connectionMethodButtonWidth(label)
+			methodViews = append(methodViews, connectionMethodView{method: method, button: button})
+			methodObjects = append(methodObjects, container.NewGridWrap(fyne.NewSize(width, SmallButtonHeight), button))
+			methodWidths = append(methodWidths, width)
+		}
+		methodRow := container.New(NewGapColumnLayout(methodWidths, methodGaps, SmallButtonHeight), methodObjects...)
+		header := container.NewBorder(nil, nil, container.NewHBox(identity, methodRow), actionRow)
+		detail := textLabel(v.connectionDetailText(lane), 9.5, v.colors.Secondary, false, false)
+		panel := container.NewStack()
 
 		accent := canvas.NewRectangle(v.colors.PaletteColor(v.config.ProviderColors[connectionColorKey(id)]))
 		accent.CornerRadius = 2
@@ -987,13 +1026,124 @@ func (v *View) buildConnectionRows() {
 		background.CornerRadius = 6
 		background.StrokeColor = v.colors.CardBorder
 		background.StrokeWidth = 1
-		content := container.NewVBox(header, detail, install)
+		content := container.NewVBox(header, detail, panel)
 		card := container.NewStack(background, container.NewBorder(nil, nil, accent, nil, container.New(layout.NewCustomPaddedLayout(4, 4, 7, 7), content)))
 		objects = append(objects, card)
-		v.connectionCache = append(v.connectionCache, &connectionView{id: id, status: status, dot: dot, detail: detail, install: install, installRow: installRow, installButton: installButton, installVisible: installVisible, testButton: testButton, reconnect: reconnect, helpButton: helpButton, actionRow: actionRow})
+		v.connectionCache = append(v.connectionCache, &connectionView{id: id, status: status, dot: dot, detail: detail, methods: methodViews, methodRow: methodRow, panel: panel, testButton: testButton, reconnect: reconnect, helpButton: helpButton, actionRow: actionRow})
 	}
 	v.connectionsBody.Objects = objects
 	v.connectionsBody.Refresh()
+	v.syncConnectionPanels()
+}
+
+func connectionMethodsFor(id model.ProviderID) []connectionMethod {
+	switch id {
+	case model.ProviderClaude:
+		return []connectionMethod{connectionMethodCLI, connectionMethodAuth, connectionMethodOther}
+	case model.ProviderCodex:
+		return []connectionMethod{connectionMethodCLI}
+	case model.ProviderAntigravity:
+		return []connectionMethod{connectionMethodIDE}
+	default:
+		return nil
+	}
+}
+
+func connectionMethodLabelKey(method connectionMethod) string {
+	switch method {
+	case connectionMethodAuth:
+		return i18n.KeyConnectionMethodAuth
+	case connectionMethodIDE:
+		return i18n.KeyConnectionMethodIDE
+	case connectionMethodOther:
+		return i18n.KeyConnectionMethodOther
+	default:
+		return i18n.KeyConnectionMethodCLI
+	}
+}
+
+func connectionMethodStateKey(state connectionMethodState) string {
+	switch state {
+	case connectionMethodActive:
+		return i18n.KeyConnectionStateActive
+	case connectionMethodAvailable:
+		return i18n.KeyConnectionStateAvailable
+	case connectionMethodPlanned:
+		return i18n.KeyConnectionStatePlanned
+	default:
+		return i18n.KeyConnectionStateMissing
+	}
+}
+
+func (v *View) connectionMethodTooltip(label string, state connectionMethodState) string {
+	return label + " · " + v.text(connectionMethodStateKey(state))
+}
+
+func (v *View) connectionMethodState(lane LaneState, method connectionMethod) connectionMethodState {
+	_, envConfigured := os.LookupEnv(claudeOAuthTokenEnv)
+	return connectionMethodStateFor(lane, method, envConfigured)
+}
+
+func connectionMethodStateFor(lane LaneState, method connectionMethod, envConfigured bool) connectionMethodState {
+	if lane.Provider == model.ProviderClaude && method == connectionMethodAuth {
+		return connectionMethodPlanned
+	}
+	if lane.Provider == model.ProviderClaude && method == connectionMethodOther {
+		if envConfigured {
+			return connectionMethodAvailable
+		}
+		return connectionMethodMissing
+	}
+	if (method == connectionMethodCLI || method == connectionMethodIDE) && !connectionNeedsInstall(lane) {
+		return connectionMethodActive
+	}
+	return connectionMethodMissing
+}
+
+func connectionMethodButtonWidth(label string) float32 {
+	measured := fyne.MeasureText(label, SettingsTextSize, fyne.TextStyle{Bold: true}).Width
+	return max(38, measured+connectionMethodDotGap+12)
+}
+
+func (v *View) toggleConnectionPanel(id model.ProviderID, method connectionMethod) {
+	v.noteActivity()
+	next := connectionPanelSelection{provider: id, method: method}
+	if v.openConnectionPanel == next {
+		v.openConnectionPanel = connectionPanelSelection{}
+	} else {
+		v.openConnectionPanel = next
+	}
+	v.syncConnectionPanels()
+	v.resizeCurrentWidget()
+}
+
+func (v *View) closeConnectionPanel() {
+	if v.openConnectionPanel == (connectionPanelSelection{}) {
+		return
+	}
+	v.openConnectionPanel = connectionPanelSelection{}
+	v.syncConnectionPanels()
+	v.resizeCurrentWidget()
+}
+
+func (v *View) syncConnectionPanels() {
+	for _, handles := range v.connectionCache {
+		selected := handles.id == v.openConnectionPanel.provider && v.openConnectionPanel.method != ""
+		if !selected {
+			handles.panelOpen = false
+			handles.panelView = connectionPanelView{}
+			handles.panel.Objects = nil
+			handles.panel.Refresh()
+			continue
+		}
+		handles.panelOpen = true
+		handles.panelView = v.connectionPanel(v.connectionLane(handles.id), v.openConnectionPanel.method)
+		handles.panel.Objects = []fyne.CanvasObject{handles.panelView.object}
+		handles.panel.Refresh()
+	}
+	if v.connectionsBody != nil {
+		v.connectionsBody.Refresh()
+	}
 }
 
 // connectionButton sizes a button to its own label so translations never get
@@ -1075,17 +1225,95 @@ func compactConnectionPath(path string) string {
 	return string(runes[:18]) + "…" + string(runes[len(runes)-(maximum-19):])
 }
 
-func (v *View) connectionNeedsInstall(lane LaneState) bool {
-	return (lane.Provider == model.ProviderClaude || lane.Provider == model.ProviderCodex) && lane.Error == model.ErrCLINotInstalled
+func connectionNeedsInstall(lane LaneState) bool {
+	switch lane.Provider {
+	case model.ProviderClaude, model.ProviderCodex, model.ProviderAntigravity:
+		return lane.Status != model.StatusConnected
+	default:
+		return false
+	}
 }
 
-func (v *View) connectionInstallRow(id model.ProviderID, button *SmallButton) fyne.CanvasObject {
-	key := i18n.KeyInstallCodex
-	if id == model.ProviderClaude {
-		key = i18n.KeyInstallClaude
+func (v *View) connectionPanel(lane LaneState, method connectionMethod) connectionPanelView {
+	closeButton := NewOutlinedSmallButton(v.text(i18n.KeyConnectionPanelClose), v.text(i18n.KeyConnectionPanelClose), v.closeConnectionPanel, v.colors)
+	result := connectionPanelView{closeButton: closeButton}
+	var content []fyne.CanvasObject
+	var actions []fyne.CanvasObject
+
+	switch {
+	case lane.Provider == model.ProviderClaude && method == connectionMethodAuth:
+		content = []fyne.CanvasObject{textLabel(v.text(i18n.KeyConnectionAuthPlanned), 9.5, v.colors.Secondary, false, false)}
+	case lane.Provider == model.ProviderClaude && method == connectionMethodOther:
+		_, configured := os.LookupEnv(claudeOAuthTokenEnv)
+		message := v.text(i18n.KeyConnectionEnvConfigured)
+		if !configured {
+			message = fmt.Sprintf(v.text(i18n.KeyConnectionEnvHint), claudeOAuthTokenEnv)
+		}
+		content = []fyne.CanvasObject{helpRichText(message, theme.ColorNameDisabled, false, 510, 28)}
+	case method == connectionMethodCLI && connectionNeedsInstall(lane):
+		return v.connectionInstallPanel(lane.Provider, closeButton)
+	case method == connectionMethodIDE && connectionNeedsInstall(lane):
+		_, descriptionKey, retryKey := connectionHelpKeys(lane.Provider)
+		content = []fyne.CanvasObject{
+			helpRichText(v.text(descriptionKey), theme.ColorNameDisabled, false, 510, 40),
+			helpRichText(v.text(retryKey), theme.ColorNameDisabled, false, 510, 34),
+		}
+	default:
+		content = []fyne.CanvasObject{textLabel(v.connectionDetailText(lane), 9.5, v.colors.Secondary, false, false)}
 	}
-	message := textLabel(v.text(key), 9.5, v.colors.Secondary, false, false)
-	return container.NewBorder(nil, nil, message, connectionButton(button, 74))
+	actions = append(actions, connectionButton(closeButton, 54))
+	result.object = v.connectionPanelCard(content, actions)
+	return result
+}
+
+func (v *View) connectionInstallPanel(id model.ProviderID, closeButton *SmallButton) connectionPanelView {
+	name, installCommand, signIn, verify, searchPaths := connectionInstallDetails(id)
+	title := textLabel(fmt.Sprintf(v.text(i18n.KeyConnectionPanelInstallTitle), name), SettingsTextSize, v.colors.Text, true, false)
+	steps := []fyne.CanvasObject{
+		textLabel("1. "+fmt.Sprintf(v.text(i18n.KeyConnectionInstallStep1), installCommand), 9.5, v.colors.Secondary, false, false),
+		textLabel("2. "+fmt.Sprintf(v.text(i18n.KeyConnectionInstallStep2), signIn), 9.5, v.colors.Secondary, false, false),
+		textLabel("3. "+fmt.Sprintf(v.text(i18n.KeyConnectionInstallStep3), verify), 9.5, v.colors.Secondary, false, false),
+		helpRichText(fmt.Sprintf(v.text(i18n.KeyConnectionSearchPaths), searchPaths)+" — "+v.text(i18n.KeyConnectionAutoDetect), theme.ColorNameDisabled, false, 510, 34),
+	}
+	rescanButton := NewOutlinedSmallButton(v.text(i18n.KeyRescan), v.text(i18n.KeyRescan), func() {
+		if v.Actions.Inspect != nil {
+			v.Actions.Inspect(id)
+		}
+	}, v.colors)
+	docsButton := NewOutlinedSmallButton(v.text(i18n.KeyOpenInstallDocs), v.text(i18n.KeyOpenInstallDocs), func() {
+		if v.Actions.OpenURL != nil {
+			_ = v.Actions.OpenURL(connectionInstallURL(id))
+		}
+	}, v.colors)
+	actions := []fyne.CanvasObject{
+		connectionButton(rescanButton, 74),
+		connectionButton(docsButton, 104),
+		connectionButton(closeButton, 54),
+	}
+	return connectionPanelView{
+		object:       v.connectionPanelCard(append([]fyne.CanvasObject{title}, steps...), actions),
+		rescanButton: rescanButton,
+		docsButton:   docsButton,
+		closeButton:  closeButton,
+	}
+}
+
+func (v *View) connectionPanelCard(content, actions []fyne.CanvasObject) fyne.CanvasObject {
+	background := canvas.NewRectangle(buttonAlpha(v.colors.TitleTop, 0x8A))
+	background.CornerRadius = 5
+	background.StrokeColor = v.colors.CardBorder
+	background.StrokeWidth = 1
+	bodyObjects := append([]fyne.CanvasObject(nil), content...)
+	bodyObjects = append(bodyObjects, container.NewHBox(actions...))
+	body := container.NewVBox(bodyObjects...)
+	return container.NewStack(background, container.New(layout.NewCustomPaddedLayout(6, 6, 8, 8), body))
+}
+
+func connectionInstallDetails(id model.ProviderID) (name, installCommand, signIn, verify, searchPaths string) {
+	if id == model.ProviderClaude {
+		return "Claude CLI", claudeInstallCommand, "claude → Claude", "claude --version", claudeSearchPaths
+	}
+	return "Codex CLI", codexInstallCommand, "codex → ChatGPT", "codex --version", codexSearchPaths
 }
 
 func connectionInstallURL(id model.ProviderID) string {

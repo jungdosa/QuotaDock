@@ -120,7 +120,30 @@ const (
 	KeyHelpCredentials           = "help.credentials"
 )
 
-var RequiredKeys = []string{KeyTrayShow, KeyTraySettings, KeyTrayNormal, KeyTrayCompact, KeyTrayNano, KeyTrayQuit, KeyUntilReset, KeyResetsAt, KeyErrorCLINotInstalled, KeyErrorNotLoggedIn, KeyErrorCLIOutdated, KeyErrorInitializationFailed, KeyErrorTimeout, KeyErrorInvalidResponse, KeyErrorUsageUnavailable, KeyErrorQuotaExhausted, KeyNotificationWarning, KeyDate12, KeyDate12Day, KeyDate24, KeyDate24Day, KeyAppTitle, KeySettingsTitle, KeyGroupUsage, KeyGroupBehavior, KeyGroupDisplay, KeyGroupConnections, KeyShowClaude, KeyShowCodex, KeyShowAGGemini, KeyShowAGClaude, KeyUsageMode, KeyUsageUsed, KeyUsageRemaining, KeyLastRefresh, KeyWarnings, KeyWarningThreshold, KeyDangerThreshold, KeyAutoStart, KeyRefreshInterval, KeyAlwaysOnTop, KeyShowInTaskbar, KeyTheme, KeyThemeLight, KeyThemeDark, KeyThemeSystem, KeyLanguage, KeyLanguageSystem, KeyLanguageKorean, KeyLanguageEnglish, KeyDateTime, KeyConnected, KeyDisconnected, KeyConnect, KeyReconnect, KeyTestConnection, KeyInstall, KeyCLIPath, KeyCLIVersion, KeySource, KeyLocalLSP, KeyInstallClaude, KeyInstallCodex, KeyClose, KeyMinimize, KeyRefresh, KeyDisplayMode, KeyDisplayNormal, KeyCompact, KeyNano, KeySettings, KeyHelp, KeyUpdate, KeyUpdatePending, KeyDone, KeyTooltipTheme, KeyTooltipThemeLight, KeyTooltipThemeDark, KeyTooltipThemeSystem, KeyTooltipDisplay, KeyTooltipRefresh, KeyTooltipBack, KeyTooltipUpdatePending, KeyClaudeColor, KeyCodexColor, KeyAGGeminiColor, KeyAGClaudeColor, KeyHelpTitle, KeyHelpIntro, KeyHelpClaudeTitle, KeyHelpClaude, KeyHelpClaudeRetry, KeyHelpCodexTitle, KeyHelpCodex, KeyHelpCodexRetry, KeyHelpAntigravityTitle, KeyHelpAntigravity, KeyHelpAntigravityRetry, KeyHelpCredentials}
+const (
+	KeyConnectionMethodCLI         = "connection.method_cli"
+	KeyConnectionMethodAuth        = "connection.method_auth"
+	KeyConnectionMethodIDE         = "connection.method_ide"
+	KeyConnectionMethodOther       = "connection.method_other"
+	KeyConnectionStateActive       = "connection.state_active"
+	KeyConnectionStateAvailable    = "connection.state_available"
+	KeyConnectionStateMissing      = "connection.state_missing"
+	KeyConnectionStatePlanned      = "connection.state_planned"
+	KeyConnectionPanelInstallTitle = "connection.panel_install_title"
+	KeyConnectionInstallStep1      = "connection.install_step_1"
+	KeyConnectionInstallStep2      = "connection.install_step_2"
+	KeyConnectionInstallStep3      = "connection.install_step_3"
+	KeyConnectionSearchPaths       = "connection.search_paths"
+	KeyConnectionAutoDetect        = "connection.auto_detect"
+	KeyConnectionAuthPlanned       = "connection.auth_planned"
+	KeyConnectionEnvConfigured     = "connection.env_configured"
+	KeyConnectionEnvHint           = "connection.env_hint"
+	KeyConnectionPanelClose        = "connection.panel_close"
+	KeyRescan                      = "action.rescan"
+	KeyOpenInstallDocs             = "action.open_install_docs"
+)
+
+var RequiredKeys = []string{KeyTrayShow, KeyTraySettings, KeyTrayNormal, KeyTrayCompact, KeyTrayNano, KeyTrayQuit, KeyUntilReset, KeyResetsAt, KeyErrorCLINotInstalled, KeyErrorNotLoggedIn, KeyErrorCLIOutdated, KeyErrorInitializationFailed, KeyErrorTimeout, KeyErrorInvalidResponse, KeyErrorUsageUnavailable, KeyErrorQuotaExhausted, KeyNotificationWarning, KeyDate12, KeyDate12Day, KeyDate24, KeyDate24Day, KeyAppTitle, KeySettingsTitle, KeyGroupUsage, KeyGroupBehavior, KeyGroupDisplay, KeyGroupConnections, KeyShowClaude, KeyShowCodex, KeyShowAGGemini, KeyShowAGClaude, KeyUsageMode, KeyUsageUsed, KeyUsageRemaining, KeyLastRefresh, KeyWarnings, KeyWarningThreshold, KeyDangerThreshold, KeyAutoStart, KeyRefreshInterval, KeyAlwaysOnTop, KeyShowInTaskbar, KeyTheme, KeyThemeLight, KeyThemeDark, KeyThemeSystem, KeyLanguage, KeyLanguageSystem, KeyLanguageKorean, KeyLanguageEnglish, KeyDateTime, KeyConnected, KeyDisconnected, KeyConnect, KeyReconnect, KeyTestConnection, KeyInstall, KeyCLIPath, KeyCLIVersion, KeySource, KeyLocalLSP, KeyInstallClaude, KeyInstallCodex, KeyConnectionMethodCLI, KeyConnectionMethodAuth, KeyConnectionMethodIDE, KeyConnectionMethodOther, KeyConnectionStateActive, KeyConnectionStateAvailable, KeyConnectionStateMissing, KeyConnectionStatePlanned, KeyConnectionPanelInstallTitle, KeyConnectionInstallStep1, KeyConnectionInstallStep2, KeyConnectionInstallStep3, KeyConnectionSearchPaths, KeyConnectionAutoDetect, KeyConnectionAuthPlanned, KeyConnectionEnvConfigured, KeyConnectionEnvHint, KeyConnectionPanelClose, KeyRescan, KeyOpenInstallDocs, KeyClose, KeyMinimize, KeyRefresh, KeyDisplayMode, KeyDisplayNormal, KeyCompact, KeyNano, KeySettings, KeyHelp, KeyUpdate, KeyUpdatePending, KeyDone, KeyTooltipTheme, KeyTooltipThemeLight, KeyTooltipThemeDark, KeyTooltipThemeSystem, KeyTooltipDisplay, KeyTooltipRefresh, KeyTooltipBack, KeyTooltipUpdatePending, KeyClaudeColor, KeyCodexColor, KeyAGGeminiColor, KeyAGClaudeColor, KeyHelpTitle, KeyHelpIntro, KeyHelpClaudeTitle, KeyHelpClaude, KeyHelpClaudeRetry, KeyHelpCodexTitle, KeyHelpCodex, KeyHelpCodexRetry, KeyHelpAntigravityTitle, KeyHelpAntigravity, KeyHelpAntigravityRetry, KeyHelpCredentials}
 
 //go:embed locales/*.json
 var resources embed.FS

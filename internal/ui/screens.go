@@ -209,6 +209,7 @@ type View struct {
 	compactCache            *compactBodyView
 	nanoCache               *nanoBodyView
 	connectionCache         []*connectionView
+	openConnectionPanel     connectionPanelSelection
 	warningEntry            *widget.Entry
 	dangerEntry             *widget.Entry
 	warningSlider           *widget.Slider
@@ -480,6 +481,15 @@ func (v *View) bindTitleButton(button *SmallButton) *SmallButton {
 	}
 	button.OnHoverStart = v.scheduleTooltip
 	button.OnHoverEnd = v.dismissTooltipFor
+	return button
+}
+
+func (v *View) bindConnectionMethodButton(button *ConnectionMethodButton) *ConnectionMethodButton {
+	if button == nil {
+		return nil
+	}
+	button.OnHoverStart = func(anchor *ConnectionMethodButton) { v.scheduleAnchorTooltip(anchor) }
+	button.OnHoverEnd = func(anchor *ConnectionMethodButton) { v.dismissAnchorTooltip(anchor) }
 	return button
 }
 

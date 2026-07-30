@@ -158,9 +158,10 @@ func (b *SmallButton) SetIcon(icon fyne.Resource) {
 	b.Icon = icon
 	b.Refresh()
 }
+
 // tooltipActive / tooltipValue let SmallButton own the shared passive tooltip.
-func (b *SmallButton) tooltipActive() bool   { return b.Hovered }
-func (b *SmallButton) tooltipValue() string  { return b.Tooltip }
+func (b *SmallButton) tooltipActive() bool  { return b.Hovered }
+func (b *SmallButton) tooltipValue() string { return b.Tooltip }
 
 func (b *SmallButton) Tapped(*fyne.PointEvent) {
 	if b.OnHoverEnd != nil {
@@ -319,6 +320,215 @@ func buttonAlpha(value color.NRGBA, alpha uint8) color.NRGBA {
 	return value
 }
 
+type connectionMethodState uint8
+
+const (
+	connectionMethodActive connectionMethodState = iota
+	connectionMethodAvailable
+	connectionMethodMissing
+	connectionMethodPlanned
+)
+
+func (s connectionMethodState) dashed() bool {
+	return s == connectionMethodMissing || s == connectionMethodPlanned
+}
+
+// ConnectionMethodButton is the settings-only method segment. Its four visual
+// states are supplied by the connection card and are never persisted.
+type ConnectionMethodButton struct {
+	widget.BaseWidget
+	Label        string
+	OnTapped     func()
+	Tooltip      string
+	State        connectionMethodState
+	Hovered      bool
+	Colors       BrandColors
+	OnHoverStart func(*ConnectionMethodButton)
+	OnHoverEnd   func(*ConnectionMethodButton)
+}
+
+func NewConnectionMethodButton(label, tooltip string, state connectionMethodState, onTapped func(), colors ...BrandColors) *ConnectionMethodButton {
+	button := &ConnectionMethodButton{Label: label, Tooltip: tooltip, State: state, OnTapped: onTapped, Colors: optionalBrandColors(colors)}
+	button.ExtendBaseWidget(button)
+	return button
+}
+
+func (b *ConnectionMethodButton) SetPresentation(state connectionMethodState, tooltip string) {
+	if b.State == state && b.Tooltip == tooltip {
+		return
+	}
+	b.State = state
+	b.Tooltip = tooltip
+	b.Refresh()
+}
+
+func (b *ConnectionMethodButton) tooltipActive() bool  { return b.Hovered }
+func (b *ConnectionMethodButton) tooltipValue() string { return b.Tooltip }
+func (b *ConnectionMethodButton) Tapped(*fyne.PointEvent) {
+	if b.OnHoverEnd != nil {
+		b.OnHoverEnd(b)
+	}
+	if b.OnTapped != nil {
+		b.OnTapped()
+	}
+}
+func (b *ConnectionMethodButton) TypedKey(event *fyne.KeyEvent) {
+	if event.Name == fyne.KeyEnter || event.Name == fyne.KeySpace {
+		b.Tapped(nil)
+	}
+}
+func (b *ConnectionMethodButton) TypedRune(rune) {}
+func (b *ConnectionMethodButton) FocusGained()   { b.Refresh() }
+func (b *ConnectionMethodButton) FocusLost()     { b.Refresh() }
+func (b *ConnectionMethodButton) MouseIn(*desktop.MouseEvent) {
+	b.Hovered = true
+	b.Refresh()
+	if b.OnHoverStart != nil {
+		b.OnHoverStart(b)
+	}
+}
+func (b *ConnectionMethodButton) MouseMoved(*desktop.MouseEvent) {}
+func (b *ConnectionMethodButton) MouseOut() {
+	b.Hovered = false
+	b.Refresh()
+	if b.OnHoverEnd != nil {
+		b.OnHoverEnd(b)
+	}
+}
+
+func (b *ConnectionMethodButton) CreateRenderer() fyne.WidgetRenderer {
+	background := canvas.NewRectangle(color.Transparent)
+	background.CornerRadius = 4
+	border := canvas.NewRectangle(color.Transparent)
+	border.CornerRadius = 4
+	label := textLabel(b.Label, SettingsTextSize, b.Colors.Text, true, false)
+	dot := canvas.NewCircle(b.Colors.Disconnected)
+	dashes := make([]*canvas.Line, 12)
+	objects := []fyne.CanvasObject{background, border}
+	for index := range dashes {
+		dashes[index] = canvas.NewLine(b.Colors.Disconnected)
+		dashes[index].StrokeWidth = 1
+		objects = append(objects, dashes[index])
+	}
+	objects = append(objects, dot, label)
+	renderer := &connectionMethodButtonRenderer{button: b, background: background, border: border, dashes: dashes, dot: dot, label: label, objects: objects}
+	renderer.Refresh()
+	return renderer
+}
+
+type connectionMethodButtonRenderer struct {
+	button     *ConnectionMethodButton
+	background *canvas.Rectangle
+	border     *canvas.Rectangle
+	dashes     []*canvas.Line
+	dot        *canvas.Circle
+	label      *canvas.Text
+	objects    []fyne.CanvasObject
+}
+
+func (r *connectionMethodButtonRenderer) Destroy()                     {}
+func (r *connectionMethodButtonRenderer) Objects() []fyne.CanvasObject { return r.objects }
+func (r *connectionMethodButtonRenderer) MinSize() fyne.Size           { return fyne.NewSize(32, 22) }
+func (r *connectionMethodButtonRenderer) Layout(size fyne.Size) {
+	r.background.Resize(size)
+	r.border.Resize(size)
+	r.layoutDashes(size)
+
+	labelSize := r.label.MinSize()
+	contentWidth := labelSize.Width
+	hasDot := r.button.State != connectionMethodPlanned
+	if hasDot {
+		contentWidth += 10
+	}
+	x := (size.Width - contentWidth) / 2
+	if hasDot {
+		r.dot.Resize(fyne.NewSize(6, 6))
+		r.dot.Move(fyne.NewPos(x, (size.Height-6)/2))
+		x += 10
+	}
+	r.label.Resize(labelSize)
+	r.label.Move(fyne.NewPos(x, (size.Height-labelSize.Height)/2-smallButtonLabelOpticalLift))
+}
+
+func (r *connectionMethodButtonRenderer) layoutDashes(size fyne.Size) {
+	horizontalSpan := max(float32(0), size.Width-2)
+	horizontalCell := horizontalSpan / 4
+	horizontalDash := horizontalCell * 0.58
+	index := 0
+	for _, y := range []float32{1, size.Height - 1} {
+		for segment := 0; segment < 4; segment++ {
+			start := float32(1) + float32(segment)*horizontalCell
+			r.dashes[index].Position1 = fyne.NewPos(start, y)
+			r.dashes[index].Position2 = fyne.NewPos(start+horizontalDash, y)
+			index++
+		}
+	}
+	verticalSpan := max(float32(0), size.Height-2)
+	verticalCell := verticalSpan / 2
+	verticalDash := verticalCell * 0.58
+	for _, x := range []float32{1, size.Width - 1} {
+		for segment := 0; segment < 2; segment++ {
+			start := float32(1) + float32(segment)*verticalCell
+			r.dashes[index].Position1 = fyne.NewPos(x, start)
+			r.dashes[index].Position2 = fyne.NewPos(x, start+verticalDash)
+			index++
+		}
+	}
+}
+
+func (r *connectionMethodButtonRenderer) Refresh() {
+	accent := r.button.Colors.Disconnected
+	labelColor := r.button.Colors.Secondary
+	fill := color.NRGBA{A: 0}
+	switch r.button.State {
+	case connectionMethodActive:
+		accent = r.button.Colors.Connected
+		labelColor = r.button.Colors.Text
+		fill = buttonAlpha(r.button.Colors.Connected, 0x24)
+	case connectionMethodAvailable:
+		accent = r.button.Colors.Accent
+		labelColor = r.button.Colors.Text
+	case connectionMethodPlanned:
+		accent = buttonAlpha(r.button.Colors.Secondary, 0x68)
+		labelColor = buttonAlpha(r.button.Colors.Secondary, 0x88)
+	}
+	if r.button.Hovered {
+		fill = buttonAlpha(accent, 0x30)
+	}
+	r.background.FillColor = fill
+	r.border.FillColor = color.Transparent
+	r.border.StrokeColor = accent
+	if r.button.State.dashed() {
+		r.border.StrokeWidth = 0
+		r.border.Hide()
+	} else {
+		r.border.StrokeWidth = 1
+		r.border.Show()
+	}
+	for _, dash := range r.dashes {
+		dash.StrokeColor = accent
+		if r.button.State.dashed() {
+			dash.Show()
+		} else {
+			dash.Hide()
+		}
+		dash.Refresh()
+	}
+	r.label.Text = r.button.Label
+	r.label.Color = labelColor
+	r.dot.FillColor = accent
+	if r.button.State == connectionMethodPlanned {
+		r.dot.Hide()
+	} else {
+		r.dot.Show()
+	}
+	r.background.Refresh()
+	r.border.Refresh()
+	r.dot.Refresh()
+	r.label.Refresh()
+	r.Layout(r.button.Size())
+}
+
 // TooltipRegion is a transparent hover target that owns the shared passive
 // tooltip for a value rendered next to (or underneath) it. It deliberately
 // implements only desktop.Hoverable — never Tappable — so taps keep falling
@@ -336,9 +546,9 @@ func NewTooltipRegion(view *View, value string) *TooltipRegion {
 	return region
 }
 
-func (r *TooltipRegion) SetValue(value string)  { r.value = value }
-func (r *TooltipRegion) tooltipActive() bool    { return r.Hovered }
-func (r *TooltipRegion) tooltipValue() string   { return r.value }
+func (r *TooltipRegion) SetValue(value string) { r.value = value }
+func (r *TooltipRegion) tooltipActive() bool   { return r.Hovered }
+func (r *TooltipRegion) tooltipValue() string  { return r.value }
 func (r *TooltipRegion) MouseIn(*desktop.MouseEvent) {
 	r.Hovered = true
 	if r.view != nil {

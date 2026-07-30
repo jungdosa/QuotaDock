@@ -1909,7 +1909,7 @@ func TestScreenCaptureArtifacts(t *testing.T) {
 			name   string
 			screen Screen
 			size   fyne.Size
-		}{{"normal", NormalScreen, v.MinimumSize(NormalScreen)}, {"compact", CompactScreen, v.MinimumSize(CompactScreen)}, {"settings", SettingsScreen, v.MinimumSize(SettingsScreen)}}
+		}{{"normal", NormalScreen, v.MinimumSize(NormalScreen)}, {"compact", CompactScreen, v.MinimumSize(CompactScreen)}, {"nano", NanoScreen, v.MinimumSize(NanoScreen)}, {"settings", SettingsScreen, v.MinimumSize(SettingsScreen)}}
 		for _, entry := range screens {
 			v.Show(entry.screen)
 			w.Resize(entry.size)
@@ -1949,6 +1949,18 @@ func TestScreenCaptureArtifacts(t *testing.T) {
 			}
 			saveCapture(mode.name+"-"+entry.name, img)
 		}
+
+		installState := DemoViewState()
+		installState.Lanes[1].Status = model.StatusUnavailable
+		installState.Lanes[1].Error = model.ErrCLINotInstalled
+		installState.Lanes[1].ErrorKey = i18n.KeyErrorCLINotInstalled
+		v.SetState(installState)
+		v.Show(SettingsScreen)
+		v.connectionCache[1].methods[0].button.Tapped(nil)
+		w.Resize(v.MinimumSize(SettingsScreen))
+		saveCapture(mode.name+"-settings-install", w.Canvas().Capture())
+		v.closeConnectionPanel()
+		v.SetState(DemoViewState())
 
 		v.Show(SettingsScreen)
 		w.Resize(v.MinimumSize(SettingsScreen))
@@ -2167,33 +2179,42 @@ func TestConnectionCardsAndButtonsAreReused(t *testing.T) {
 	row := v.connectionCache[0]
 	status := row.status
 	detail := row.detail
+	methodButton := row.methods[0].button
+	panel := row.panel
 	reconnect := row.reconnect
 	help := row.helpButton
 
 	state := sampleState()
 	state.Lanes[0].Status = model.StatusLoggedOut
 	v.SetState(state)
-	if v.connectionCache[0] != row || row.status != status || row.detail != detail || row.reconnect != reconnect || row.helpButton != help {
+	if v.connectionCache[0] != row || row.status != status || row.detail != detail || row.methods[0].button != methodButton || row.panel != panel || row.reconnect != reconnect || row.helpButton != help {
 		t.Fatal("connection state update replaced cached widgets")
 	}
 	if !strings.Contains(row.status.Text, "Sign in") {
 		t.Fatalf("logged-out card status=%q", row.status.Text)
+	}
+	if methodButton.State != connectionMethodMissing {
+		t.Fatalf("logged-out Claude CLI state=%v, want missing", methodButton.State)
 	}
 
 	state.Lanes[0].Status = model.StatusUnavailable
 	state.Lanes[0].Error = model.ErrCLINotInstalled
 	state.Lanes[0].ErrorKey = i18n.KeyErrorCLINotInstalled
 	v.SetState(state)
-	if len(row.install.Objects) != 1 || !row.installVisible {
-		t.Fatal("cached CLI installation guidance was not attached")
+	if len(row.panel.Objects) != 0 || row.panelOpen || methodButton.State != connectionMethodMissing {
+		t.Fatal("missing CLI opened guidance before its method button was selected")
+	}
+	methodButton.Tapped(nil)
+	if len(row.panel.Objects) != 1 || !row.panelOpen || row.panelView.rescanButton == nil || row.panelView.docsButton == nil {
+		t.Fatal("cached CLI installation guidance was not attached inline")
 	}
 
 	state.Lanes[0].Status = model.StatusConnected
 	state.Lanes[0].Error = model.ErrNone
 	state.Lanes[0].ErrorKey = ""
 	v.SetState(state)
-	if len(row.install.Objects) != 0 || row.installVisible {
-		t.Fatal("CLI installation guidance remained attached after recovery")
+	if len(row.panel.Objects) != 1 || !row.panelOpen || methodButton.State != connectionMethodActive || row.panelView.docsButton != nil {
+		t.Fatal("selected CLI panel did not switch from install guidance to active details")
 	}
 }
 
@@ -2256,11 +2277,18 @@ func TestConnectionCardActionsHelpAndInstallLinks(t *testing.T) {
 		state.Lanes[index].ErrorKey = i18n.KeyErrorCLINotInstalled
 	}
 	v.SetState(state)
-	if !v.connectionCache[0].installVisible || !v.connectionCache[1].installVisible {
-		t.Fatal("Claude/Codex CLI installation guidance is not visible")
+	if v.connectionCache[0].methods[0].button.State != connectionMethodMissing || v.connectionCache[1].methods[0].button.State != connectionMethodMissing {
+		t.Fatal("Claude/Codex CLI methods are not in the missing state")
 	}
-	v.connectionCache[0].installButton.Tapped(nil)
-	v.connectionCache[1].installButton.Tapped(nil)
+	v.connectionCache[0].methods[0].button.Tapped(nil)
+	v.connectionCache[0].panelView.rescanButton.Tapped(nil)
+	v.connectionCache[0].panelView.docsButton.Tapped(nil)
+	v.connectionCache[1].methods[0].button.Tapped(nil)
+	v.connectionCache[1].panelView.rescanButton.Tapped(nil)
+	v.connectionCache[1].panelView.docsButton.Tapped(nil)
+	if !reflect.DeepEqual(inspected, []model.ProviderID{model.ProviderCodex, model.ProviderAntigravity, model.ProviderClaude, model.ProviderCodex}) {
+		t.Fatalf("inspect callbacks after panel rescans=%v", inspected)
+	}
 	if !reflect.DeepEqual(opened, []string{claudeInstallURL, codexInstallURL}) {
 		t.Fatalf("opened installation URLs=%v", opened)
 	}
