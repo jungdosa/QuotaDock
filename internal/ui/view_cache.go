@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"image/color"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -270,7 +269,7 @@ func (v *View) normalBodySignature(lanes []LaneState, now time.Time) string {
 		hasPlan := lane.Plan != model.PlanUnknown && lane.Plan != ""
 		fmt.Fprintf(&signature, "lane:%q:plan=%t:credits=%t:rows=%d|", lane.Provider, hasPlan, v.laneCreditsVisible(lane), len(lane.Rows))
 		for _, row := range lane.Rows {
-			_, resetAt := resetStrings(row, now, v.config)
+			_, resetAt := resetStrings(row, now, v.config, v.SystemLanguage)
 			resetLines := wrapMonospace(resetAt, normalRowColumns[2], NormalMetaTextSize)
 			fmt.Fprintf(&signature, "row:%q:%q:%d:reset-lines=%d|", row.Label, row.DisplayLabel, row.WindowMinutes, len(resetLines))
 		}
@@ -331,7 +330,7 @@ func (v *View) creditsText(credits *model.Credits) string {
 	if credits.Unlimited {
 		return v.text(i18n.KeyCreditsUnlimited)
 	}
-	return fmt.Sprintf(v.text(i18n.KeyCredits), strconv.FormatFloat(credits.Balance, 'f', -1, 64))
+	return fmt.Sprintf(v.text(i18n.KeyCredits), i18n.FormatDecimal(v.resolvedLanguage(), credits.Balance))
 }
 
 func (v *View) updateNormalHeader(handles normalHeaderView, lane LaneState) {
@@ -387,7 +386,7 @@ func (v *View) rowVisual(lane LaneState, row UsageRowState, now time.Time) rowVi
 		meterColor = severityColor
 		percentColor = severityColor
 	}
-	until, resetAt := resetStrings(row, now, v.config)
+	until, resetAt := resetStrings(row, now, v.config, v.SystemLanguage)
 	return rowVisual{
 		label:         v.usageRowLabel(lane, row),
 		percent:       v.displayPercent(row),
@@ -774,7 +773,7 @@ func (v *View) nanoRowTooltip(cell nanoCellState, state nanoUsageState, now time
 	if !state.available {
 		return ""
 	}
-	until, resetAt := resetStrings(state.row, now, v.config)
+	until, resetAt := resetStrings(state.row, now, v.config, v.SystemLanguage)
 	return cell.name + " " + state.label + "\n" + until + "\n" + resetAt
 }
 

@@ -357,6 +357,17 @@ func (v *View) text(key string) string {
 	lang := i18n.Language(v.config.Language)
 	return v.Catalog.Text(lang, v.SystemLanguage, key)
 }
+
+func (v *View) resolvedLanguage() i18n.Language {
+	language := i18n.Language(v.config.Language)
+	if language == i18n.System {
+		language = v.SystemLanguage
+	}
+	if !i18n.IsSupported(language) {
+		return i18n.English
+	}
+	return language
+}
 func (v *View) windowTitle(mode settings.DisplayMode) *fyne.Container {
 	title := textLabel(v.text(i18n.KeyAppTitle), TitleTextSize, v.colors.Text, true, false)
 	appVersion := v.Actions.AppVersion
@@ -457,10 +468,7 @@ func (v *View) formatTimestamp(value time.Time) string {
 	if value.IsZero() {
 		return "—"
 	}
-	lang := qdatetime.English
-	if v.config.Language == settings.LanguageKorean {
-		lang = qdatetime.Korean
-	}
+	lang := qdatetime.Language(v.resolvedLanguage())
 	formatted, err := qdatetime.FormatUnix(value.Unix(), time.Local, lang, qdatetime.Format(v.config.DateTimeFormat))
 	if err != nil {
 		return value.Local().Format("15:04")
@@ -1208,7 +1216,7 @@ func resetProgress(row UsageRowState, now time.Time) float64 {
 	remaining := row.ResetsAt.Sub(now).Minutes()
 	return 100 - clampPercent(remaining/float64(row.WindowMinutes)*100)
 }
-func resetStrings(row UsageRowState, now time.Time, c settings.Config) (string, string) {
+func resetStrings(row UsageRowState, now time.Time, c settings.Config, systemLanguages ...i18n.Language) (string, string) {
 	if row.DisplayOverride {
 		return row.DisplayRemaining, row.DisplayReset
 	}
@@ -1226,11 +1234,18 @@ func resetStrings(row UsageRowState, now time.Time, c settings.Config) (string, 
 	} else {
 		until = fmt.Sprintf("%dh %02dm", totalHours, int(d.Minutes())%60)
 	}
-	lang := qdatetime.English
-	if c.Language == settings.LanguageKorean {
-		lang = qdatetime.Korean
+	systemLanguage := i18n.English
+	if len(systemLanguages) > 0 {
+		systemLanguage = systemLanguages[0]
 	}
-	at, _ := qdatetime.FormatUnix(row.ResetsAt.Unix(), time.Local, lang, qdatetime.Format(c.DateTimeFormat))
+	language := i18n.Language(c.Language)
+	if language == i18n.System {
+		language = systemLanguage
+	}
+	if !i18n.IsSupported(language) {
+		language = i18n.English
+	}
+	at, _ := qdatetime.FormatUnix(row.ResetsAt.Unix(), time.Local, qdatetime.Language(language), qdatetime.Format(c.DateTimeFormat))
 	return until, at
 }
 
@@ -1449,6 +1464,7 @@ func settingsPair(left, right fyne.CanvasObject) fyne.CanvasObject {
 
 const (
 	halfSettingGap      float32 = 8
+	halfSettingRowWidth float32 = 280
 	thresholdTrackWidth float32 = 76
 	// settingLabelGap is the breathing room kept between the longest settings
 	// label and its control.
@@ -1687,26 +1703,39 @@ func (v *View) behaviorSettings() fyne.CanvasObject {
 	)
 }
 func (v *View) displaySettings() fyne.CanvasObject {
-	languages := []string{v.text(i18n.KeyLanguageSystem), v.text(i18n.KeyLanguageKorean), v.text(i18n.KeyLanguageEnglish)}
+	languages := []string{v.text(i18n.KeyLanguageSystem)}
+	languageValues := []settings.Language{settings.LanguageSystem}
+	for _, supported := range i18n.Supported {
+		languages = append(languages, i18n.Endonym(supported))
+		languageValues = append(languageValues, settings.Language(supported))
+	}
 	language := widget.NewSelect(languages, func(value string) {
 		cfg := v.config
-		switch value {
-		case languages[1]:
-			cfg.Language = settings.LanguageKorean
-		case languages[2]:
-			cfg.Language = settings.LanguageEnglish
-		default:
-			cfg.Language = settings.LanguageSystem
+		cfg.Language = settings.LanguageSystem
+		for index, label := range languages {
+			if value == label {
+				cfg.Language = languageValues[index]
+				break
+			}
 		}
 		v.SetConfig(cfg)
 	})
-	language.SetSelected(languages[map[settings.Language]int{settings.LanguageSystem: 0, settings.LanguageKorean: 1, settings.LanguageEnglish: 2}[v.config.Language]])
+	selectedLanguage := settings.LanguageSystem
+	for _, supported := range i18n.Supported {
+		if settings.Language(supported) == v.config.Language {
+			selectedLanguage = v.config.Language
+			break
+		}
+	}
+	for index, value := range languageValues {
+		if value == selectedLanguage {
+			language.SetSelected(languages[index])
+			break
+		}
+	}
 	dateKeys := []settings.DateTimeFormat{settings.Format12HourDate, settings.Format12HourDateDay, settings.Format24HourDate, settings.Format24HourDateDay}
 	examples := make([]string, 4)
-	lang := qdatetime.English
-	if v.config.Language == settings.LanguageKorean {
-		lang = qdatetime.Korean
-	}
+	lang := qdatetime.Language(v.resolvedLanguage())
 	for i, key := range dateKeys {
 		examples[i], _ = qdatetime.FormatUnix(time.Now().Unix(), time.Local, lang, qdatetime.Format(key))
 	}
@@ -1724,10 +1753,13 @@ func (v *View) displaySettings() fyne.CanvasObject {
 			dateSelect.SetSelected(examples[i])
 		}
 	}
+	languageWidth := selectWidth(languages)
+	dateWidth := selectWidth(examples)
+	displayLabelWidth := min(v.settingLabelWidth(), halfSettingRowWidth-halfSettingGap-max(languageWidth, dateWidth))
 	return container.NewVBox(
 		settingsPair(
-			v.settingRowSized(v.text(i18n.KeyLanguage), language, v.settingLabelWidth(), halfSettingGap, selectWidth(languages)),
-			v.settingRowSized(v.text(i18n.KeyDateTime), dateSelect, v.settingLabelWidth(), halfSettingGap, selectWidth(examples)),
+			v.settingRowSized(v.text(i18n.KeyLanguage), language, displayLabelWidth, halfSettingGap, languageWidth),
+			v.settingRowSized(v.text(i18n.KeyDateTime), dateSelect, displayLabelWidth, halfSettingGap, dateWidth),
 		),
 	)
 }

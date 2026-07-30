@@ -60,10 +60,15 @@ func TestPhase3SSettingsLayoutMetrics(t *testing.T) {
 	if languageLayout.LabelWidth+languageLayout.Gap != dateLayout.LabelWidth+dateLayout.Gap {
 		t.Fatalf("select starts differ: language=%.1f date=%.1f", languageLayout.LabelWidth+languageLayout.Gap, dateLayout.LabelWidth+dateLayout.Gap)
 	}
-	if languageLayout.ControlWidth >= phase3SLegacyLanguageWidth || dateLayout.ControlWidth >= phase3SLegacyDateWidth {
-		t.Fatalf("select widths did not shrink: language %.1f date %.1f", languageLayout.ControlWidth, dateLayout.ControlWidth)
+	if dateLayout.ControlWidth >= phase3SLegacyDateWidth {
+		t.Fatalf("date select width did not shrink: %.1f", dateLayout.ControlWidth)
 	}
-	t.Logf("select start x=%.1f; widths language %.1f->%.1f, date/time %.1f->%.1f", languageLayout.LabelWidth+languageLayout.Gap, phase3SLegacyLanguageWidth, languageLayout.ControlWidth, phase3SLegacyDateWidth, dateLayout.ControlWidth)
+	for name, rowLayout := range map[string]*SettingRowLayout{"language": languageLayout, "date/time": dateLayout} {
+		if total := rowLayout.LabelWidth + rowLayout.Gap + rowLayout.ControlWidth; total > halfSettingRowWidth {
+			t.Fatalf("%s select row width %.1f exceeds half-row %.1f", name, total, halfSettingRowWidth)
+		}
+	}
+	t.Logf("select start x=%.1f; widths language %.1f->%.1f (nine endonyms), date/time %.1f->%.1f", languageLayout.LabelWidth+languageLayout.Gap, phase3SLegacyLanguageWidth, languageLayout.ControlWidth, phase3SLegacyDateWidth, dateLayout.ControlWidth)
 
 	cfg = v.config
 	cfg.WarningsEnabled = true

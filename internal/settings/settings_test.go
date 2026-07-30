@@ -216,3 +216,27 @@ func TestTrayPromotionDefaultsFalseAndMissingKeyStaysFalse(t *testing.T) {
 		t.Fatal("settings without promoteTrayIcon enabled tray icon promotion")
 	}
 }
+
+func TestSettingsLanguageSchemaAcceptsLegacyAndPhase4FValues(t *testing.T) {
+	languages := []Language{
+		LanguageSystem,
+		LanguageEnglish,
+		LanguageKorean,
+		LanguageGerman,
+		LanguageFrench,
+		LanguageItalian,
+		LanguageIndonesian,
+		LanguagePortugueseBrazil,
+		LanguageSpanishSpain,
+		LanguageSpanishLatinAmerica,
+	}
+	for _, language := range languages {
+		config, err := Decode(strings.NewReader(fmt.Sprintf(`{"schemaVersion":4,"language":%q}`, language)))
+		if err != nil {
+			t.Fatalf("Decode(%s): %v", language, err)
+		}
+		if config.Language != language {
+			t.Errorf("Decode(%s) language = %s", language, config.Language)
+		}
+	}
+}

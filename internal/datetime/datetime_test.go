@@ -22,7 +22,7 @@ func TestFourDateTimeFormatsKoreanAndEnglish(t *testing.T) {
 	}
 }
 func Test24HourFormatsHaveNoMeridiem(t *testing.T) {
-	for _, language := range []Language{Korean, English} {
+	for _, language := range []Language{Korean, English, German, French, Italian, Indonesian, PortugueseBrazil, SpanishSpain, SpanishLatinAmerica} {
 		got, err := FormatUnix(time.Date(2026, 7, 24, 23, 5, 0, 0, time.UTC).Unix(), time.UTC, language, Hour24DateDay)
 		if err != nil {
 			t.Fatal(err)
@@ -49,5 +49,27 @@ func TestMidnightTimezoneAndDSTTransitions(t *testing.T) {
 	afterDST, _ := FormatUnix(time.Date(2026, 3, 8, 7, 1, 0, 0, time.UTC).Unix(), newYork, English, Hour24Date)
 	if beforeDST != "Mar 8 01:59" || afterDST != "Mar 8 03:01" {
 		t.Fatalf("DST transition = %q -> %q", beforeDST, afterDST)
+	}
+}
+
+func TestNewLocalesUseClockAssetWeekdaysAndMeridiem(t *testing.T) {
+	value := time.Date(2026, 7, 26, 13, 5, 0, 0, time.UTC)
+	cases := []struct {
+		language Language
+		want     string
+	}{
+		{German, "So 26.07. 1:05 PM"},
+		{French, "dim 26/07 1:05 PM"},
+		{Italian, "dom 26/07 1:05 PM"},
+		{Indonesian, "Min 26/07 1:05 PM"},
+		{PortugueseBrazil, "dom 26/07 1:05 PM"},
+		{SpanishSpain, "dom 26/07 1:05 PM"},
+		{SpanishLatinAmerica, "dom 26/07 1:05 PM"},
+	}
+	for _, tc := range cases {
+		got, err := FormatUnix(value.Unix(), time.UTC, tc.language, Hour12DateDay)
+		if err != nil || got != tc.want {
+			t.Errorf("FormatUnix(%s) = %q, %v; want %q", tc.language, got, err, tc.want)
+		}
 	}
 }

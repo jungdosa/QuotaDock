@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/jungdosa/QuotaDock/internal/i18n"
 	"github.com/jungdosa/QuotaDock/internal/security"
 )
 
@@ -21,9 +22,16 @@ const (
 type Language string
 
 const (
-	LanguageSystem  Language = "system"
-	LanguageKorean  Language = "ko"
-	LanguageEnglish Language = "en"
+	LanguageSystem               Language = "system"
+	LanguageEnglish              Language = "en"
+	LanguageKorean               Language = "ko"
+	LanguageGerman               Language = "de"
+	LanguageFrench               Language = "fr"
+	LanguageItalian              Language = "it"
+	LanguageIndonesian           Language = "id"
+	LanguagePortugueseBrazil     Language = "pt-BR"
+	LanguageSpanishSpain         Language = "es-ES"
+	LanguageSpanishLatinAmerica  Language = "es-419"
 )
 
 type DateTimeFormat string
@@ -111,9 +119,7 @@ func Default() Config {
 func (c Config) Validated() Config {
 	defaults := Default()
 	c.SchemaVersion = CurrentSchemaVersion
-	switch c.Language {
-	case LanguageSystem, LanguageKorean, LanguageEnglish:
-	default:
+	if c.Language != LanguageSystem && !i18n.IsSupported(i18n.Language(c.Language)) {
 		c.Language = defaults.Language
 	}
 	switch c.DateTimeFormat {

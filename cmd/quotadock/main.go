@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/lang"
 	"fyne.io/fyne/v2/widget"
 	"github.com/jungdosa/QuotaDock/internal/i18n"
 	"github.com/jungdosa/QuotaDock/internal/model"
@@ -77,6 +78,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	systemLanguage := i18n.MatchSystemLanguage(lang.SystemLocale().String())
 	a := app.NewWithID("com.jungdosa.quotadock")
 	app.SetMetadata(withFyneDoMigration(a.Metadata()))
 	a.SetIcon(appIcon())
@@ -111,7 +113,7 @@ func run(args []string) error {
 		window:      w,
 		catalog:     catalog,
 		language: func() (i18n.Language, i18n.Language) {
-			return i18n.Language(cfg.Language), i18n.English
+			return i18n.Language(cfg.Language), systemLanguage
 		},
 		checker: updater.Checker{
 			Fetcher:        updater.NewHTTPReleaseFetcher(version, nil),
@@ -221,7 +223,7 @@ func run(args []string) error {
 			slog.Warn("settings save failed", "error", saveErr)
 		}
 		if tray != nil {
-			tray.Update(i18n.Language(cfg.Language), i18n.English, cfg.DisplayMode)
+			tray.Update(i18n.Language(cfg.Language), systemLanguage, cfg.DisplayMode)
 		}
 		scheduler.Stop()
 		if !demo {
@@ -299,7 +301,7 @@ func run(args []string) error {
 		OpenURL:     func(raw string) error { return platform.OpenAllowedURL(a, raw) },
 	}
 	actions.DemoMode = demo
-	view = ui.NewView(w.Canvas(), catalog, i18n.English, cfg, actions)
+	view = ui.NewView(w.Canvas(), catalog, systemLanguage, cfg, actions)
 	updates.preparePrompt = func() {
 		w.Show()
 		applyScreen(ui.SettingsScreen)
@@ -316,7 +318,7 @@ func run(args []string) error {
 	applyScreen(ui.ScreenForDisplayMode(cfg.DisplayMode))
 	lifecycle = &platform.Lifecycle{Hide: func() { savePosition(); hideWindow() }, Quit: func() { savePosition(); cancel(); scheduler.Stop(); _ = controller.Close(); a.Quit() }}
 	w.SetCloseIntercept(lifecycle.CloseRequested)
-	tray, err = platform.NewTray(a, w, catalog, i18n.Language(cfg.Language), i18n.English,
+	tray, err = platform.NewTray(a, w, catalog, i18n.Language(cfg.Language), systemLanguage,
 		func() {
 			markActivity()
 			fyne.Do(w.Show)
@@ -342,7 +344,7 @@ func run(args []string) error {
 	// Fyne installs its tray toggle intercept in SetSystemTrayWindow. Restore
 	// QuotaDock's lifecycle intercept so close still saves position and trims.
 	w.SetCloseIntercept(lifecycle.CloseRequested)
-	tray.Update(i18n.Language(cfg.Language), i18n.English, cfg.DisplayMode)
+	tray.Update(i18n.Language(cfg.Language), systemLanguage, cfg.DisplayMode)
 	w.Show()
 	if err := native.Bind(); err != nil {
 		return err

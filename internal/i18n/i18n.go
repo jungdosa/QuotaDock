@@ -6,14 +6,23 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
+	"strings"
 )
 
 type Language string
 
 const (
-	System  Language = "system"
-	Korean  Language = "ko"
-	English Language = "en"
+	System              Language = "system"
+	English             Language = "en"
+	Korean              Language = "ko"
+	German              Language = "de"
+	French              Language = "fr"
+	Italian             Language = "it"
+	Indonesian          Language = "id"
+	PortugueseBrazil    Language = "pt-BR"
+	SpanishSpain        Language = "es-ES"
+	SpanishLatinAmerica Language = "es-419"
 )
 const (
 	KeyTrayShow                  = "tray.show"
@@ -68,8 +77,6 @@ const (
 	KeyThemeSystem               = "settings.theme_system"
 	KeyLanguage                  = "settings.language"
 	KeyLanguageSystem            = "settings.language_system"
-	KeyLanguageKorean            = "settings.language_korean"
-	KeyLanguageEnglish           = "settings.language_english"
 	KeyDateTime                  = "settings.datetime"
 	KeyConnected                 = "status.connected"
 	KeyDisconnected              = "status.disconnected"
@@ -157,7 +164,92 @@ const (
 	KeyOpenInstallDocs             = "action.open_install_docs"
 )
 
-var RequiredKeys = []string{KeyTrayShow, KeyTraySettings, KeyTrayNormal, KeyTrayCompact, KeyTrayNano, KeyTrayQuit, KeyUntilReset, KeyResetsAt, KeyErrorCLINotInstalled, KeyErrorNotLoggedIn, KeyErrorCLIOutdated, KeyErrorInitializationFailed, KeyErrorTimeout, KeyErrorInvalidResponse, KeyErrorUsageUnavailable, KeyErrorQuotaExhausted, KeyNotificationWarning, KeyDate12, KeyDate12Day, KeyDate24, KeyDate24Day, KeyAppTitle, KeySettingsTitle, KeyGroupUsage, KeyGroupBehavior, KeyGroupDisplay, KeyGroupConnections, KeyShowClaude, KeyShowCodex, KeyShowAGGemini, KeyShowAGClaude, KeyUsageMode, KeyUsageUsed, KeyUsageRemaining, KeyLastRefresh, KeyWarnings, KeyWarningThreshold, KeyDangerThreshold, KeyAutoStart, KeyRefreshInterval, KeyAlwaysOnTop, KeyPromoteTray, KeyShowInTaskbar, KeyTheme, KeyThemeLight, KeyThemeDark, KeyThemeSystem, KeyLanguage, KeyLanguageSystem, KeyLanguageKorean, KeyLanguageEnglish, KeyDateTime, KeyConnected, KeyDisconnected, KeyConnect, KeyReconnect, KeyTestConnection, KeyInstall, KeyCLIPath, KeyCLIVersion, KeySource, KeyLocalLSP, KeyInstallClaude, KeyInstallCodex, KeyConnectionMethodCLI, KeyConnectionMethodAuth, KeyConnectionMethodIDE, KeyConnectionMethodOther, KeyConnectionStateActive, KeyConnectionStateAvailable, KeyConnectionStateMissing, KeyConnectionStatePlanned, KeyConnectionPanelInstallTitle, KeyConnectionInstallStep1, KeyConnectionInstallStep2, KeyConnectionInstallStep3, KeyConnectionSearchPaths, KeyConnectionAutoDetect, KeyConnectionAuthPlanned, KeyConnectionEnvConfigured, KeyConnectionEnvHint, KeyConnectionPanelClose, KeyRescan, KeyOpenInstallDocs, KeyClose, KeyMinimize, KeyRefresh, KeyDisplayMode, KeyDisplayNormal, KeyCompact, KeyNano, KeySettings, KeyHelp, KeyUpdate, KeyUpdatePending, KeyUpdateNow, KeyUpdateLater, KeyUpdateChecking, KeyUpdateUpToDate, KeyUpdateAvailable, KeyUpdateCheckFailed, KeyUpdateDownloading, KeyUpdateVerifying, KeyUpdateHashMismatch, KeyUpdateInstalling, KeyUpdatePortableNotice, KeyUpdateUnsignedNotice, KeyDone, KeyTooltipTheme, KeyTooltipThemeLight, KeyTooltipThemeDark, KeyTooltipThemeSystem, KeyTooltipDisplay, KeyTooltipRefresh, KeyTooltipBack, KeyTooltipUpdatePending, KeyTooltipPromoteTray, KeyClaudeColor, KeyCodexColor, KeyAGGeminiColor, KeyAGClaudeColor, KeyHelpTitle, KeyHelpIntro, KeyHelpClaudeTitle, KeyHelpClaude, KeyHelpClaudeRetry, KeyHelpCodexTitle, KeyHelpCodex, KeyHelpCodexRetry, KeyHelpAntigravityTitle, KeyHelpAntigravity, KeyHelpAntigravityRetry, KeyHelpCredentials}
+var Supported = []Language{
+	English,
+	Korean,
+	German,
+	French,
+	Italian,
+	Indonesian,
+	PortugueseBrazil,
+	SpanishSpain,
+	SpanishLatinAmerica,
+}
+
+var endonyms = map[Language]string{
+	English:             "English",
+	Korean:              "한국어",
+	German:              "Deutsch",
+	French:              "Français",
+	Italian:             "Italiano",
+	Indonesian:          "Bahasa Indonesia",
+	PortugueseBrazil:    "Português (Brasil)",
+	SpanishSpain:        "Español (España)",
+	SpanishLatinAmerica: "Español (Latinoamérica)",
+}
+
+func Endonym(language Language) string {
+	return endonyms[language]
+}
+
+func IsSupported(language Language) bool {
+	for _, candidate := range Supported {
+		if language == candidate {
+			return true
+		}
+	}
+	return false
+}
+
+// MatchSystemLanguage maps an OS locale to a supported QuotaDock language.
+// It is deliberately pure so platform locale detection remains independently testable.
+func MatchSystemLanguage(raw string) Language {
+	normalized := strings.TrimSpace(strings.ReplaceAll(raw, "_", "-"))
+	if index := strings.IndexAny(normalized, ".@"); index >= 0 {
+		normalized = normalized[:index]
+	}
+	for _, language := range Supported {
+		if strings.EqualFold(normalized, string(language)) {
+			return language
+		}
+	}
+	base := strings.ToLower(strings.Split(normalized, "-")[0])
+	switch base {
+	case "en":
+		return English
+	case "ko":
+		return Korean
+	case "de":
+		return German
+	case "fr":
+		return French
+	case "it":
+		return Italian
+	case "id":
+		return Indonesian
+	case "pt":
+		return PortugueseBrazil
+	case "es":
+		if strings.EqualFold(normalized, "es") || strings.EqualFold(normalized, "es-ES") {
+			return SpanishSpain
+		}
+		return SpanishLatinAmerica
+	default:
+		return English
+	}
+}
+
+func FormatDecimal(language Language, value float64) string {
+	formatted := strconv.FormatFloat(value, 'f', -1, 64)
+	switch language {
+	case German, French, Italian, Indonesian, PortugueseBrazil, SpanishSpain, SpanishLatinAmerica:
+		return strings.Replace(formatted, ".", ",", 1)
+	default:
+		return formatted
+	}
+}
+
+var RequiredKeys = []string{KeyTrayShow, KeyTraySettings, KeyTrayNormal, KeyTrayCompact, KeyTrayNano, KeyTrayQuit, KeyUntilReset, KeyResetsAt, KeyErrorCLINotInstalled, KeyErrorNotLoggedIn, KeyErrorCLIOutdated, KeyErrorInitializationFailed, KeyErrorTimeout, KeyErrorInvalidResponse, KeyErrorUsageUnavailable, KeyErrorQuotaExhausted, KeyNotificationWarning, KeyDate12, KeyDate12Day, KeyDate24, KeyDate24Day, KeyAppTitle, KeySettingsTitle, KeyGroupUsage, KeyGroupBehavior, KeyGroupDisplay, KeyGroupConnections, KeyShowClaude, KeyShowCodex, KeyShowAGGemini, KeyShowAGClaude, KeyUsageMode, KeyUsageUsed, KeyUsageRemaining, KeyLastRefresh, KeyWarnings, KeyWarningThreshold, KeyDangerThreshold, KeyAutoStart, KeyRefreshInterval, KeyAlwaysOnTop, KeyPromoteTray, KeyShowInTaskbar, KeyTheme, KeyThemeLight, KeyThemeDark, KeyThemeSystem, KeyLanguage, KeyLanguageSystem, KeyDateTime, KeyConnected, KeyDisconnected, KeyConnect, KeyReconnect, KeyTestConnection, KeyInstall, KeyCLIPath, KeyCLIVersion, KeySource, KeyLocalLSP, KeyInstallClaude, KeyInstallCodex, KeyConnectionMethodCLI, KeyConnectionMethodAuth, KeyConnectionMethodIDE, KeyConnectionMethodOther, KeyConnectionStateActive, KeyConnectionStateAvailable, KeyConnectionStateMissing, KeyConnectionStatePlanned, KeyConnectionPanelInstallTitle, KeyConnectionInstallStep1, KeyConnectionInstallStep2, KeyConnectionInstallStep3, KeyConnectionSearchPaths, KeyConnectionAutoDetect, KeyConnectionAuthPlanned, KeyConnectionEnvConfigured, KeyConnectionEnvHint, KeyConnectionPanelClose, KeyRescan, KeyOpenInstallDocs, KeyClose, KeyMinimize, KeyRefresh, KeyDisplayMode, KeyDisplayNormal, KeyCompact, KeyNano, KeySettings, KeyHelp, KeyUpdate, KeyUpdatePending, KeyUpdateNow, KeyUpdateLater, KeyUpdateChecking, KeyUpdateUpToDate, KeyUpdateAvailable, KeyUpdateCheckFailed, KeyUpdateDownloading, KeyUpdateVerifying, KeyUpdateHashMismatch, KeyUpdateInstalling, KeyUpdatePortableNotice, KeyUpdateUnsignedNotice, KeyDone, KeyTooltipTheme, KeyTooltipThemeLight, KeyTooltipThemeDark, KeyTooltipThemeSystem, KeyTooltipDisplay, KeyTooltipRefresh, KeyTooltipBack, KeyTooltipUpdatePending, KeyTooltipPromoteTray, KeyClaudeColor, KeyCodexColor, KeyAGGeminiColor, KeyAGClaudeColor, KeyHelpTitle, KeyHelpIntro, KeyHelpClaudeTitle, KeyHelpClaude, KeyHelpClaudeRetry, KeyHelpCodexTitle, KeyHelpCodex, KeyHelpCodexRetry, KeyHelpAntigravityTitle, KeyHelpAntigravity, KeyHelpAntigravityRetry, KeyHelpCredentials}
 
 //go:embed locales/*.json
 var resources embed.FS
@@ -168,7 +260,7 @@ type Catalog struct {
 
 func Load() (*Catalog, error) {
 	catalog := &Catalog{translations: make(map[Language]map[string]string)}
-	for _, language := range []Language{Korean, English} {
+	for _, language := range Supported {
 		data, err := resources.ReadFile("locales/" + string(language) + ".json")
 		if err != nil {
 			return nil, fmt.Errorf("read %s translations: %w", language, err)
@@ -195,7 +287,7 @@ func (c *Catalog) MissingKeys() map[Language][]string {
 			keys[key] = struct{}{}
 		}
 	}
-	for _, language := range []Language{Korean, English} {
+	for _, language := range Supported {
 		for key := range keys {
 			if c.translations[language][key] == "" {
 				missing[language] = append(missing[language], key)
@@ -209,10 +301,14 @@ func (c *Catalog) Text(language, systemLanguage Language, key string) string {
 	if language == System {
 		language = systemLanguage
 	}
-	if language != Korean && language != English {
+	if !IsSupported(language) {
 		language = English
 	}
-	if text := c.translations[language][key]; text != "" {
+	values, loaded := c.translations[language]
+	if !loaded {
+		values = c.translations[English]
+	}
+	if text := values[key]; text != "" {
 		return text
 	}
 	return key
