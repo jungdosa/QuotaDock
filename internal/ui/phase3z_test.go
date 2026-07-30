@@ -40,7 +40,7 @@ func TestPhase3ZSettingsTitleHierarchyAndSectionTypography(t *testing.T) {
 	help := titleRow.Objects[3].(*SmallButton)
 	update := titleRow.Objects[5].(*SmallButton)
 	done := titleRow.Objects[6].(*SmallButton)
-	if themeButton.Outlined || help.Outlined || !update.Disabled || !update.Outlined || !done.Primary {
+	if themeButton.Outlined || help.Outlined || update.Disabled || !update.Outlined || !done.Primary {
 		t.Fatalf("title hierarchy theme/help/update/done=%+v/%+v/%+v/%+v", themeButton, help, update, done)
 	}
 	updateRenderer := update.CreateRenderer().(*smallButtonRenderer)

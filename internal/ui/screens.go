@@ -170,6 +170,7 @@ type Actions struct {
 	ConfigChanged   func(settings.Config)
 	Inspect         func(model.ProviderID)
 	Reconnect       func(model.ProviderID)
+	CheckUpdate     func()
 	OpenURL         func(string) error
 	Activity        func()
 	AppVersion      string
@@ -1265,7 +1266,12 @@ func (v *View) settingsTitleBar(back *SmallButton, appVersion string, closeSetti
 	back = v.bindTitleButton(back)
 	help := v.bindTitleButton(NewSmallIconButton(theme.HelpIcon(), v.text(i18n.KeyHelp), v.showHelp, v.colors))
 	themeButton := v.bindTitleButton(v.newThemeButton())
-	update := v.bindTitleButton(NewDisabledOutlinedSmallButton(v.text(i18n.KeyUpdate), v.text(i18n.KeyTooltipUpdatePending), v.colors))
+	update := v.bindTitleButton(NewOutlinedSmallButton(v.text(i18n.KeyUpdate), v.text(i18n.KeyUpdate), func() {
+		v.noteActivity()
+		if v.Actions.CheckUpdate != nil {
+			v.Actions.CheckUpdate()
+		}
+	}, v.colors))
 	done := v.bindTitleButton(NewPrimarySmallButton(v.text(i18n.KeyDone), v.text(i18n.KeyDone), closeSettings, v.colors))
 	separator := canvas.NewRectangle(buttonAlpha(v.colors.TitleDivider, 0xA0))
 	separator.SetMinSize(fyne.NewSize(1, 16))

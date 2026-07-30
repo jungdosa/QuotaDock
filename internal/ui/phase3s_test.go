@@ -107,6 +107,8 @@ func TestPhase3SCustomRadioAndSettingsButtons(t *testing.T) {
 
 	v, w := newTestView(t)
 	defer w.Close()
+	updateTapped := false
+	v.Actions.CheckUpdate = func() { updateTapped = true }
 	bar := v.settingsTitleBar(NewSmallIconButton(nil, "back", nil, v.colors), defaultAppVersion, nil)
 	bar.Resize(fyne.NewSize(SettingsWidth, TitleBarHeight))
 	var titleRow *fyne.Container
@@ -124,7 +126,7 @@ func TestPhase3SCustomRadioAndSettingsButtons(t *testing.T) {
 	help := titleRow.Objects[3].(*SmallButton)
 	update := titleRow.Objects[5].(*SmallButton)
 	done := titleRow.Objects[6].(*SmallButton)
-	if help.Icon == nil || help.Outlined || !update.Disabled || !update.Outlined || done.Disabled || !done.Primary {
+	if help.Icon == nil || help.Outlined || update.Disabled || !update.Outlined || done.Disabled || !done.Primary {
 		t.Fatalf("title actions help/update/done=%+v/%+v/%+v", help, update, done)
 	}
 	separator := titleRow.Objects[4]
@@ -134,10 +136,14 @@ func TestPhase3SCustomRadioAndSettingsButtons(t *testing.T) {
 	if leftGap != 8 || rightGap != 8 || buttonGap != 6 {
 		t.Fatalf("title action gaps=%.1f/%.1f/%.1f, want 8/8/6", leftGap, rightGap, buttonGap)
 	}
+	update.Tapped(nil)
+	if !updateTapped {
+		t.Fatal("enabled update button did not invoke its action")
+	}
 	updateRenderer := update.CreateRenderer().(*smallButtonRenderer)
 	updateRenderer.Refresh()
 	if updateRenderer.bg.StrokeWidth != 1 {
-		t.Fatalf("disabled update box stroke=%.1f, want 1", updateRenderer.bg.StrokeWidth)
+		t.Fatalf("update box stroke=%.1f, want 1", updateRenderer.bg.StrokeWidth)
 	}
 
 	v.Show(SettingsScreen)

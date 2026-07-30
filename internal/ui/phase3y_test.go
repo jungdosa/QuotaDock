@@ -179,7 +179,7 @@ func TestPhase3YTitleTooltipsDelayI18NStateAndLifecycle(t *testing.T) {
 			settingsTooltips[value.Tooltip] = true
 		}
 	})
-	for _, tooltip := range []string{"Back", "Theme: Dark", "Help", "Update (coming soon)", "Done"} {
+	for _, tooltip := range []string{"Back", "Theme: Dark", "Help", "Update", "Done"} {
 		if !settingsTooltips[tooltip] {
 			t.Fatalf("settings title tooltip %q is missing", tooltip)
 		}

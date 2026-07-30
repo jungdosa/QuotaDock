@@ -18,6 +18,7 @@ import (
 	codexprovider "github.com/jungdosa/QuotaDock/internal/provider/codex"
 	"github.com/jungdosa/QuotaDock/internal/settings"
 	"github.com/jungdosa/QuotaDock/internal/ui"
+	updater "github.com/jungdosa/QuotaDock/internal/update"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -57,6 +58,11 @@ func run(args []string) error {
 			demo = true
 		}
 	}
+	executable, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("locate current executable: %w", err)
+	}
+	auto := platform.NewAutoStartManager("QuotaDock", executable, portable)
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		return fmt.Errorf("locate user config: %w", err)
@@ -99,6 +105,31 @@ func run(args []string) error {
 	var view *ui.View
 	var tray *platform.Tray
 	var lifecycle *platform.Lifecycle
+	updates := &updateController{
+		rootContext: ctx,
+		window:      w,
+		catalog:     catalog,
+		language: func() (i18n.Language, i18n.Language) {
+			return i18n.Language(cfg.Language), i18n.English
+		},
+		checker: updater.Checker{
+			Fetcher:        updater.NewHTTPReleaseFetcher(version, nil),
+			CurrentVersion: version,
+		},
+		flow: updater.Flow{
+			Portable: auto.Portable,
+			Installer: &updater.Installer{
+				Version:  version,
+				Launcher: updater.ProcessLauncher{},
+			},
+			OpenRelease: func(raw string) error { return platform.OpenAllowedURL(a, raw) },
+		},
+		quit: func() {
+			if lifecycle != nil {
+				lifecycle.ExitRequested()
+			}
+		},
+	}
 	hideWindow := func() {
 		w.Hide()
 		if trimErr := native.TrimWorkingSet(); trimErr != nil {
@@ -171,8 +202,6 @@ func run(args []string) error {
 		_ = native.SetAlwaysOnTop(cfg.AlwaysOnTop)
 		_ = native.SetTaskbarVisible(cfg.ShowInTaskbar)
 		refreshWindowCorners()
-		exe, _ := os.Executable()
-		auto := platform.NewAutoStartManager("QuotaDock", exe, portable)
 		if !demo && cfg.AutoStart != previous.AutoStart {
 			if cfg.AutoStart {
 				if autoErr := auto.Enable(); autoErr != nil {
@@ -258,12 +287,17 @@ func run(args []string) error {
 	}, Close: hideWindow, CloseSettings: func() {
 		applyScreen(ui.ScreenForDisplayMode(cfg.DisplayMode))
 	}, ConfigChanged: applyConfig, Activity: markActivity,
-		Inspect:   func(id model.ProviderID) { runConnectionAction(id, false) },
-		Reconnect: func(id model.ProviderID) { runConnectionAction(id, true) },
-		OpenURL:   func(raw string) error { return platform.OpenAllowedURL(a, raw) },
+		Inspect:     func(id model.ProviderID) { runConnectionAction(id, false) },
+		Reconnect:   func(id model.ProviderID) { runConnectionAction(id, true) },
+		CheckUpdate: func() { updates.Check(true) },
+		OpenURL:     func(raw string) error { return platform.OpenAllowedURL(a, raw) },
 	}
 	actions.DemoMode = demo
 	view = ui.NewView(w.Canvas(), catalog, i18n.English, cfg, actions)
+	updates.preparePrompt = func() {
+		w.Show()
+		applyScreen(ui.SettingsScreen)
+	}
 	a.Settings().AddListener(func(fyne.Settings) {
 		go func() {
 			fyne.Do(func() { view.RefreshTheme() })
@@ -339,6 +373,7 @@ func run(args []string) error {
 	if !demo {
 		scheduler.Start(ctx, time.Duration(cfg.RefreshSeconds)*time.Second, func(context.Context) { refresh() })
 		refresh()
+		go func() { fyne.Do(func() { updates.Check(false) }) }()
 	}
 	a.Run()
 	return nil

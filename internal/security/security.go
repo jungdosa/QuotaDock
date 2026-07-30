@@ -35,10 +35,17 @@ func MaskSecrets(value string) string {
 	return emailPattern.ReplaceAllString(value, "[REDACTED_EMAIL]")
 }
 
-var officialDomains = []string{"anthropic.com", "claude.ai", "claude.com", "openai.com", "chatgpt.com", "google.com"}
+// External URL matching is boundary-aware suffix matching, so allowing
+// github.com also allows its *.github.com subdomains.
+var officialDomains = []string{"anthropic.com", "claude.ai", "claude.com", "openai.com", "chatgpt.com", "google.com", "github.com"}
 var providerRequestHosts = map[string]struct{}{
 	"api.anthropic.com":   {},
 	"platform.claude.com": {},
+}
+var updateRequestHosts = map[string]struct{}{
+	"api.github.com":                       {},
+	"objects.githubusercontent.com":        {},
+	"release-assets.githubusercontent.com": {},
 }
 
 func IsAllowedExternalURL(raw string) bool {
@@ -72,6 +79,20 @@ func IsAllowedProviderRequestURL(raw string) bool {
 		return false
 	}
 	_, allowed := providerRequestHosts[strings.ToLower(parsed.Hostname())]
+	return allowed
+}
+
+// IsAllowedUpdateURL is only for update checks and downloads that carry no
+// credentials. Never use it for requests that send credentials.
+func IsAllowedUpdateURL(raw string) bool {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Scheme != "https" || parsed.User != nil {
+		return false
+	}
+	if parsed.Port() != "" && parsed.Port() != "443" {
+		return false
+	}
+	_, allowed := updateRequestHosts[strings.ToLower(parsed.Hostname())]
 	return allowed
 }
 

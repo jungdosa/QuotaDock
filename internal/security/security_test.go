@@ -16,7 +16,7 @@ func TestSensitiveLogMasking(t *testing.T) {
 }
 
 func TestURLAllowlist(t *testing.T) {
-	for _, value := range []string{"https://openai.com/", "https://auth.openai.com/login", "https://claude.ai/", "https://code.claude.com/docs/en/quickstart", "https://developers.openai.com/codex/cli/"} {
+	for _, value := range []string{"https://openai.com/", "https://auth.openai.com/login", "https://claude.ai/", "https://code.claude.com/docs/en/quickstart", "https://developers.openai.com/codex/cli/", "https://github.com/jungdosa/QuotaDock/releases/latest"} {
 		if !IsAllowedExternalURL(value) {
 			t.Errorf("expected allowed: %s", value)
 		}
@@ -37,6 +37,31 @@ func TestProviderRequestURLAllowlist(t *testing.T) {
 	for _, value := range []string{"http://api.anthropic.com/api/oauth/usage", "https://anthropic.com/api/oauth/usage", "https://api.anthropic.com.evil.invalid/", "https://user@platform.claude.com/"} {
 		if IsAllowedProviderRequestURL(value) {
 			t.Errorf("expected provider request URL to be rejected: %s", value)
+		}
+	}
+}
+
+func TestUpdateURLAllowlist(t *testing.T) {
+	for _, value := range []string{
+		"https://api.github.com/repos/jungdosa/QuotaDock/releases/latest",
+		"https://objects.githubusercontent.com/github-production-release-asset/file",
+		"https://release-assets.githubusercontent.com/github-production-release-asset/file",
+		"https://api.github.com:443/repos/jungdosa/QuotaDock/releases/latest",
+	} {
+		if !IsAllowedUpdateURL(value) {
+			t.Errorf("expected update URL to be allowed: %s", value)
+		}
+	}
+	for _, value := range []string{
+		"https://api.github.com.evil.com/",
+		"https://evil.com/api.github.com",
+		"http://api.github.com/repos/jungdosa/QuotaDock/releases/latest",
+		"https://api.github.com:444/repos/jungdosa/QuotaDock/releases/latest",
+		"https://user@api.github.com/repos/jungdosa/QuotaDock/releases/latest",
+		"https://github.com/jungdosa/QuotaDock/releases/latest",
+	} {
+		if IsAllowedUpdateURL(value) {
+			t.Errorf("expected update URL to be rejected: %s", value)
 		}
 	}
 }

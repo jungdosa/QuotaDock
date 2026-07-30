@@ -998,7 +998,7 @@ func TestSettingsHeaderHelpAndProviderColorsMovedToMeters(t *testing.T) {
 	if helpButton == nil || helpButton.Outlined {
 		t.Fatal("settings header is missing the borderless help icon button")
 	}
-	if !buttons["Update"].Disabled || !buttons["Update"].Outlined || !buttons["Done"].Primary {
+	if buttons["Update"].Disabled || !buttons["Update"].Outlined || !buttons["Done"].Primary {
 		t.Fatal("settings update/done button hierarchy is incorrect")
 	}
 	for _, label := range []string{"Theme", "Claude color", "Codex color", "AG Gemini color", "AG Claude color"} {
