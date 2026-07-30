@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- QuotaDock 앱 아이콘: 딥 슬레이트 바탕 + 앰버 강조 -->
+  <!-- 배경: 시안 B 브랜드색 #0B1216, 둥근 사각 -->
+  <rect width="256" height="256" rx="56" fill="#0B1216"/>
+  <rect x="0.5" y="0.5" width="255" height="255" rx="55.5" fill="none" stroke="#1E2A31" stroke-width="1"/>
+
+  <!-- 눈금 미터 3단: 할당량을 나타내는 이산 눈금 (Dock = 계기판) -->
+  <!-- 상단 행: 앰버 신호색, 부분 채움 -->
+  <g>
+    <rect x="52"  y="86" width="18" height="20" rx="3" fill="#FFB454"/>
+    <rect x="76"  y="86" width="18" height="20" rx="3" fill="#FFB454"/>
+    <rect x="100" y="86" width="18" height="20" rx="3" fill="#FFB454"/>
+    <rect x="124" y="86" width="18" height="20" rx="3" fill="#FFB454"/>
+    <rect x="148" y="86" width="18" height="20" rx="3" fill="#2A3942"/>
+    <rect x="172" y="86" width="18" height="20" rx="3" fill="#2A3942"/>
+    <rect x="196" y="86" width="18" height="20" rx="3" fill="#2A3942"/>
+  </g>
+  <!-- 중단 행: 블루 (공급자 색) -->
+  <g>
+    <rect x="52"  y="118" width="18" height="20" rx="3" fill="#60A5FA"/>
+    <rect x="76"  y="118" width="18" height="20" rx="3" fill="#60A5FA"/>
+    <rect x="100" y="118" width="18" height="20" rx="3" fill="#60A5FA"/>
+    <rect x="124" y="118" width="18" height="20" rx="3" fill="#60A5FA"/>
+    <rect x="148" y="118" width="18" height="20" rx="3" fill="#60A5FA"/>
+    <rect x="172" y="118" width="18" height="20" rx="3" fill="#2A3942"/>
+    <rect x="196" y="118" width="18" height="20" rx="3" fill="#2A3942"/>
+  </g>
+  <!-- 하단 행: 초록 (공급자 색) -->
+  <g>
+    <rect x="52"  y="150" width="18" height="20" rx="3" fill="#4AD67D"/>
+    <rect x="76"  y="150" width="18" height="20" rx="3" fill="#4AD67D"/>
+    <rect x="100" y="150" width="18" height="20" rx="3" fill="#2A3942"/>
+    <rect x="124" y="150" width="18" height="20" rx="3" fill="#2A3942"/>
+    <rect x="148" y="150" width="18" height="20" rx="3" fill="#2A3942"/>
+    <rect x="172" y="150" width="18" height="20" rx="3" fill="#2A3942"/>
+    <rect x="196" y="150" width="18" height="20" rx="3" fill="#2A3942"/>
+  </g>
+</svg>

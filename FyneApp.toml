@@ -1,0 +1,9 @@
+[Details]
+Name = "QuotaDock"
+ID = "com.jungdosa.quotadock"
+Version = "0.7.8"
+Build = 1
+Icon = "assets/icon-256.png"
+
+[Migrations]
+fyneDo = true

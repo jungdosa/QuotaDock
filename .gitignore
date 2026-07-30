@@ -1,0 +1,57 @@
+# QuotaDock — Go/Fyne
+# 계획서 §23.3 저장소 경계 규칙에 따라 빌드 산출물과 캐시는 커밋하지 않는다.
+
+# 컴파일 산출물
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.syso
+/quotadock
+/quotadock.exe
+
+# 배포 산출물
+/dist/
+/build/
+*.msi
+*.dmg
+*.AppImage
+*.app/
+SHA256SUMS.txt
+
+# Go 테스트 · 커버리지
+*.test
+*.out
+/coverage/
+
+# Go 워크스페이스 (로컬 전용)
+go.work
+go.work.sum
+
+# Fyne 패키징 중간물
+/fyne-cross/
+/.fyne/
+*.rc
+
+# 인증 원문 — 절대 커밋 금지 (§12, §23.3)
+*.pem
+*.key
+auth.json
+.env
+.env.*
+!.env.example
+
+# 에디터 · OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 로컬 도구 캐시
+/.tmp/
+
+# Codex 검증용 로컬 빌드 캐시
+.cache/

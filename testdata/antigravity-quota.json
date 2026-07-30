@@ -1,0 +1,1 @@
+{"userStatus":{"userTier":{"name":"Google AI Ultra"}},"planStatus":{"planInfo":{"planName":"Google AI Pro"}},"quotaGroups":[{"name":"Gemini Models","buckets":[{"id":"five_hour","remainingFraction":0.65,"windowMinutes":300,"resetTime":1784912400}]},{"name":"Claude and GPT models","buckets":[{"id":"weekly","remainingFraction":0.2,"windowMinutes":10080,"resetTime":1785430800}]}]}
