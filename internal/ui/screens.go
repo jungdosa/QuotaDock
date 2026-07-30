@@ -117,7 +117,7 @@ const (
 	TooltipGap              float32 = 4
 	TooltipMargin           float32 = 4
 	TooltipDelay                    = 400 * time.Millisecond
-	defaultAppVersion               = "0.7.11"
+	defaultAppVersion               = "0.7.12"
 )
 
 // Normal-mode label column sizing mirrors compact mode: the column is only as
