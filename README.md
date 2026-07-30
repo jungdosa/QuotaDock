@@ -2,22 +2,146 @@
 
 # QuotaDock
 
-**Claude · OpenAI Codex · Google Antigravity 사용량 한도를 한 화면에서 지켜보는 Windows 데스크톱 위젯**
+**A tiny always-on-top Windows desktop widget that watches your Claude, OpenAI Codex, and
+Google Antigravity usage limits — session/weekly quotas and reset timers — in one glance.**
 
-*A tiny always-on-top Windows desktop widget that monitors your Claude, OpenAI Codex, and
-Google Antigravity (Gemini) usage limits, session/weekly quotas, and reset timers — in one glance.*
+*Claude · OpenAI Codex · Google Antigravity 사용량 한도를 한 화면에서 지켜보는 Windows 데스크톱 위젯*
 
 [![Release](https://img.shields.io/github/v/release/jungdosa/QuotaDock?include_prereleases&label=release)](https://github.com/jungdosa/QuotaDock/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go&logoColor=white)](https://go.dev/)
+[![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![Fyne](https://img.shields.io/badge/GUI-Fyne-orange)](https://fyne.io/)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?logo=windows&logoColor=white)](#지원-대상)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?logo=windows&logoColor=white)](#supported-platforms)
 
-<img src="docs/screenshots/normal-dark.png" alt="QuotaDock 일반 화면 — Claude / Codex / Antigravity 사용량과 리셋 타이머" width="539">
+<img src="docs/marketing/quotadock-normal-en.png" alt="QuotaDock normal view — Claude / Codex / Antigravity usage and reset timers" width="539">
+
+**English** · [한국어](#한국어)
 
 </div>
 
 ---
+
+# English
+
+When you work with Claude Code, Codex CLI, and Antigravity IDE, you keep asking the same
+questions: *how much of the 5-hour session is left? when does the weekly limit reset?*
+QuotaDock answers both without you having to check — an always-on-top widget showing
+**session and weekly usage plus time remaining until reset** for all three providers.
+
+| Provider | What it shows | How it connects |
+|---|---|---|
+| **Claude** (Claude Code) | 5-hour session · 7-day weekly · Fable weekly | Reuses your official Claude CLI credentials |
+| **OpenAI Codex** | Session · weekly limits | Official Codex CLI app-server (stdio JSONL) |
+| **Google Antigravity** | Gemini and Claude/GPT group session · weekly | Local language server (loopback) |
+
+If one provider fails, the others keep working. Every row draws a **segmented bar (usage)**
+above a **thin continuous bar (time until reset)**, so you can see at a glance whether your
+quota is burning faster than the clock. Bars and figures switch to warning colors once your
+thresholds are crossed.
+
+## Views
+
+Three widget views plus a settings screen. The toolbar button cycles
+`normal → compact → nano`, and a single click returns nano to compact.
+
+### Normal — everything at once
+
+Provider groups, plan badges, usage bars with reset bars, countdown and reset time.
+
+<p align="center"><img src="docs/marketing/quotadock-normal-en.png" alt="Normal view (dark)" width="480"></p>
+
+### Compact — one line per row
+
+A narrow view with time-until-reset next to each percentage. Hover a time to get a tooltip
+with the exact reset moment.
+
+<p align="center"><img src="docs/marketing/quotadock-compact-en.png" alt="Compact view (dark)" width="312"></p>
+
+### Nano — a tiny strip
+
+One cell per provider, roughly 78px tall — made for parking in a corner of your monitor.
+Hovering a row shows a three-line tooltip: `provider · window / remaining / reset time`.
+
+<p align="center"><img src="docs/marketing/quotadock-nano-en.png" alt="Nano view (dark)" width="360"></p>
+
+## Features
+
+- **Light · dark · system themes**, 12/24-hour date formats, per-provider color palettes
+  and configurable warning thresholds
+- **Nine languages** — English, Korean, German, French, Italian, Indonesian,
+  Portuguese (Brazil), Spanish (Spain / Latin America). `System` follows your Windows
+  display language
+- **Connection method buttons** — each provider row shows how it connects (`CLI`, `Auth`,
+  `IDE`) with its state. If a CLI is missing, clicking the button expands install guidance
+  right inside the card
+- **Built-in updates** — checks GitHub Releases once at startup and whenever you ask.
+  Downloads are verified against the release asset's SHA-256 **twice**: after download and
+  again immediately before the installer runs. No periodic polling, no credentials sent
+- **Pin to taskbar (Windows 11)** — keeps the tray icon out of the overflow flyout
+
+## Install
+
+Grab it from [**Releases**](https://github.com/jungdosa/QuotaDock/releases).
+
+| File | Purpose |
+|---|---|
+| `QuotaDock-<version>-win-x64-Setup.exe` | Installer — Start Menu entry, optional launch at startup |
+| `QuotaDock-<version>-win-x64-portable.exe` | Single portable executable |
+
+Binaries are unsigned, so SmartScreen may warn you. Verify integrity with `SHA256SUMS.txt`.
+There is nothing to configure — QuotaDock discovers your already-signed-in official CLIs and
+IDE on its own.
+
+> Current version is `0.7.14`. It becomes `1.0.0` once Windows feature verification is done.
+
+## Design principles
+
+- **It doesn't ask.** If the official tools are installed and signed in, it connects on its
+  own. No first-run login wizard, no forced popups.
+- **It doesn't handle secrets.** Tokens, cookies, and raw `auth.json` never reach the UI or
+  the logs. Only normalized usage rates, allowlist-validated plan labels, and reset times do.
+- **It stays local.** No telemetry, no external analytics. Loopback connections are allowed
+  only to verified processes on fixed endpoints. The one outbound request is the update
+  check, which carries no credentials and runs only at startup or when you click.
+- **It doesn't spend credits.** Refreshing usage never sends a billable AI request.
+- **It stays small.** Native Go + Fyne rendering, 0% idle CPU, actively managed memory.
+
+## Supported platforms
+
+| Priority | Platform | Status |
+|---|---|---|
+| 1st | Windows 10 22H2+ / 11, x64 | **Working** (0.7.x) |
+| 2nd | macOS 14+, Apple Silicon | Planned |
+| 3rd | Linux x64 → arm64 | Planned |
+
+## Building from source
+
+Fyne uses CGO, so Go alone is not enough.
+
+- Go 1.26 or newer
+- A C compiler (Windows: MinGW-w64 / macOS: Xcode Command Line Tools / Linux: gcc + X11 headers)
+
+```sh
+git clone https://github.com/jungdosa/QuotaDock.git
+cd QuotaDock
+go build ./cmd/quotadock
+```
+
+Release artifacts (Setup.exe, portable, SHA256SUMS) are produced by
+`build/windows/build-release.ps1`.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+QuotaDock's source, wording, and screen design are original work.
+Remaining work is tracked in [docs/REMAINING-WORK.md](docs/REMAINING-WORK.md).
+
+---
+
+<a id="한국어"></a>
+
+# 한국어
 
 Claude Code, Codex CLI, Antigravity IDE를 쓰다 보면 "5시간 세션이 얼마나 남았지?",
 "주간 한도는 언제 풀리지?"를 계속 확인하게 됩니다. QuotaDock은 세 공급자의 **세션·주간
@@ -59,10 +183,20 @@ Claude Code, Codex CLI, Antigravity IDE를 쓰다 보면 "5시간 세션이 얼�
 
 <p align="center"><img src="docs/screenshots/nano-dark.png" alt="나노 화면 (다크)" width="360"></p>
 
-라이트 · 다크 · 시스템 테마, 한국어 · 영어 UI, 12/24시간 날짜 형식, 공급자별 색상
-팔레트와 경고 임계값 설정을 지원합니다.
-
 <p align="center"><img src="docs/screenshots/normal-light.png" alt="일반 화면 (라이트)" width="480"></p>
+
+## 기능
+
+- **라이트 · 다크 · 시스템 테마**, 12/24시간 날짜 형식, 공급자별 색상 팔레트, 경고 임계값 설정
+- **9개 언어** — 한국어 · 영어 · 독일어 · 프랑스어 · 이탈리아어 · 인도네시아어 ·
+  포르투갈어(브라질) · 스페인어(스페인/라틴아메리카). `시스템`을 고르면 Windows 표시
+  언어를 따릅니다
+- **연결 방식 버튼** — 공급자별로 어떤 방식(`CLI`·`Auth`·`IDE`)으로 연결되는지와 그 상태를
+  보여줍니다. CLI가 없으면 버튼을 눌러 카드 안에서 설치 안내를 펼칠 수 있습니다
+- **업데이트 확인·설치** — 시작 시 1회와 사용자가 누를 때 GitHub Releases를 확인합니다.
+  내려받은 파일은 릴리스 자산의 SHA-256과 **두 번** 대조합니다 — 다운로드 직후, 그리고
+  설치 프로그램 실행 직전. 주기적 폴링이 없고 인증 정보도 실리지 않습니다
+- **작업 표시줄에 고정 (Windows 11)** — 트레이 아이콘이 오버플로에 숨지 않게 합니다
 
 ## 설치
 
@@ -76,13 +210,13 @@ Claude Code, Codex CLI, Antigravity IDE를 쓰다 보면 "5시간 세션이 얼�
 바이너리는 코드 서명이 없어 SmartScreen 경고가 나올 수 있습니다. `SHA256SUMS.txt`로
 무결성을 확인하세요. 별도 설정 없이, 이미 로그인된 공식 CLI/IDE를 자동 탐색해 연결합니다.
 
-> 현재 버전은 `0.7.8`입니다. Windows 기능 검증을 마치는 시점에 `1.0.0`이 됩니다.
+> 현재 버전은 `0.7.14`입니다. Windows 기능 검증을 마치는 시점에 `1.0.0`이 됩니다.
 
 ## 설계 원칙
 
 - **묻지 않습니다.** 공식 도구를 이미 설치하고 로그인했다면 자동으로 연결합니다. 최초 실행 로그인 마법사나 강제 팝업이 없습니다.
 - **비밀정보를 다루지 않습니다.** 토큰, 쿠키, `auth.json` 원문을 읽어 UI로 전달하거나 로그에 남기지 않습니다. UI에는 정규화된 사용률, 허용 목록으로 검증된 요금제 라벨, 초기화 시각만 전달됩니다.
-- **로컬에만 연결합니다.** 텔레메트리와 외부 분석 서버가 없습니다. loopback 연결은 검증된 프로세스와 고정된 endpoint에만 허용합니다.
+- **로컬에만 연결합니다.** 텔레메트리와 외부 분석 서버가 없습니다. loopback 연결은 검증된 프로세스와 고정된 endpoint에만 허용합니다. 유일한 외부 요청은 업데이트 확인이며, 인증 정보를 싣지 않고 시작 시 1회와 사용자 클릭에만 발생합니다.
 - **크레딧을 쓰지 않습니다.** 사용량을 갱신하려고 불필요한 AI 요청을 보내지 않습니다.
 - **가볍습니다.** Go + Fyne 네이티브 렌더링으로 유휴 CPU 0%, 메모리 사용을 적극 관리합니다.
 
@@ -98,7 +232,7 @@ Claude Code, Codex CLI, Antigravity IDE를 쓰다 보면 "5시간 세션이 얼�
 
 Fyne은 CGO를 사용하므로 Go만으로는 빌드되지 않습니다.
 
-- Go 1.24 이상
+- Go 1.26 이상
 - C 컴파일러 (Windows: MinGW-w64 / macOS: Xcode Command Line Tools / Linux: gcc + X11 개발 헤더)
 
 ```sh
@@ -109,15 +243,12 @@ go build ./cmd/quotadock
 
 릴리스 산출물(Setup.exe, portable, SHA256SUMS)은 `build/windows/build-release.ps1`로 만듭니다.
 
-## 저장소 범위
-
-이 저장소에는 **Go 소스만** 둡니다. 남은 작업 계획은 [docs/REMAINING-WORK.md](docs/REMAINING-WORK.md)에 있습니다.
-
 ## 라이선스
 
 MIT — [LICENSE](LICENSE) 참조.
 
-QuotaDock의 소스, 문구, 화면 설계는 새로 작성한 것입니다. 개발 경위와 선행 프로젝트와의 관계는 [docs/PROVENANCE.md](docs/PROVENANCE.md)에 기록해 두었습니다.
+QuotaDock의 소스, 문구, 화면 설계는 새로 작성한 것입니다. 남은 작업 계획은
+[docs/REMAINING-WORK.md](docs/REMAINING-WORK.md)에 있습니다.
 
 ---
 
