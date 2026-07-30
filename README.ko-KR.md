@@ -1,6 +1,6 @@
 # QuotaDock
 
-[English](./README.md) | [한국어](./README.ko-KR.md) | [简体中文](./README.zh-CN.md) | [日本語](./README.ja-JP.md)
+[English](./README.md) | [한국어](./README.ko-KR.md) | [简体中文](./README.zh-CN.md) | [繁體中文（臺灣）](./README.zh-TW.md) | [日本語](./README.ja-JP.md)
 
 QuotaDock은 **Claude · OpenAI Codex · Google Antigravity**의 사용량 한도 — 세션·주간 할당량과
 리셋 타이머 — 를 한 화면에서 지켜보는 작은 Windows 데스크톱 위젯입니다.

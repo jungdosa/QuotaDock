@@ -1,6 +1,6 @@
 # QuotaDock
 
-[English](./README.md) | [한국어](./README.ko-KR.md) | [简体中文](./README.zh-CN.md) | [日本語](./README.ja-JP.md)
+[English](./README.md) | [한국어](./README.ko-KR.md) | [简体中文](./README.zh-CN.md) | [繁體中文（臺灣）](./README.zh-TW.md) | [日本語](./README.ja-JP.md)
 
 QuotaDock 是一款常驻置顶的轻量 Windows 桌面小组件，让你一眼看清 **Claude、OpenAI Codex 与
 Google Antigravity** 的用量额度 —— 会话/每周配额以及重置倒计时。

@@ -1,6 +1,6 @@
 # QuotaDock
 
-[English](./README.md) | [한국어](./README.ko-KR.md) | [简体中文](./README.zh-CN.md) | [日本語](./README.ja-JP.md)
+[English](./README.md) | [한국어](./README.ko-KR.md) | [简体中文](./README.zh-CN.md) | [繁體中文（臺灣）](./README.zh-TW.md) | [日本語](./README.ja-JP.md)
 
 QuotaDock is a tiny always-on-top Windows desktop widget that watches your **Claude, OpenAI
 Codex, and Google Antigravity** usage limits — session/weekly quotas and reset timers — in one

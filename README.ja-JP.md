@@ -1,6 +1,6 @@
 # QuotaDock
 
-[English](./README.md) | [한국어](./README.ko-KR.md) | [简体中文](./README.zh-CN.md) | [日本語](./README.ja-JP.md)
+[English](./README.md) | [한국어](./README.ko-KR.md) | [简体中文](./README.zh-CN.md) | [繁體中文（臺灣）](./README.zh-TW.md) | [日本語](./README.ja-JP.md)
 
 QuotaDock は、**Claude・OpenAI Codex・Google Antigravity** の利用上限 —— セッション/週間クォータと
 リセットまでの残り時間 —— をひと目で確認できる、常に最前面に表示される小さな Windows デスクトップ
