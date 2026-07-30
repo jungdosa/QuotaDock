@@ -28,7 +28,7 @@ import (
 	"time"
 )
 
-var version = "0.7.12"
+var version = "0.7.13"
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
