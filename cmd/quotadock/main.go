@@ -162,11 +162,56 @@ func run(args []string) error {
 		apply()
 		time.AfterFunc(100*time.Millisecond, func() { fyne.Do(apply) })
 	}
+	fitWindowToScreen := func() {
+		position, positionErr := native.Position()
+		if positionErr != nil {
+			return
+		}
+		fitted := platform.FitToWorkArea(position, platform.MonitorWorkAreas())
+		if fitted == position {
+			return
+		}
+		if moveErr := native.MoveTo(fitted.X, fitted.Y); moveErr != nil {
+			slog.Debug("window could not be fitted to the work area", "error", moveErr)
+		}
+	}
+	var rememberedWidgetPosition platform.Rect
+	var widgetPositionRemembered bool
+	var restoreWidgetPosition platform.Rect
+	var restoreWidgetPositionOnResize bool
 	resizeWindow := func(size fyne.Size) {
 		w.Resize(size)
 		refreshWindowCorners()
+		positionToRestore := restoreWidgetPosition
+		shouldRestorePosition := restoreWidgetPositionOnResize
+		restoreWidgetPositionOnResize = false
+		applyPosition := func() {
+			if shouldRestorePosition {
+				if moveErr := native.MoveTo(positionToRestore.X, positionToRestore.Y); moveErr != nil {
+					slog.Debug("widget position could not be restored", "error", moveErr)
+				}
+			}
+			fitWindowToScreen()
+		}
+		applyPosition()
+		time.AfterFunc(100*time.Millisecond, func() { fyne.Do(applyPosition) })
 	}
-	applyScreen := func(screen ui.Screen) { view.Show(screen); resizeWindow(view.MinimumSize(screen)) }
+	applyScreen := func(screen ui.Screen) {
+		current := view.Screen()
+		if current != ui.SettingsScreen && screen == ui.SettingsScreen {
+			if position, positionErr := native.Position(); positionErr == nil {
+				rememberedWidgetPosition = position
+				widgetPositionRemembered = true
+			}
+		}
+		if current == ui.SettingsScreen && screen != ui.SettingsScreen && widgetPositionRemembered {
+			restoreWidgetPosition = rememberedWidgetPosition
+			restoreWidgetPositionOnResize = true
+			widgetPositionRemembered = false
+		}
+		view.Show(screen)
+		resizeWindow(view.MinimumSize(screen))
+	}
 	refresh := func() {
 		if !refreshing.CompareAndSwap(false, true) {
 			return

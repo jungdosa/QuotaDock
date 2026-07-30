@@ -46,4 +46,38 @@ func RestoreRect(saved Rect, monitors []Rect) Rect {
 	return Rect{X: primary.X + (primary.Width-width)/2, Y: primary.Y + (primary.Height-height)/2, Width: width, Height: height}
 }
 
+// FitToWorkArea moves a window fully inside the work area with which it has
+// the largest overlap. It never changes the window size.
+func FitToWorkArea(window Rect, areas []Rect) Rect {
+	if len(areas) == 0 {
+		return window
+	}
+
+	area := areas[0]
+	var largestOverlap int64
+	for _, candidate := range areas {
+		overlap := intersection(window, candidate)
+		overlapArea := int64(overlap.Width) * int64(overlap.Height)
+		if overlapArea > largestOverlap {
+			largestOverlap = overlapArea
+			area = candidate
+		}
+	}
+
+	fitted := window
+	if fitted.Right() > area.Right() {
+		fitted.X = area.Right() - fitted.Width
+	}
+	if fitted.X < area.X {
+		fitted.X = area.X
+	}
+	if fitted.Bottom() > area.Bottom() {
+		fitted.Y = area.Bottom() - fitted.Height
+	}
+	if fitted.Y < area.Y {
+		fitted.Y = area.Y
+	}
+	return fitted
+}
+
 var ErrPortableAutoStart = errors.New("automatic start is disabled for portable builds")

@@ -59,7 +59,7 @@ func TestFyneDoMigrationIsDeclared(t *testing.T) {
 	}
 }
 
-func TestPhase3IVersionMetadataMatchesRuntime(t *testing.T) {
+func TestPhase4GVersionMetadataMatchesRuntime(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("..", "..", "FyneApp.toml"))
 	if err != nil {
 		t.Fatal(err)
