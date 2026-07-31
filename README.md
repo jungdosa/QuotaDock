@@ -86,6 +86,46 @@ IDE on its own.
 
 > Current version is `0.7.15`. It becomes `1.0.0` once Windows feature verification is done.
 
+## First run
+
+There is no setup wizard, no login screen, and nothing to paste.
+
+1. Launch **QuotaDock**. It appears as a small always-on-top widget.
+2. It looks for the official tools you already use and connects on its own —
+   Claude Code CLI, Codex CLI, and the Antigravity IDE.
+3. Providers you are signed in to start showing usage within a few seconds.
+
+If a row reports a missing CLI, open **Settings → Connections** and click that provider's
+`CLI` button. Install guidance expands inside the card — the command to run, how to sign in,
+and where QuotaDock looks. Press `Rescan` when you are done; no restart needed.
+
+Day to day:
+
+- The toolbar button cycles `normal → compact → nano`; one click returns nano to compact.
+- `✕` sends the widget to the tray instead of quitting. Quit from the tray menu.
+- Drag the title bar to move it. The position is remembered across restarts.
+
+## Privacy
+
+QuotaDock is built so that it never sees your credentials in the first place.
+
+- **It reads, it never asks.** Claude usage comes from the token Claude Code already stored on
+  your machine. Codex usage comes from the official Codex CLI's app-server over stdio.
+  Antigravity usage comes from its language server on `127.0.0.1`. There is no session-key
+  box, no cookie extraction, and no browser automation.
+- **Credentials never reach the surface.** Tokens, cookies, and raw credential files are not
+  rendered in the UI. Only normalized usage percentages, allowlist-validated plan labels, and
+  reset timestamps do.
+- **No log file.** Nothing is written to disk as a log. Diagnostic output goes to standard
+  error only, and secrets, bearer tokens, and email addresses are redacted first.
+- **Outbound traffic is a short allowlist.** Provider requests may only reach
+  `api.anthropic.com` and `platform.claude.com`. Update checks may only reach
+  `api.github.com` and GitHub's release hosts, and they carry no credentials. Everything else
+  is loopback. No telemetry, no analytics, no crash reporting.
+- **Your settings stay yours.** Configuration lives in `%APPDATA%\QuotaDock\settings.json`
+  and survives uninstall. Nothing is synced anywhere.
+- **No billable requests.** Refreshing usage never spends your quota or credits.
+
 ## Design principles
 
 - **It doesn't ask.** If the official tools are installed and signed in, it connects on its
