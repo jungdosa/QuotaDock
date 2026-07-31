@@ -204,16 +204,26 @@ func TestDisplayModeCyclesAndMigratesLegacyCompactSetting(t *testing.T) {
 	}
 }
 
-func TestTrayPromotionDefaultsFalseAndMissingKeyStaysFalse(t *testing.T) {
-	if Default().PromoteTrayIcon {
-		t.Fatal("tray icon promotion must be disabled by default")
+func TestTrayPromotionDefaultsTrueAndMissingKeyStaysTrue(t *testing.T) {
+	if !Default().PromoteTrayIcon {
+		t.Fatal("tray icon promotion must be enabled by default")
 	}
 	config, err := Decode(strings.NewReader("{\"schemaVersion\":4,\"alwaysOnTop\":true}"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !config.PromoteTrayIcon {
+		t.Fatal("settings without promoteTrayIcon did not use the enabled default")
+	}
+}
+
+func TestTrayPromotionStoredFalseOverridesDefault(t *testing.T) {
+	config, err := Decode(strings.NewReader("{\"schemaVersion\":4,\"promoteTrayIcon\":false}"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if config.PromoteTrayIcon {
-		t.Fatal("settings without promoteTrayIcon enabled tray icon promotion")
+		t.Fatal("stored false promoteTrayIcon setting was overwritten by the default")
 	}
 }
 

@@ -43,27 +43,27 @@ func SupportsTrayIconPromotion() bool {
 	return isWindows11Build(build)
 }
 
-func SetTrayIconPromoted(executable string, promoted bool) error {
+func SetTrayIconPromoted(executable string, promoted bool) (TrayPromotionResult, error) {
 	build, err := currentWindowsBuild()
 	if err != nil {
-		return fmt.Errorf("read Windows build for tray icon promotion: %w", err)
+		return TrayPromotionUnsupported, fmt.Errorf("read Windows build for tray icon promotion: %w", err)
 	}
 	if !isWindows11Build(build) {
-		return nil
+		return TrayPromotionUnsupported, nil
 	}
 
 	root, err := registry.OpenKey(registry.CURRENT_USER, notifyIconSettingsKeyPath, registry.ENUMERATE_SUB_KEYS)
 	if err == registry.ErrNotExist {
-		return nil
+		return TrayPromotionEntryNotFound, nil
 	}
 	if err != nil {
-		return fmt.Errorf("open tray icon settings: %w", err)
+		return TrayPromotionUnsupported, fmt.Errorf("open tray icon settings: %w", err)
 	}
 	defer root.Close()
 
 	subkeys, err := root.ReadSubKeyNames(-1)
 	if err != nil {
-		return fmt.Errorf("enumerate tray icon settings: %w", err)
+		return TrayPromotionUnsupported, fmt.Errorf("enumerate tray icon settings: %w", err)
 	}
 	entries := make([]trayIconRegistryEntry, 0, len(subkeys))
 	for _, subkey := range subkeys {
@@ -87,14 +87,14 @@ func SetTrayIconPromoted(executable string, promoted bool) error {
 
 	subkey, found := selectTrayIconSubkey(executable, entries)
 	if !found {
-		return nil
+		return TrayPromotionEntryNotFound, nil
 	}
 	entryKey, err := registry.OpenKey(root, subkey, registry.SET_VALUE)
 	if err == registry.ErrNotExist {
-		return nil
+		return TrayPromotionEntryNotFound, nil
 	}
 	if err != nil {
-		return fmt.Errorf("open matched tray icon settings: %w", err)
+		return TrayPromotionUnsupported, fmt.Errorf("open matched tray icon settings: %w", err)
 	}
 	defer entryKey.Close()
 
@@ -103,7 +103,7 @@ func SetTrayIconPromoted(executable string, promoted bool) error {
 		value = 1
 	}
 	if err := entryKey.SetDWordValue("IsPromoted", value); err != nil {
-		return fmt.Errorf("write tray icon promotion: %w", err)
+		return TrayPromotionUnsupported, fmt.Errorf("write tray icon promotion: %w", err)
 	}
-	return nil
+	return TrayPromotionApplied, nil
 }

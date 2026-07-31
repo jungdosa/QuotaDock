@@ -1,6 +1,9 @@
 package windows
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestTrayPromotionWindows11BuildThreshold(t *testing.T) {
 	tests := []struct {
@@ -82,5 +85,44 @@ func TestTrayPromotionDemotesOnlyOnEnabledToDisabledTransition(t *testing.T) {
 		if got := shouldDemoteTrayIcon(test.previous, test.current); got != test.want {
 			t.Errorf("shouldDemoteTrayIcon(%v, %v)=%v, want %v", test.previous, test.current, got, test.want)
 		}
+	}
+}
+
+func TestTrayPromotionRetryContinuesOnlyWhenEntryIsMissing(t *testing.T) {
+	tests := []struct {
+		name   string
+		result TrayPromotionResult
+		want   bool
+	}{
+		{name: "entry not found", result: TrayPromotionEntryNotFound, want: true},
+		{name: "applied", result: TrayPromotionApplied, want: false},
+		{name: "unsupported", result: TrayPromotionUnsupported, want: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, got := NextTrayIconPromotionRetry(test.result, 1)
+			if got != test.want {
+				t.Fatalf("NextTrayIconPromotionRetry(%v, 1) retry=%v, want %v", test.result, got, test.want)
+			}
+		})
+	}
+}
+
+func TestTrayPromotionRetryAttemptsAreCapped(t *testing.T) {
+	attempts := 1
+	var previousDelay time.Duration
+	for {
+		delay, retry := NextTrayIconPromotionRetry(TrayPromotionEntryNotFound, attempts)
+		if !retry {
+			break
+		}
+		if delay <= previousDelay {
+			t.Fatalf("retry delay %v after attempt %d did not increase from %v", delay, attempts, previousDelay)
+		}
+		previousDelay = delay
+		attempts++
+	}
+	if attempts != maxTrayPromotionAttempts {
+		t.Fatalf("tray promotion attempts=%d, want %d", attempts, maxTrayPromotionAttempts)
 	}
 }

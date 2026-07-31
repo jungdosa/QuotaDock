@@ -108,6 +108,14 @@ func run(args []string) error {
 	var view *ui.View
 	var tray *platform.Tray
 	var lifecycle *platform.Lifecycle
+	var trayPromotionRetryTimer *time.Timer
+	stopTrayPromotionRetries := func() {
+		if trayPromotionRetryTimer != nil {
+			trayPromotionRetryTimer.Stop()
+			trayPromotionRetryTimer = nil
+		}
+	}
+	defer stopTrayPromotionRetries()
 	updates := &updateController{
 		rootContext: ctx,
 		window:      w,
@@ -250,6 +258,9 @@ func run(args []string) error {
 		_ = native.SetAlwaysOnTop(cfg.AlwaysOnTop)
 		_ = native.SetTaskbarVisible(cfg.ShowInTaskbar)
 		if !demo && trayPromotionSupported && tray != nil {
+			if !cfg.PromoteTrayIcon {
+				stopTrayPromotionRetries()
+			}
 			if promotionErr := platform.UpdateTrayIconPromotion(executable, previous.PromoteTrayIcon, cfg.PromoteTrayIcon); promotionErr != nil {
 				slog.Warn("tray icon promotion was not updated", "error", promotionErr)
 			}
@@ -361,7 +372,14 @@ func run(args []string) error {
 	}
 	w.SetContent(view.Root)
 	applyScreen(ui.ScreenForDisplayMode(cfg.DisplayMode))
-	lifecycle = &platform.Lifecycle{Hide: func() { savePosition(); hideWindow() }, Quit: func() { savePosition(); cancel(); scheduler.Stop(); _ = controller.Close(); a.Quit() }}
+	lifecycle = &platform.Lifecycle{Hide: func() { savePosition(); hideWindow() }, Quit: func() {
+		savePosition()
+		cancel()
+		stopTrayPromotionRetries()
+		scheduler.Stop()
+		_ = controller.Close()
+		a.Quit()
+	}}
 	w.SetCloseIntercept(lifecycle.CloseRequested)
 	tray, err = platform.NewTray(a, w, catalog, i18n.Language(cfg.Language), systemLanguage,
 		func() {
@@ -382,9 +400,31 @@ func run(args []string) error {
 		return err
 	}
 	if !demo && trayPromotionSupported && cfg.PromoteTrayIcon {
-		if promotionErr := platform.SetTrayIconPromoted(executable, true); promotionErr != nil {
-			slog.Warn("tray icon promotion was not applied after tray registration", "error", promotionErr)
+		var applyTrayIconPromotion func(int)
+		applyTrayIconPromotion = func(attempt int) {
+			if ctx.Err() != nil || !cfg.PromoteTrayIcon {
+				return
+			}
+			result, promotionErr := platform.SetTrayIconPromoted(executable, true)
+			if promotionErr != nil {
+				slog.Warn("tray icon promotion was not applied after tray registration", "error", promotionErr)
+				return
+			}
+			delay, retry := platform.NextTrayIconPromotionRetry(result, attempt)
+			if !retry {
+				return
+			}
+			trayPromotionRetryTimer = time.AfterFunc(delay, func() {
+				if ctx.Err() != nil {
+					return
+				}
+				fyne.Do(func() {
+					trayPromotionRetryTimer = nil
+					applyTrayIconPromotion(attempt + 1)
+				})
+			})
 		}
+		applyTrayIconPromotion(1)
 	}
 	// Fyne installs its tray toggle intercept in SetSystemTrayWindow. Restore
 	// QuotaDock's lifecycle intercept so close still saves position and trims.

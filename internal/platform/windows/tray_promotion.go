@@ -1,8 +1,28 @@
 package windows
 
-import "strings"
+import (
+	"strings"
+	"time"
+)
 
 const windows11MinimumBuild = 22000
+
+type TrayPromotionResult int
+
+const (
+	TrayPromotionApplied TrayPromotionResult = iota
+	TrayPromotionEntryNotFound
+	TrayPromotionUnsupported
+)
+
+const maxTrayPromotionAttempts = 5
+
+var trayPromotionRetryDelays = [...]time.Duration{
+	time.Second,
+	2 * time.Second,
+	4 * time.Second,
+	8 * time.Second,
+}
 
 type trayIconRegistryEntry struct {
 	subkey         string
@@ -60,14 +80,26 @@ func shouldDemoteTrayIcon(previous, current bool) bool {
 	return previous && !current
 }
 
+// NextTrayIconPromotionRetry returns the next delay after completedAttempts.
+// The first registry attempt is immediate, so four delayed retries cap the
+// operation at five total attempts.
+func NextTrayIconPromotionRetry(result TrayPromotionResult, completedAttempts int) (time.Duration, bool) {
+	if result != TrayPromotionEntryNotFound || completedAttempts < 1 || completedAttempts >= maxTrayPromotionAttempts {
+		return 0, false
+	}
+	return trayPromotionRetryDelays[completedAttempts-1], true
+}
+
 // UpdateTrayIconPromotion applies only a setting transition. In particular,
 // false -> false never reaches the registry and cannot undo a manual Windows pin.
 func UpdateTrayIconPromotion(executable string, previous, current bool) error {
 	switch {
 	case shouldDemoteTrayIcon(previous, current):
-		return SetTrayIconPromoted(executable, false)
+		_, err := SetTrayIconPromoted(executable, false)
+		return err
 	case !previous && current:
-		return SetTrayIconPromoted(executable, true)
+		_, err := SetTrayIconPromoted(executable, true)
+		return err
 	default:
 		return nil
 	}

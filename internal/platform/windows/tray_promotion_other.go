@@ -6,6 +6,6 @@ func SupportsTrayIconPromotion() bool {
 	return false
 }
 
-func SetTrayIconPromoted(string, bool) error {
-	return nil
+func SetTrayIconPromoted(string, bool) (TrayPromotionResult, error) {
+	return TrayPromotionUnsupported, nil
 }
