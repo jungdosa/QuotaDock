@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -22,6 +23,26 @@ const syntheticUsage = `{
   "five_hour":{"utilization":12.5,"resets_at":"2030-01-01T01:00:00Z"},
   "seven_day":{"utilization":34.5,"resets_at":"2030-01-07T01:00:00Z"}
 }`
+
+func oauthUsageFixture(t *testing.T, mutate func(map[string]json.RawMessage)) json.RawMessage {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "testdata", "claude-oauth-usage-spend.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if mutate != nil {
+		mutate(payload)
+	}
+	updated, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return updated
+}
 
 type fakeOAuthFetcher struct {
 	available bool
@@ -97,6 +118,118 @@ func TestNormalizeOAuthUsageFiveHourAndSevenDay(t *testing.T) {
 	}
 	if snapshot.Limits[0].ID != "five_hour" || snapshot.Limits[0].WindowMinutes != 300 || snapshot.Limits[1].ID != "seven_day" || snapshot.Limits[1].WindowMinutes != 10080 {
 		t.Fatal("usage windows were not mapped")
+	}
+}
+
+func TestAmountFromMinorUsesResponseExponent(t *testing.T) {
+	tests := []struct {
+		amountMinor int64
+		exponent    int
+		want        float64
+	}{
+		{amountMinor: 4761, exponent: 2, want: 47.61},
+		{amountMinor: 4761, exponent: 0, want: 4761},
+		{amountMinor: 4761, exponent: 3, want: 4.761},
+	}
+	for _, test := range tests {
+		got, ok := amountFromMinor(test.amountMinor, test.exponent)
+		if !ok || math.Abs(got-test.want) > 1e-9 {
+			t.Errorf("amountFromMinor(%d, %d) = %v, %t; want %v, true", test.amountMinor, test.exponent, got, ok, test.want)
+		}
+	}
+}
+
+func TestNormalizeOAuthUsageExtraUsageDisabledOmitsSpend(t *testing.T) {
+	raw := oauthUsageFixture(t, func(payload map[string]json.RawMessage) {
+		payload["extra_usage"] = json.RawMessage(`{"is_enabled":false}`)
+	})
+	snapshot, err := NormalizeOAuthUsage(raw, "", "pro", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Credits != nil {
+		t.Fatalf("disabled extra usage returned credits: %+v", snapshot.Credits)
+	}
+}
+
+func TestNormalizeOAuthUsageSpendDisabledOmitsSpend(t *testing.T) {
+	raw := oauthUsageFixture(t, func(payload map[string]json.RawMessage) {
+		payload["spend"] = json.RawMessage(`{"enabled":false}`)
+	})
+	snapshot, err := NormalizeOAuthUsage(raw, "", "pro", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Credits != nil {
+		t.Fatalf("disabled spend returned credits: %+v", snapshot.Credits)
+	}
+}
+
+func TestNormalizeOAuthUsageZeroLimitOmitsSpend(t *testing.T) {
+	raw := oauthUsageFixture(t, func(payload map[string]json.RawMessage) {
+		payload["spend"] = json.RawMessage(`{
+			"used":{"amount_minor":4761,"currency":"USD","exponent":2},
+			"limit":{"amount_minor":0,"currency":"USD","exponent":2},
+			"percent":48,
+			"enabled":true
+		}`)
+	})
+	snapshot, err := NormalizeOAuthUsage(raw, "", "pro", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Credits != nil {
+		t.Fatalf("zero spend limit returned credits: %+v", snapshot.Credits)
+	}
+}
+
+func TestNormalizeOAuthUsageUsesReportedSpendPercent(t *testing.T) {
+	snapshot, err := NormalizeOAuthUsage(oauthUsageFixture(t, nil), "", "pro", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Credits == nil || snapshot.Credits.Spend == nil {
+		t.Fatal("enabled spend was not normalized")
+	}
+	spend := snapshot.Credits.Spend
+	if spend.Used != 47.61 || spend.Limit != 100 || spend.Currency != "USD" || spend.Percent != 48 {
+		t.Fatalf("normalized spend = %+v", spend)
+	}
+}
+
+func TestNormalizeOAuthUsageCreditBlockFailuresPreserveWindows(t *testing.T) {
+	tests := map[string]func(map[string]json.RawMessage){
+		"missing": func(payload map[string]json.RawMessage) {
+			delete(payload, "extra_usage")
+			delete(payload, "spend")
+		},
+		"null": func(payload map[string]json.RawMessage) {
+			payload["extra_usage"] = json.RawMessage("null")
+			payload["spend"] = json.RawMessage("null")
+		},
+		"malformed fields": func(payload map[string]json.RawMessage) {
+			payload["spend"] = json.RawMessage(`{"enabled":"invalid"}`)
+		},
+		"missing used": func(payload map[string]json.RawMessage) {
+			payload["spend"] = json.RawMessage(`{"limit":{"amount_minor":10000,"currency":"USD","exponent":2},"percent":48,"enabled":true}`)
+		},
+		"missing limit": func(payload map[string]json.RawMessage) {
+			payload["spend"] = json.RawMessage(`{"used":{"amount_minor":4761,"currency":"USD","exponent":2},"percent":48,"enabled":true}`)
+		},
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			snapshot, err := NormalizeOAuthUsage(oauthUsageFixture(t, mutate), "", "pro", time.Now())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(snapshot.Limits) != 2 || snapshot.Limits[0].ID != "five_hour" || snapshot.Limits[1].ID != "seven_day" {
+				t.Fatalf("usage windows were lost: %+v", snapshot.Limits)
+			}
+			if snapshot.Credits != nil {
+				t.Fatalf("invalid credit block returned credits: %+v", snapshot.Credits)
+			}
+		})
 	}
 }
 

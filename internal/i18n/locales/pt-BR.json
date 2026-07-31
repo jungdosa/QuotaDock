@@ -9,6 +9,7 @@
   "usage.resets_at": "Reset às",
   "settings.credits": "Créditos",
   "usage.credits": "Créditos %s",
+  "usage.credits_spend": "Créditos %s / %s",
   "usage.credits_unlimited": "Créditos ilimitados",
   "error.cli_not_installed": "A Codex CLI não está instalada.",
   "error.not_logged_in": "Login necessário",

@@ -437,12 +437,31 @@ type oauthScopedLimit struct {
 	} `json:"scope"`
 }
 
+type oauthMoney struct {
+	AmountMinor int64  `json:"amount_minor"`
+	Currency    string `json:"currency"`
+	Exponent    int    `json:"exponent"`
+}
+
+type oauthExtraUsage struct {
+	IsEnabled bool `json:"is_enabled"`
+}
+
+type oauthSpend struct {
+	Used    *oauthMoney `json:"used"`
+	Limit   *oauthMoney `json:"limit"`
+	Percent *float64    `json:"percent"`
+	Enabled bool        `json:"enabled"`
+}
+
 type oauthUsageResponse struct {
 	FiveHour      *oauthUsageWindow  `json:"five_hour"`
 	SevenDay      *oauthUsageWindow  `json:"seven_day"`
 	SevenDayFable *oauthUsageWindow  `json:"seven_day_fable"`
 	Fable         *oauthUsageWindow  `json:"fable"`
 	Limits        []oauthScopedLimit `json:"limits"`
+	ExtraUsage    json.RawMessage    `json:"extra_usage"`
+	Spend         json.RawMessage    `json:"spend"`
 }
 
 func NormalizeOAuthUsage(raw json.RawMessage, rateLimitTier, subscriptionType string, fetchedAt time.Time) (model.UsageSnapshot, error) {
@@ -485,7 +504,46 @@ func NormalizeOAuthUsage(raw json.RawMessage, rateLimitTier, subscriptionType st
 		fable = fableLimit(payload.Limits)
 	}
 	appendWindow("seven_day_fable", "Fable", 10080, fable)
+	snapshot.Credits = normalizeOAuthCredits(payload.ExtraUsage, payload.Spend)
 	return snapshot, nil
+}
+
+func normalizeOAuthCredits(extraUsageRaw, spendRaw json.RawMessage) *model.Credits {
+	if len(extraUsageRaw) == 0 || len(spendRaw) == 0 {
+		return nil
+	}
+	var extraUsage oauthExtraUsage
+	if err := json.Unmarshal(extraUsageRaw, &extraUsage); err != nil || !extraUsage.IsEnabled {
+		return nil
+	}
+	var spend oauthSpend
+	if err := json.Unmarshal(spendRaw, &spend); err != nil || !spend.Enabled || spend.Used == nil || spend.Limit == nil || spend.Limit.AmountMinor <= 0 || spend.Percent == nil || !finite(*spend.Percent) {
+		return nil
+	}
+	used, usedOK := amountFromMinor(spend.Used.AmountMinor, spend.Used.Exponent)
+	limit, limitOK := amountFromMinor(spend.Limit.AmountMinor, spend.Limit.Exponent)
+	if !usedOK || !limitOK {
+		return nil
+	}
+	currency := strings.ToUpper(strings.TrimSpace(spend.Used.Currency))
+	if currency == "" {
+		currency = strings.ToUpper(strings.TrimSpace(spend.Limit.Currency))
+	}
+	return &model.Credits{Spend: &model.CreditSpend{
+		Used:     used,
+		Limit:    limit,
+		Currency: currency,
+		Percent:  *spend.Percent,
+	}}
+}
+
+func amountFromMinor(amountMinor int64, exponent int) (float64, bool) {
+	divisor := math.Pow10(exponent)
+	if divisor == 0 || math.IsNaN(divisor) || math.IsInf(divisor, 0) {
+		return 0, false
+	}
+	amount := float64(amountMinor) / divisor
+	return amount, finite(amount)
 }
 
 func weeklyAllLimit(limits []oauthScopedLimit) *oauthUsageWindow {

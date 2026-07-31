@@ -9,6 +9,7 @@
   "usage.resets_at": "Reset um",
   "settings.credits": "Guthaben",
   "usage.credits": "Guthaben %s",
+  "usage.credits_spend": "Guthaben %s / %s",
   "usage.credits_unlimited": "Unbegrenztes Guthaben",
   "error.cli_not_installed": "Codex CLI ist nicht installiert.",
   "error.not_logged_in": "Anmeldung nötig",

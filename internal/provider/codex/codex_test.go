@@ -90,6 +90,18 @@ func TestNormalUsagePartialFieldsAndMultipleLimitIDs(t *testing.T) {
 	}
 }
 
+func TestCodexCreditsRemainBalanceAndUnlimitedOnly(t *testing.T) {
+	transport := workingTransport(t)
+	transport.responses["account/rateLimits/read"] = json.RawMessage(`{"credits":{"balance":"12.5","unlimited":true}}`)
+	snapshot, err := New(transport, "0.100.0").Refresh(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Credits == nil || snapshot.Credits.Balance != 12.5 || !snapshot.Credits.Unlimited || snapshot.Credits.Spend != nil {
+		t.Fatalf("Codex credits changed shape: %+v", snapshot.Credits)
+	}
+}
+
 func TestSparseRateLimitEventMerge(t *testing.T) {
 	provider := New(workingTransport(t), "0.100.0")
 	before, err := provider.Refresh(context.Background())

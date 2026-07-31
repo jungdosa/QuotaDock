@@ -93,6 +93,15 @@ type UsageLimit struct {
 type Credits struct {
 	Balance   float64
 	Unlimited bool
+	// Spend is populated only when a provider reports a paid extra-usage meter.
+	Spend *CreditSpend
+}
+
+type CreditSpend struct {
+	Used     float64
+	Limit    float64
+	Currency string
+	Percent  float64
 }
 
 // UsageSnapshot deliberately has no representation for authentication data,

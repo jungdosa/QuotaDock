@@ -302,13 +302,12 @@ func (v *View) makeLaneHeader(lane LaneState) (fyne.CanvasObject, normalHeaderVi
 }
 
 // creditsDisplayEnabled gates the whole paid-credit surface: the lane-header
-// meta text, the CONNECTIONS detail entry, and the Settings toggles. The Codex
-// pipeline already delivers the balance, but the surface stays off until the
-// Claude browser-login path can report credits too, so both providers launch
-// together (plan: docs/REMAINING-WORK.md).
-const creditsDisplayEnabled = false
+// meta text, the CONNECTIONS detail entry, and the Settings toggles. The
+// existing Claude OAuth usage response and Codex pipeline both report credits,
+// so the shared surface can launch without new authentication or requests.
+const creditsDisplayEnabled = true
 
-// laneCreditsVisible combines "the provider reported a balance" with the
+// laneCreditsVisible combines "the provider reported credits" with the
 // per-provider visibility toggle from Settings.
 func (v *View) laneCreditsVisible(lane LaneState) bool {
 	if !creditsDisplayEnabled || lane.Credits == nil {
@@ -330,7 +329,24 @@ func (v *View) creditsText(credits *model.Credits) string {
 	if credits.Unlimited {
 		return v.text(i18n.KeyCreditsUnlimited)
 	}
+	if credits.Spend != nil {
+		used := v.creditAmountText(credits.Spend.Used, credits.Spend.Currency)
+		limit := v.creditAmountText(credits.Spend.Limit, credits.Spend.Currency)
+		return fmt.Sprintf(v.text(i18n.KeyCreditsSpend), used, limit)
+	}
 	return fmt.Sprintf(v.text(i18n.KeyCredits), i18n.FormatDecimal(v.resolvedLanguage(), credits.Balance))
+}
+
+func (v *View) creditAmountText(amount float64, currency string) string {
+	formatted := i18n.FormatDecimal(v.resolvedLanguage(), amount)
+	currency = strings.ToUpper(strings.TrimSpace(currency))
+	if currency == "USD" {
+		return "$" + formatted
+	}
+	if currency == "" {
+		return formatted
+	}
+	return formatted + " " + currency
 }
 
 func (v *View) updateNormalHeader(handles normalHeaderView, lane LaneState) {
