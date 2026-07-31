@@ -19,6 +19,7 @@ type Transport interface {
 	Version(context.Context) (string, error)
 	Request(context.Context, string, any) (json.RawMessage, error)
 	Notify(context.Context, string, any) error
+	Invalidate()
 	Close() error
 }
 
@@ -102,7 +103,7 @@ func (p *Provider) initialize(ctx context.Context) error {
 	}
 	p.mu.Unlock()
 	if _, err := p.transport.Request(ctx, "initialize", map[string]any{"clientInfo": map[string]string{"name": "QuotaDock", "version": "0.4.0"}}); err != nil {
-		return safeTransportError(err)
+		return p.recoverableTransportError(err, true)
 	}
 	// The handshake succeeded, so the CLI is installed, logged in and talking to
 	// us. From here on a silent timeout is not a setup failure: it is the pattern
@@ -111,7 +112,7 @@ func (p *Provider) initialize(ctx context.Context) error {
 	p.handshakeOK = true
 	p.mu.Unlock()
 	if err := p.transport.Notify(ctx, "initialized", map[string]any{}); err != nil {
-		return safeTransportError(err)
+		return p.recoverableTransportError(err, false)
 	}
 	accountRaw, err := p.transport.Request(ctx, "account/read", map[string]any{})
 	if err != nil {
@@ -157,12 +158,28 @@ func (p *Provider) postHandshakeError(err error) error {
 	handshake := p.handshakeOK
 	p.mu.Unlock()
 	if !handshake {
-		return safeTransportError(err)
+		return p.recoverableTransportError(err, true)
 	}
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, process.ErrTimeout) {
 		return model.SafeError{Code: model.ErrQuotaExhausted, Key: "error.quota_exhausted"}
 	}
-	return safeTransportError(err)
+	return p.recoverableTransportError(err, false)
+}
+
+func (p *Provider) recoverableTransportError(err error, invalidateTimeout bool) error {
+	safeErr := safeTransportError(err)
+	var classified model.SafeError
+	if errors.Is(err, process.ErrProcessExited) ||
+		(!errors.Is(err, process.ErrRPCResponse) && errors.As(safeErr, &classified) &&
+			(classified.Code == model.ErrInitialization ||
+				(invalidateTimeout && classified.Code == model.ErrTimeout))) {
+		p.transport.Invalidate()
+		p.mu.Lock()
+		p.initialized = false
+		p.handshakeOK = false
+		p.mu.Unlock()
+	}
+	return safeErr
 }
 
 func safeTransportError(err error) error {

@@ -5,14 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
-
-	"github.com/jungdosa/QuotaDock/internal/model"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/jungdosa/QuotaDock/internal/model"
+	"github.com/jungdosa/QuotaDock/internal/process"
 )
 
 type fakeTransport struct {
@@ -22,11 +23,15 @@ type fakeTransport struct {
 	fail      map[string]error
 	calls     []string
 	handler   func(json.RawMessage)
+	session   int
+	active    bool
+	discarded int
 }
 
 func (f *fakeTransport) Version(context.Context) (string, error) { return f.version, nil }
 func (f *fakeTransport) ExecutablePath() (string, error)         { return f.path, nil }
 func (f *fakeTransport) Request(_ context.Context, method string, _ any) (json.RawMessage, error) {
+	f.ensureSession()
 	f.calls = append(f.calls, method)
 	if err := f.fail[method]; err != nil {
 		return nil, err
@@ -34,13 +39,29 @@ func (f *fakeTransport) Request(_ context.Context, method string, _ any) (json.R
 	return f.responses[method], nil
 }
 func (f *fakeTransport) Notify(_ context.Context, method string, _ any) error {
+	f.ensureSession()
 	f.calls = append(f.calls, method)
 	return f.fail[method]
 }
 func (f *fakeTransport) SetRateLimitsUpdatedHandler(handler func(json.RawMessage)) {
 	f.handler = handler
 }
-func (f *fakeTransport) Close() error { return nil }
+func (f *fakeTransport) ensureSession() {
+	if !f.active {
+		f.session++
+		f.active = true
+	}
+}
+func (f *fakeTransport) Invalidate() {
+	if f.active {
+		f.active = false
+		f.discarded++
+	}
+}
+func (f *fakeTransport) Close() error {
+	f.active = false
+	return nil
+}
 func workingTransport(t *testing.T) *fakeTransport {
 	return &fakeTransport{version: "0.145.0", path: `/opt/codex/bin/codex`, responses: map[string]json.RawMessage{"initialize": json.RawMessage(`{"capabilities":{}}`), "account/read": json.RawMessage(`{"account":{"loggedIn":true,"planType":"plus"}}`), "account/rateLimits/read": fixture(t, "codex-rate-limits.json")}, fail: map[string]error{}}
 }
@@ -205,6 +226,103 @@ func TestAPIKeyAccountReturnsSafeNoSubscriptionLimitGuidance(t *testing.T) {
 	if !errors.As(err, &safe) || safe.Code != model.ErrSubscriptionUnavailable || safe.Key != "error.codex_api_key_no_limits" {
 		t.Fatalf("API key error = %v", err)
 	}
+	if transport.discarded != 0 || !transport.active {
+		t.Fatalf("API key session discarded=%d active=%v", transport.discarded, transport.active)
+	}
+}
+
+func TestRateLimitsProcessExitInvalidatesSession(t *testing.T) {
+	transport := workingTransport(t)
+	transport.fail["account/rateLimits/read"] = process.ErrProcessExited
+
+	_, err := New(transport, "0.100.0").Refresh(context.Background())
+
+	var safe model.SafeError
+	if !errors.As(err, &safe) || safe.Code != model.ErrProcessExited || transport.discarded != 1 {
+		t.Fatalf("process exit error=%v discarded=%d", err, transport.discarded)
+	}
+}
+
+func TestUnclassifiedTransportErrorAndHandshakeTimeoutInvalidateSession(t *testing.T) {
+	transport := workingTransport(t)
+	transport.fail["account/rateLimits/read"] = errors.New("broken JSONL transport")
+
+	_, err := New(transport, "0.100.0").Refresh(context.Background())
+
+	var safe model.SafeError
+	if !errors.As(err, &safe) || safe.Code != model.ErrInitialization || transport.discarded != 1 {
+		t.Fatalf("unclassified error=%v discarded=%d", err, transport.discarded)
+	}
+
+	handshake := workingTransport(t)
+	handshake.fail["initialize"] = context.DeadlineExceeded
+	_, err = New(handshake, "0.100.0").Refresh(context.Background())
+	if !errors.As(err, &safe) || safe.Code != model.ErrTimeout || handshake.discarded != 1 {
+		t.Fatalf("handshake timeout=%v discarded=%d", err, handshake.discarded)
+	}
+}
+
+func TestPostHandshakeTimeoutKeepsSession(t *testing.T) {
+	transport := workingTransport(t)
+	transport.fail["account/rateLimits/read"] = context.DeadlineExceeded
+
+	_, err := New(transport, "0.100.0").Refresh(context.Background())
+
+	var safe model.SafeError
+	if !errors.As(err, &safe) || safe.Code != model.ErrQuotaExhausted || transport.discarded != 0 || !transport.active {
+		t.Fatalf("post-handshake timeout=%v discarded=%d active=%v", err, transport.discarded, transport.active)
+	}
+}
+
+func TestResponseContentErrorsKeepSession(t *testing.T) {
+	tests := []struct {
+		name       string
+		account    json.RawMessage
+		accountErr error
+		code       model.ErrorCode
+	}{
+		{name: "not logged in", account: json.RawMessage(`{"account":null}`), code: model.ErrNotLoggedIn},
+		{name: "invalid response", account: json.RawMessage(`not-json`), code: model.ErrInvalidResponse},
+		{name: "invalid RPC response", accountErr: process.ErrRPCResponse, code: model.ErrInitialization},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			transport := workingTransport(t)
+			transport.responses["account/read"] = test.account
+			transport.fail["account/read"] = test.accountErr
+
+			_, err := New(transport, "0.100.0").Refresh(context.Background())
+
+			var safe model.SafeError
+			if !errors.As(err, &safe) || safe.Code != test.code || transport.discarded != 0 || !transport.active {
+				t.Fatalf("response error=%v discarded=%d active=%v", err, transport.discarded, transport.active)
+			}
+		})
+	}
+}
+
+func TestRefreshAfterInvalidationRequestsNewSession(t *testing.T) {
+	transport := workingTransport(t)
+	transport.fail["account/rateLimits/read"] = process.ErrProcessExited
+	provider := New(transport, "0.100.0")
+
+	if _, err := provider.Refresh(context.Background()); err == nil {
+		t.Fatal("first refresh unexpectedly succeeded")
+	}
+	delete(transport.fail, "account/rateLimits/read")
+	if _, err := provider.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if transport.session != 2 {
+		t.Fatalf("session count=%d, want 2", transport.session)
+	}
+}
+
+func TestAppServerTransportInvalidateIsIdempotent(t *testing.T) {
+	transport := NewAppServerTransport(nil)
+
+	transport.Invalidate()
+	transport.Invalidate()
 }
 
 func fixture(t *testing.T, name string) json.RawMessage {

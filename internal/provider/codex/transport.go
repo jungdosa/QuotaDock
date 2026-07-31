@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -165,11 +166,27 @@ func (t *AppServerTransport) SetRateLimitsUpdatedHandler(handler func(json.RawMe
 	t.mu.Unlock()
 }
 
-func (t *AppServerTransport) Close() error {
+func (t *AppServerTransport) takeSession() *process.JSONLSession {
 	t.mu.Lock()
 	session := t.session
 	t.session = nil
 	t.mu.Unlock()
+	return session
+}
+
+func (t *AppServerTransport) Invalidate() {
+	session := t.takeSession()
+	if session == nil {
+		return
+	}
+	slog.Debug("Codex app-server session invalidated")
+	if err := session.Close(); err != nil {
+		slog.Debug("Codex app-server session close failed after invalidation", "error", err)
+	}
+}
+
+func (t *AppServerTransport) Close() error {
+	session := t.takeSession()
 	if session == nil {
 		return nil
 	}
