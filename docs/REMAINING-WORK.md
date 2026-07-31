@@ -8,14 +8,35 @@
 - Codex 데이터는 이미 수신 중(app-server `credits { balance, unlimited }` → `LaneState.Credits`).
   app-server 응답에는 리셋권 개수(`rateLimitResetCredits.availableCount`)와 `hasCredits`도
   포함되지만 QuotaDock은 아직 파싱하지 않는다. 착수 시 실제 응답을 덤프해 확인할 것.
-- 활성화 시점: **Claude 브라우저 로그인 방식**을 개발해 Claude 쪽 크레딧(사용액/한도)까지
-  확보한 뒤 두 제공자를 함께 공개한다. 그전까지는 계획만 유지.
-  - Claude 크레딧은 OAuth usage API가 아니라 **웹 세션 인증이 필요한 별도 엔드포인트**에서
-    나온다. 현재 파서가 소비하는 5시간/주간/Fable 창과는 다른 경로다.
-  - **최우선 설계 분기**: 순수 HTTP 클라이언트에 쿠키만 실어 보내는 방식은 봇 차단에
-    걸릴 가능성이 높다. Fyne에는 내장 웹뷰가 없으므로 착수 전에 대안을 먼저 정해야 한다
-    (웹뷰 도입 / 외부 브라우저 연동 / 다른 경로). 이 결정 없이 구현에 들어가지 말 것.
-  - 어느 경로든 실측이 선행돼야 한다.
+### Claude 크레딧 — 브라우저 로그인이 필요 없다 (2026-07-31 실측 확인)
+
+기존 계획은 "브라우저 로그인을 개발해야 Claude 크레딧을 얻는다"였으나 **틀렸다.**
+`api.anthropic.com/api/oauth/usage`가 **이미 크레딧 데이터를 함께 돌려준다.** 앱이 5분마다
+받는 바로 그 응답인데, 현재 파서가 `five_hour`·`seven_day`·`limits`만 읽고 나머지를 버린다.
+
+응답에 포함된 미소비 필드:
+
+```
+extra_usage: is_enabled · monthly_limit · used_credits · utilization · currency ·
+             decimal_places · disabled_reason · user_disabled · spend_limit_reached ·
+             credits_ever_enabled · daily · weekly
+spend:       used{amount_minor,currency,exponent} · limit{...} · percent · severity ·
+             enabled · cap.credits{amount_minor,exponent} · balance · auto_reload ·
+             can_purchase_credits · can_toggle
+```
+
+따라서 이 작업은 **파서 확장 + UI 게이트 해제**로 끝난다. 새 인증, 쿠키 저장소, 웹뷰 도입이
+모두 불필요하며 "비밀정보를 다루지 않는다"는 설계 원칙도 그대로 유지된다.
+
+구현 시 주의:
+
+- **`limit_dollars`·`used_dollars`는 `null`이다.** 금액은 `spend.used.amount_minor`(정수)와
+  `exponent`로 오므로 `amount_minor / 10^exponent`로 환산한다. 부동소수점으로 바로 다루지 말 것.
+- `extra_usage.utilization`이 백분율을 직접 준다. 자체 계산으로 대체하지 말 것.
+- 크레딧 미사용 계정에서는 `extra_usage.is_enabled=false`, `spend.balance=null`이 될 수 있다.
+  null 안전하게 처리하고, 값이 없으면 크레딧 표시를 조용히 생략한다.
+- 토큰 스코프에 결제 항목이 없는데도(`user:profile`·`user:inference` 등) 이 필드가 오므로,
+  스코프만 보고 불가능하다고 판단하지 말 것.
 
 ## 업데이트 버튼 활성화
 
