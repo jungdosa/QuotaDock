@@ -3,11 +3,13 @@ package main
 import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	appmetadata "github.com/jungdosa/QuotaDock"
 	"github.com/jungdosa/QuotaDock/internal/settings"
 	"github.com/jungdosa/QuotaDock/internal/ui"
 )
@@ -60,12 +62,48 @@ func TestFyneDoMigrationIsDeclared(t *testing.T) {
 }
 
 func TestPhase4GVersionMetadataMatchesRuntime(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("..", "..", "FyneApp.toml"))
+	metadataVersion := appmetadata.Version()
+	if metadataVersion == "" || version != metadataVersion {
+		t.Fatalf("runtime version=%q metadata version=%q", version, metadataVersion)
+	}
+}
+
+func TestVersionLiteralHasSingleSource(t *testing.T) {
+	if version == "" {
+		t.Fatal("runtime version is empty")
+	}
+	root := filepath.Clean(filepath.Join("..", ".."))
+	expected := filepath.Join(root, "FyneApp.toml")
+	var matches []string
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			if entry.Name() == ".git" || strings.HasPrefix(entry.Name(), ".tmp-go") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		switch filepath.Ext(path) {
+		case ".go", ".toml", ".ps1", ".iss":
+		default:
+			return nil
+		}
+		raw, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		if strings.Contains(string(raw), version) {
+			matches = append(matches, filepath.Clean(path))
+		}
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if version != "0.7.17" || !strings.Contains(string(raw), `Version = "0.7.17"`) {
-		t.Fatalf("runtime version=%q metadata=%q", version, raw)
+	if len(matches) != 1 || matches[0] != expected {
+		t.Fatalf("version literal %q found in %v, want only %s", version, matches, expected)
 	}
 }
 

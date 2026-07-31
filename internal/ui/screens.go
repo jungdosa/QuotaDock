@@ -117,7 +117,6 @@ const (
 	TooltipGap              float32 = 4
 	TooltipMargin           float32 = 4
 	TooltipDelay                    = 400 * time.Millisecond
-	defaultAppVersion               = "0.7.17"
 )
 
 // Normal-mode label column sizing mirrors compact mode: the column is only as
@@ -370,11 +369,7 @@ func (v *View) resolvedLanguage() i18n.Language {
 }
 func (v *View) windowTitle(mode settings.DisplayMode) *fyne.Container {
 	title := textLabel(v.text(i18n.KeyAppTitle), TitleTextSize, v.colors.Text, true, false)
-	appVersion := v.Actions.AppVersion
-	if appVersion == "" {
-		appVersion = defaultAppVersion
-	}
-	titleObjects := []fyne.CanvasObject{title, v.titleVersionLabel(v.text(i18n.KeyAppTitle), TitleTextSize, appVersion)}
+	titleObjects := []fyne.CanvasObject{title, v.titleVersionLabel(v.text(i18n.KeyAppTitle), TitleTextSize, v.Actions.AppVersion)}
 	if v.Actions.DemoMode {
 		demoText := textLabel("DEMO", 10, v.colors.Accent, true, false)
 		demoBackground := canvas.NewRectangle(v.colors.PlanChip)
@@ -1264,11 +1259,7 @@ func (v *View) buildSettings() *fyne.Container {
 		v.Show(ScreenForDisplayMode(v.config.DisplayMode))
 	}
 	back := NewSmallIconButton(theme.NavigateBackIcon(), v.text(i18n.KeyTooltipBack), closeSettings, v.colors)
-	appVersion := v.Actions.AppVersion
-	if appVersion == "" {
-		appVersion = defaultAppVersion
-	}
-	bar := v.settingsTitleBar(back, appVersion, closeSettings)
+	bar := v.settingsTitleBar(back, v.Actions.AppVersion, closeSettings)
 	page := canvas.NewRectangle(v.colors.SettingsBackground)
 	page.CornerRadius = WindowCornerRadius
 	body := container.NewBorder(bar, nil, nil, nil, container.New(layout.NewCustomPaddedLayout(4, 8, 12, 12), content))

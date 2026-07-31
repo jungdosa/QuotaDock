@@ -10,6 +10,7 @@ import (
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/lang"
 	"fyne.io/fyne/v2/widget"
+	appmetadata "github.com/jungdosa/QuotaDock"
 	"github.com/jungdosa/QuotaDock/internal/i18n"
 	"github.com/jungdosa/QuotaDock/internal/model"
 	platform "github.com/jungdosa/QuotaDock/internal/platform/windows"
@@ -28,7 +29,13 @@ import (
 	"time"
 )
 
-var version = "0.7.17"
+var version string
+
+func init() {
+	if version == "" {
+		version = appmetadata.Version()
+	}
+}
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {

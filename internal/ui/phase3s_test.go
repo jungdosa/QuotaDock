@@ -114,7 +114,7 @@ func TestPhase3SCustomRadioAndSettingsButtons(t *testing.T) {
 	defer w.Close()
 	updateTapped := false
 	v.Actions.CheckUpdate = func() { updateTapped = true }
-	bar := v.settingsTitleBar(NewSmallIconButton(nil, "back", nil, v.colors), defaultAppVersion, nil)
+	bar := v.settingsTitleBar(NewSmallIconButton(nil, "back", nil, v.colors), testAppVersion, nil)
 	bar.Resize(fyne.NewSize(SettingsWidth, TitleBarHeight))
 	var titleRow *fyne.Container
 	walkCanvasObject(bar, func(object fyne.CanvasObject) {

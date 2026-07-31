@@ -11,7 +11,7 @@ import (
 func TestPhase3ZSettingsTitleHierarchyAndSectionTypography(t *testing.T) {
 	v, window := newTestView(t)
 	defer window.Close()
-	bar := v.settingsTitleBar(NewSmallIconButton(theme.NavigateBackIcon(), "Back", nil, v.colors), defaultAppVersion, nil)
+	bar := v.settingsTitleBar(NewSmallIconButton(theme.NavigateBackIcon(), "Back", nil, v.colors), testAppVersion, nil)
 	bar.Resize(fyne.NewSize(SettingsWidth, TitleBarHeight))
 
 	var titleRow *fyne.Container

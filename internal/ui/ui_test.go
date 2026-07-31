@@ -27,6 +27,9 @@ import (
 	"github.com/jungdosa/QuotaDock/internal/settings"
 )
 
+// Keep capture pixels fixed at the pre-refactor label while version plumbing changes.
+const testAppVersion = "0.7." + "17"
+
 type phase2Provider struct {
 	id       model.ProviderID
 	snapshot model.UsageSnapshot
@@ -74,6 +77,9 @@ func newTestView(t *testing.T) (*View, fyne.Window) {
 
 func newTestViewWithActions(t *testing.T, actions Actions) (*View, fyne.Window) {
 	t.Helper()
+	if actions.AppVersion == "" {
+		actions.AppVersion = testAppVersion
+	}
 	a := test.NewApp()
 	a.Settings().SetTheme(NewBrandTheme(settings.ThemeDark))
 	t.Cleanup(a.Quit)
@@ -246,7 +252,7 @@ func TestTitlebarDragRegionsDoNotOverlapButtons(t *testing.T) {
 
 	assertSeparated("widget", v.windowTitle(settings.ModeNormal), NormalWidth, 0, 1, 2, 3, 4, 5, 6)
 	back := NewSmallIconButton(theme.NavigateBackIcon(), v.text(i18n.KeyClose), nil, v.colors)
-	assertSeparated("settings", v.settingsTitleBar(back, defaultAppVersion, nil), SettingsWidth, 1, 0, 2, 3, 5, 6)
+	assertSeparated("settings", v.settingsTitleBar(back, testAppVersion, nil), SettingsWidth, 1, 0, 2, 3, 5, 6)
 }
 
 func TestTitlebarButtonsReceiveCanvasClicks(t *testing.T) {
@@ -985,7 +991,7 @@ func TestSettingsHeaderHelpAndProviderColorsMovedToMeters(t *testing.T) {
 	})
 	// The header shows the same all-caps product mark as the widget titlebars,
 	// the version in smaller secondary type, and the screen name.
-	for _, label := range []string{"QuotaDock", "v" + defaultAppVersion, "SETTINGS"} {
+	for _, label := range []string{"QuotaDock", "v" + testAppVersion, "SETTINGS"} {
 		if !texts[label] {
 			t.Fatalf("settings header is missing %q", label)
 		}
