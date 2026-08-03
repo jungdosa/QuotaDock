@@ -43,17 +43,17 @@ func TestTranslationMissingKeyDetectionIncludesLocaleKeySetDifferences(t *testin
 	}
 }
 
-func TestLoadAllNineLocalesWithoutMissingKeys(t *testing.T) {
+func TestLoadAllTwelveLocalesWithoutMissingKeys(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []Language{English, Korean, German, French, Italian, Indonesian, PortugueseBrazil, SpanishSpain, SpanishLatinAmerica}
+	want := []Language{English, Korean, German, French, Italian, Indonesian, PortugueseBrazil, SpanishSpain, SpanishLatinAmerica, Japanese, ChineseSimplified, ChineseTraditional}
 	if !slices.Equal(Supported, want) {
 		t.Fatalf("Supported = %v, want %v", Supported, want)
 	}
-	if len(catalog.translations) != 9 {
-		t.Fatalf("loaded locales = %d, want 9", len(catalog.translations))
+	if len(catalog.translations) != 12 {
+		t.Fatalf("loaded locales = %d, want 12", len(catalog.translations))
 	}
 	if missing := catalog.MissingKeys(); len(missing) != 0 {
 		t.Fatalf("missing translations: %v", missing)
@@ -87,17 +87,26 @@ func TestAllLocalesHaveSame139Keys(t *testing.T) {
 
 func TestMatchSystemLanguage(t *testing.T) {
 	cases := map[string]Language{
-		"pt":    PortugueseBrazil,
-		"pt-BR": PortugueseBrazil,
-		"es":    SpanishSpain,
-		"es-ES": SpanishSpain,
-		"es-MX": SpanishLatinAmerica,
-		"es-AR": SpanishLatinAmerica,
-		"es-CO": SpanishLatinAmerica,
-		"de-DE": German,
-		"id_ID": Indonesian,
-		"ja":    English,
-		"":      English,
+		"pt":         PortugueseBrazil,
+		"pt-BR":      PortugueseBrazil,
+		"es":         SpanishSpain,
+		"es-ES":      SpanishSpain,
+		"es-MX":      SpanishLatinAmerica,
+		"es-AR":      SpanishLatinAmerica,
+		"es-CO":      SpanishLatinAmerica,
+		"de-DE":      German,
+		"id_ID":      Indonesian,
+		"ja":         Japanese,
+		"ja-JP":      Japanese,
+		"zh":         ChineseSimplified,
+		"zh-CN":      ChineseSimplified,
+		"zh-SG":      ChineseSimplified,
+		"zh-Hans-CN": ChineseSimplified,
+		"zh-TW":      ChineseTraditional,
+		"zh-HK":      ChineseTraditional,
+		"zh-MO":      ChineseTraditional,
+		"zh-Hant-HK": ChineseTraditional,
+		"":           English,
 	}
 	for raw, want := range cases {
 		if got := MatchSystemLanguage(raw); got != want {
@@ -111,7 +120,7 @@ func TestTextFallsBackToEnglishForUnloadedLanguage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := catalog.Text(Language("ja"), Korean, KeyHelp); got != "Help" {
+	if got := catalog.Text(Language("hi"), Korean, KeyHelp); got != "Help" {
 		t.Fatalf("unsupported language text = %q, want English", got)
 	}
 	if got := catalog.Text(System, Language("hi"), KeyHelp); got != "Help" {
@@ -120,7 +129,7 @@ func TestTextFallsBackToEnglishForUnloadedLanguage(t *testing.T) {
 }
 
 func TestFormatDecimalUsesLocaleSeparator(t *testing.T) {
-	for _, language := range []Language{English, Korean} {
+	for _, language := range []Language{English, Korean, Japanese, ChineseSimplified, ChineseTraditional} {
 		if got := FormatDecimal(language, 2.39); got != "2.39" {
 			t.Errorf("FormatDecimal(%s) = %q, want 2.39", language, got)
 		}
@@ -128,6 +137,19 @@ func TestFormatDecimalUsesLocaleSeparator(t *testing.T) {
 	for _, language := range []Language{German, French, Italian, Indonesian, PortugueseBrazil, SpanishSpain, SpanishLatinAmerica} {
 		if got := FormatDecimal(language, 2.39); got != "2,39" {
 			t.Errorf("FormatDecimal(%s) = %q, want 2,39", language, got)
+		}
+	}
+}
+
+func TestCJKEndonyms(t *testing.T) {
+	want := map[Language]string{
+		Japanese:           "日本語",
+		ChineseSimplified:  "简体中文",
+		ChineseTraditional: "繁體中文（臺灣）",
+	}
+	for language, endonym := range want {
+		if got := Endonym(language); got != endonym {
+			t.Errorf("Endonym(%s) = %q, want %q", language, got, endonym)
 		}
 	}
 }

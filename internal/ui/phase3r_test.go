@@ -396,7 +396,7 @@ func TestPhase3RVisualReviewCaptures(t *testing.T) {
 	v, w := phase2DTestView(t)
 	defer w.Close()
 	cfg := DemoConfig(v.config)
-	cfg.Language = settings.LanguageKorean
+	cfg.Language = settings.Language(i18n.Korean)
 	v.SetConfig(cfg)
 	v.SetState(DemoViewState())
 

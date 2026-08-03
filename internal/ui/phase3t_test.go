@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2"
+	"github.com/jungdosa/QuotaDock/internal/i18n"
 	"github.com/jungdosa/QuotaDock/internal/model"
 	"github.com/jungdosa/QuotaDock/internal/settings"
 )
@@ -124,7 +125,7 @@ func TestPhase3TSoftwareRenderCaptures(t *testing.T) {
 	for _, themeMode := range []settings.Theme{settings.ThemeLight, settings.ThemeDark} {
 		cfg := v.config
 		cfg.Theme = themeMode
-		cfg.Language = settings.LanguageKorean
+		cfg.Language = settings.Language(i18n.Korean)
 		fyne.CurrentApp().Settings().SetTheme(NewBrandTheme(themeMode))
 		v.SetConfig(cfg)
 		for _, screen := range []struct {

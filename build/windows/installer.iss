@@ -41,9 +41,11 @@ ShowLanguageDialog=no
 
 [Languages]
 ; 설치기 언어는 Inno 공식 배포에 포함되고 ISCC 컴파일을 통과하는 것만 넣는다.
-; 인도네시아어는 공식 .isl이 없으므로 앱만 지원하고 설치기는 영어로 폴백한다.
+; 인도네시아어와 중국어 간체·번체는 Inno 공식 .isl 팩에 없으므로 앱만 지원하고 설치기는 영어로 폴백한다.
+; 일본어는 공식 배포의 Japanese.isl을 사용한다.
 Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "korean"; MessagesFile: "compiler:Languages\Korean.isl"
+Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"
 Name: "german"; MessagesFile: "compiler:Languages\German.isl"
 Name: "french"; MessagesFile: "compiler:Languages\French.isl"
 Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"

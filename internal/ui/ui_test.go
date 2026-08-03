@@ -551,7 +551,7 @@ func TestKoreanCodexDuplicateWeeklyRowsUseResetOrderedOrdinals(t *testing.T) {
 	v, window := newTestView(t)
 	defer window.Close()
 	config := v.config
-	config.Language = settings.LanguageKorean
+	config.Language = settings.Language(i18n.Korean)
 	v.SetConfig(config)
 	v.SetState(state)
 
@@ -733,7 +733,7 @@ func phase2DTestView(t *testing.T) (*View, fyne.Window) {
 	t.Helper()
 	v, w := newTestView(t)
 	cfg := v.config
-	cfg.Language = settings.LanguageEnglish
+	cfg.Language = settings.Language(i18n.English)
 	v.SetConfig(cfg)
 	v.SetState(DemoViewState())
 	v.Show(CompactScreen)
@@ -881,7 +881,7 @@ func TestPhase2DCompactLabelsUseCurrentLanguageDynamicWidth(t *testing.T) {
 	if got, limit := v.MinimumSize(CompactScreen).Height, float32(263)+UsageHeaderRowHeight+1+4*CompactDividerPaddingY; got > limit {
 		t.Fatalf("compact height=%v exceeds Phase 3W divider+header budget %.0f", got, limit)
 	}
-	for _, language := range []settings.Language{settings.LanguageEnglish, settings.LanguageKorean} {
+	for _, language := range []settings.Language{settings.Language(i18n.English), settings.Language(i18n.Korean)} {
 		cfg := v.config
 		cfg.Language = language
 		v.SetConfig(cfg)
@@ -1097,7 +1097,7 @@ func TestLanguageSwitchRebuildsSettingsWithoutScroll(t *testing.T) {
 	defer w.Close()
 	v.Show(SettingsScreen)
 	cfg := v.config
-	cfg.Language = settings.LanguageKorean
+	cfg.Language = settings.Language(i18n.Korean)
 	v.SetConfig(cfg)
 	if v.text(i18n.KeySettingsTitle) != "설정" || len(v.Root.Objects) != 5 {
 		t.Fatalf("language update title=%q root objects=%d (4 screens + tooltip layer)", v.text(i18n.KeySettingsTitle), len(v.Root.Objects))
@@ -2025,7 +2025,7 @@ func TestPhase2BDefectReviewCapture(t *testing.T) {
 	v, w := newTestView(t)
 	defer w.Close()
 	cfg := v.config
-	cfg.Language = settings.LanguageKorean
+	cfg.Language = settings.Language(i18n.Korean)
 	v.SetConfig(cfg)
 	reset := time.Now().Add(3 * time.Hour)
 	v.SetState(ViewState{Lanes: []LaneState{

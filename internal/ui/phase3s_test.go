@@ -51,7 +51,7 @@ func TestPhase3SSettingsLayoutMetrics(t *testing.T) {
 	t.Logf("control start x: left=%.1f right=%.1f (560px pair), local starts=%v", controlStarts[0][0], rightColumnStart, controlStarts)
 
 	cfg := v.config
-	cfg.Language = settings.LanguageKorean
+	cfg.Language = settings.Language(i18n.Korean)
 	v.SetConfig(cfg)
 	display := v.displaySettings().(*fyne.Container)
 	displayPair := display.Objects[0].(*fyne.Container)
@@ -209,7 +209,7 @@ func TestPhase3SSoftwareRenderCaptures(t *testing.T) {
 			window.SetPadded(false)
 			config := DemoConfig(settings.Default())
 			config.Theme = entry.theme
-			config.Language = settings.LanguageKorean
+			config.Language = settings.Language(i18n.Korean)
 			config.WarningsEnabled = entry.warnings
 			view := NewView(window.Canvas(), catalog, i18n.Korean, config, Actions{DemoMode: true})
 			window.SetContent(view.Root)

@@ -9,6 +9,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/widget"
+	"github.com/jungdosa/QuotaDock/internal/i18n"
 	"github.com/jungdosa/QuotaDock/internal/settings"
 )
 
@@ -186,7 +187,7 @@ func TestPhase3YTitleTooltipsDelayI18NStateAndLifecycle(t *testing.T) {
 	}
 
 	cfg := v.config
-	cfg.Language = settings.LanguageKorean
+	cfg.Language = settings.Language(i18n.Korean)
 	v.SetConfig(cfg)
 	if got := v.themeTooltip(); got != "테마: 다크" {
 		t.Fatalf("Korean theme tooltip=%q", got)
@@ -294,7 +295,7 @@ func TestPhase3YTranslatedButtonsUseMeasuredWidths(t *testing.T) {
 
 	v, window := newTestView(t)
 	defer window.Close()
-	for _, language := range []settings.Language{settings.LanguageEnglish, settings.LanguageKorean} {
+	for _, language := range []settings.Language{settings.Language(i18n.English), settings.Language(i18n.Korean)} {
 		cfg := v.config
 		cfg.Language = language
 		v.SetConfig(cfg)

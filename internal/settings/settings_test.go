@@ -1,18 +1,21 @@
 package settings
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/jungdosa/QuotaDock/internal/i18n"
 )
 
 func TestSettingsSaveRestoreAndValidation(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "nested", "settings.json")
 	config := Default()
-	config.Language = LanguageKorean
+	config.Language = Language(i18n.Korean)
 	config.DateTimeFormat = Format24HourDateDay
 	config.WarningPercent = -10
 	config.DangerPercent = 200
@@ -25,7 +28,7 @@ func TestSettingsSaveRestoreAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.Language != LanguageKorean || loaded.DateTimeFormat != Format24HourDateDay {
+	if loaded.Language != Language(i18n.Korean) || loaded.DateTimeFormat != Format24HourDateDay {
 		t.Fatalf("stable settings not restored: %+v", loaded)
 	}
 	if loaded.WarningPercent != 1 || loaded.DangerPercent != 99 {
@@ -73,7 +76,7 @@ func TestWarningAndDangerThresholdsClampToOneThroughNinetyNine(t *testing.T) {
 
 func TestSettingsUnknownFieldsAndTypeErrors(t *testing.T) {
 	config, err := Decode(strings.NewReader(`{"schemaVersion":99,"language":"en","unknown":{"x":1}}`))
-	if err != nil || config.Language != LanguageEnglish || config.SchemaVersion != CurrentSchemaVersion {
+	if err != nil || config.Language != Language(i18n.English) || config.SchemaVersion != CurrentSchemaVersion {
 		t.Fatalf("unknown field handling = %+v, %v", config, err)
 	}
 	if _, err := Decode(strings.NewReader(`{"refreshSeconds":"often"}`)); err == nil {
@@ -227,26 +230,34 @@ func TestTrayPromotionStoredFalseOverridesDefault(t *testing.T) {
 	}
 }
 
-func TestSettingsLanguageSchemaAcceptsLegacyAndPhase4FValues(t *testing.T) {
-	languages := []Language{
-		LanguageSystem,
-		LanguageEnglish,
-		LanguageKorean,
-		LanguageGerman,
-		LanguageFrench,
-		LanguageItalian,
-		LanguageIndonesian,
-		LanguagePortugueseBrazil,
-		LanguageSpanishSpain,
-		LanguageSpanishLatinAmerica,
+func TestSettingsLanguageSchemaPreservesLegacyStoredBytes(t *testing.T) {
+	storedValues := []string{"system", "en", "ko", "de", "fr", "it", "id", "pt-BR", "es-ES", "es-419"}
+	for _, stored := range storedValues {
+		config, err := Decode(strings.NewReader(fmt.Sprintf(`{"schemaVersion":4,"language":%q}`, stored)))
+		if err != nil {
+			t.Fatalf("Decode(%s): %v", stored, err)
+		}
+		if got := string(config.Language); got != stored {
+			t.Errorf("Decode(%s) language bytes = %q", stored, got)
+		}
+		encoded, err := json.Marshal(config.Language)
+		if err != nil {
+			t.Fatalf("Marshal(%s): %v", stored, err)
+		}
+		if got, want := string(encoded), fmt.Sprintf("%q", stored); got != want {
+			t.Errorf("Marshal(%s) = %s, want byte-stable %s", stored, got, want)
+		}
 	}
-	for _, language := range languages {
+}
+
+func TestSettingsLanguageSchemaAcceptsPhase4KCJKValues(t *testing.T) {
+	for _, language := range []i18n.Language{i18n.Japanese, i18n.ChineseSimplified, i18n.ChineseTraditional} {
 		config, err := Decode(strings.NewReader(fmt.Sprintf(`{"schemaVersion":4,"language":%q}`, language)))
 		if err != nil {
 			t.Fatalf("Decode(%s): %v", language, err)
 		}
-		if config.Language != language {
-			t.Errorf("Decode(%s) language = %s", language, config.Language)
+		if got := i18n.Language(config.Language); got != language {
+			t.Errorf("Decode(%s) language = %s", language, got)
 		}
 	}
 }

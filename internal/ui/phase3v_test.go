@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2"
+	"github.com/jungdosa/QuotaDock/internal/i18n"
 	"github.com/jungdosa/QuotaDock/internal/settings"
 )
 
@@ -51,7 +52,7 @@ func TestPhase3VCompactPercentWidthBudgetAndRightClearance(t *testing.T) {
 	if measured100+CompactPercentMargin > percentWidth {
 		t.Fatalf("100%% measured %.2f + margin %.2f exceeds percent column %.2f", measured100, CompactPercentMargin, percentWidth)
 	}
-	for _, language := range []settings.Language{settings.LanguageEnglish, settings.LanguageKorean} {
+	for _, language := range []settings.Language{settings.Language(i18n.English), settings.Language(i18n.Korean)} {
 		cfg := v.config
 		cfg.Language = language
 		cfg.UsageMode = settings.UsageUsed
@@ -98,7 +99,7 @@ func TestPhase3VCompactSoftwareRenderCaptures(t *testing.T) {
 	for _, themeMode := range []settings.Theme{settings.ThemeLight, settings.ThemeDark} {
 		cfg := v.config
 		cfg.Theme = themeMode
-		cfg.Language = settings.LanguageKorean
+		cfg.Language = settings.Language(i18n.Korean)
 		cfg.UsageMode = settings.UsageUsed
 		fyne.CurrentApp().Settings().SetTheme(NewBrandTheme(themeMode))
 		v.SetConfig(cfg)

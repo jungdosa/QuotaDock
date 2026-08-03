@@ -17,7 +17,7 @@ import (
 	"github.com/jungdosa/QuotaDock/internal/settings"
 )
 
-func TestPhase4FKoEnRenderCaptures(t *testing.T) {
+func TestPhase4KExistingLocaleRenderCaptures(t *testing.T) {
 	outputDirectory := os.Getenv("QUOTADOCK_PHASE4F_SCREENSHOT_DIR")
 	if outputDirectory == "" {
 		outputDirectory = t.TempDir()
@@ -26,7 +26,10 @@ func TestPhase4FKoEnRenderCaptures(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, language := range []settings.Language{settings.LanguageKorean, settings.LanguageEnglish} {
+	for _, language := range []i18n.Language{
+		i18n.English, i18n.Korean, i18n.German, i18n.French, i18n.Italian,
+		i18n.Indonesian, i18n.PortugueseBrazil, i18n.SpanishSpain, i18n.SpanishLatinAmerica,
+	} {
 		t.Run(string(language), func(t *testing.T) {
 			app := test.NewApp()
 			app.Settings().SetTheme(NewBrandTheme(settings.ThemeDark))
@@ -40,7 +43,7 @@ func TestPhase4FKoEnRenderCaptures(t *testing.T) {
 			t.Cleanup(window.Close)
 
 			config := DemoConfig(settings.Default())
-			config.Language = language
+			config.Language = settings.Language(language)
 			// Freeze the pre-version label so this capture isolates Phase 4F i18n pixels;
 			// the mandatory 0.7.13 label is verified by the separate version test.
 			view := NewView(window.Canvas(), catalog, i18n.English, config, Actions{AppVersion: "0.7." + "12"})
@@ -73,7 +76,7 @@ func TestPhase4FKoEnRenderCaptures(t *testing.T) {
 	}
 }
 
-func TestPhase4FCompactNanoMinimumSizeAcrossNineLanguages(t *testing.T) {
+func TestPhase4KCompactNanoMinimumSizeAcrossTwelveLanguages(t *testing.T) {
 	view, window := newTestView(t)
 	defer window.Close()
 	view.SetState(DemoViewState())
@@ -104,11 +107,11 @@ func TestPhase4FCompactNanoMinimumSizeAcrossNineLanguages(t *testing.T) {
 	}
 }
 
-func TestPhase4FEndonymLanguageSelectorHasSystemAndNineLocales(t *testing.T) {
+func TestPhase4KEndonymLanguageSelectorHasSystemAndTwelveLocales(t *testing.T) {
 	view, window := newTestView(t)
 	defer window.Close()
 	config := view.config
-	config.Language = settings.LanguageEnglish
+	config.Language = settings.Language(i18n.English)
 	view.SetConfig(config)
 
 	display := view.displaySettings().(*fyne.Container)
@@ -126,13 +129,20 @@ func TestPhase4FEndonymLanguageSelectorHasSystemAndNineLocales(t *testing.T) {
 		"Português (Brasil)",
 		"Español (España)",
 		"Español (Latinoamérica)",
+		"日本語",
+		"简体中文",
+		"繁體中文（臺灣）",
 	}
 	if !slices.Equal(selector.Options, want) {
 		t.Fatalf("language options = %q, want %q", selector.Options, want)
 	}
 	selector.SetSelected("Deutsch")
-	if view.config.Language != settings.LanguageGerman {
+	if view.config.Language != settings.Language(i18n.German) {
 		t.Fatalf("selected language = %q, want de", view.config.Language)
+	}
+	selector.SetSelected("繁體中文（臺灣）")
+	if view.config.Language != settings.Language(i18n.ChineseTraditional) {
+		t.Fatalf("selected language = %q, want zh-Hant", view.config.Language)
 	}
 }
 

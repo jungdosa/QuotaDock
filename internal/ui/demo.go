@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"github.com/jungdosa/QuotaDock/internal/i18n"
 	"github.com/jungdosa/QuotaDock/internal/model"
 	"github.com/jungdosa/QuotaDock/internal/settings"
 	"time"
@@ -8,7 +9,7 @@ import (
 
 // DemoConfig makes visual review deterministic regardless of saved settings.
 func DemoConfig(config settings.Config) settings.Config {
-	config.Language = settings.LanguageKorean
+	config.Language = settings.Language(i18n.Korean)
 	config.Theme = settings.ThemeDark
 	config.UsageMode = settings.UsageUsed
 	config.WarningsEnabled = true

@@ -23,6 +23,9 @@ const (
 	PortugueseBrazil    Language = "pt-BR"
 	SpanishSpain        Language = "es-ES"
 	SpanishLatinAmerica Language = "es-419"
+	Japanese            Language = "ja"
+	ChineseSimplified   Language = "zh-Hans"
+	ChineseTraditional  Language = "zh-Hant"
 )
 const (
 	KeyTrayShow                  = "tray.show"
@@ -175,6 +178,9 @@ var Supported = []Language{
 	PortugueseBrazil,
 	SpanishSpain,
 	SpanishLatinAmerica,
+	Japanese,
+	ChineseSimplified,
+	ChineseTraditional,
 }
 
 var endonyms = map[Language]string{
@@ -187,6 +193,9 @@ var endonyms = map[Language]string{
 	PortugueseBrazil:    "Português (Brasil)",
 	SpanishSpain:        "Español (España)",
 	SpanishLatinAmerica: "Español (Latinoamérica)",
+	Japanese:            "日本語",
+	ChineseSimplified:   "简体中文",
+	ChineseTraditional:  "繁體中文（臺灣）",
 }
 
 func Endonym(language Language) string {
@@ -214,12 +223,27 @@ func MatchSystemLanguage(raw string) Language {
 			return language
 		}
 	}
+	lower := strings.ToLower(normalized)
+	if lower == "zh-hant" || strings.HasPrefix(lower, "zh-hant-") {
+		return ChineseTraditional
+	}
+	switch lower {
+	case "zh-tw", "zh-hk", "zh-mo":
+		return ChineseTraditional
+	case "zh", "zh-cn", "zh-sg", "zh-hans":
+		return ChineseSimplified
+	}
+	if strings.HasPrefix(lower, "zh-hans-") {
+		return ChineseSimplified
+	}
 	base := strings.ToLower(strings.Split(normalized, "-")[0])
 	switch base {
 	case "en":
 		return English
 	case "ko":
 		return Korean
+	case "ja":
+		return Japanese
 	case "de":
 		return German
 	case "fr":

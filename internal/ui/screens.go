@@ -463,7 +463,7 @@ func (v *View) formatTimestamp(value time.Time) string {
 	if value.IsZero() {
 		return "—"
 	}
-	lang := qdatetime.Language(v.resolvedLanguage())
+	lang := v.resolvedLanguage()
 	formatted, err := qdatetime.FormatUnix(value.Unix(), time.Local, lang, qdatetime.Format(v.config.DateTimeFormat))
 	if err != nil {
 		return value.Local().Format("15:04")
@@ -1240,7 +1240,7 @@ func resetStrings(row UsageRowState, now time.Time, c settings.Config, systemLan
 	if !i18n.IsSupported(language) {
 		language = i18n.English
 	}
-	at, _ := qdatetime.FormatUnix(row.ResetsAt.Unix(), time.Local, qdatetime.Language(language), qdatetime.Format(c.DateTimeFormat))
+	at, _ := qdatetime.FormatUnix(row.ResetsAt.Unix(), time.Local, language, qdatetime.Format(c.DateTimeFormat))
 	return until, at
 }
 
@@ -1726,7 +1726,7 @@ func (v *View) displaySettings() fyne.CanvasObject {
 	}
 	dateKeys := []settings.DateTimeFormat{settings.Format12HourDate, settings.Format12HourDateDay, settings.Format24HourDate, settings.Format24HourDateDay}
 	examples := make([]string, 4)
-	lang := qdatetime.Language(v.resolvedLanguage())
+	lang := v.resolvedLanguage()
 	for i, key := range dateKeys {
 		examples[i], _ = qdatetime.FormatUnix(time.Now().Unix(), time.Local, lang, qdatetime.Format(key))
 	}

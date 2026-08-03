@@ -19,20 +19,12 @@ const (
 	MaxFileSize          int64 = 256 << 10
 )
 
+// Language remains a distinct public string type so settings.json keeps its
+// stable wire representation. Supported locale constants live in i18n.
 type Language string
 
-const (
-	LanguageSystem               Language = "system"
-	LanguageEnglish              Language = "en"
-	LanguageKorean               Language = "ko"
-	LanguageGerman               Language = "de"
-	LanguageFrench               Language = "fr"
-	LanguageItalian              Language = "it"
-	LanguageIndonesian           Language = "id"
-	LanguagePortugueseBrazil     Language = "pt-BR"
-	LanguageSpanishSpain         Language = "es-ES"
-	LanguageSpanishLatinAmerica  Language = "es-419"
-)
+// LanguageSystem is a settings-only choice rather than a concrete locale.
+const LanguageSystem Language = "system"
 
 type DateTimeFormat string
 

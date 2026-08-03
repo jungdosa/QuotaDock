@@ -129,7 +129,7 @@ func TestPhase4AThemeSunAndNextDisplayModeIcons(t *testing.T) {
 		}
 	}
 	cfg := v.config
-	cfg.Language = settings.LanguageKorean
+	cfg.Language = settings.Language(i18n.Korean)
 	v.SetConfig(cfg)
 	korean := map[settings.DisplayMode]string{
 		settings.ModeNormal:  "컴팩트 모드로 전환",

@@ -10,6 +10,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
+	"github.com/jungdosa/QuotaDock/internal/i18n"
 	"github.com/jungdosa/QuotaDock/internal/settings"
 )
 
@@ -103,7 +104,7 @@ func TestPhase3WCompactPercentPartsFontsBaselineAndClearance(t *testing.T) {
 func TestPhase3WCompactMetersStaySquareAcrossDynamicLabelWidths(t *testing.T) {
 	v, window := phase2DTestView(t)
 	defer window.Close()
-	for _, language := range []settings.Language{settings.LanguageKorean, settings.LanguageEnglish} {
+	for _, language := range []settings.Language{settings.Language(i18n.Korean), settings.Language(i18n.English)} {
 		cfg := v.config
 		cfg.Language = language
 		v.SetConfig(cfg)
@@ -269,7 +270,7 @@ func TestPhase3WUsageHeadersAlignLocalizeAndUpdateImmediately(t *testing.T) {
 	}
 
 	cfg = v.config
-	cfg.Language = settings.LanguageKorean
+	cfg.Language = settings.Language(i18n.Korean)
 	v.SetConfig(cfg)
 	if v.normalCache.usageHeader.Text != "잔여량" || v.compactCache.usageHeader.Text != "잔여량" || v.normalCache.resetHeader.Text != "재설정" {
 		t.Fatalf("Korean remaining/reset headers normal/compact/reset=%q/%q/%q", v.normalCache.usageHeader.Text, v.compactCache.usageHeader.Text, v.normalCache.resetHeader.Text)
@@ -314,7 +315,7 @@ func TestPhase3WSoftwareRenderCapturesShowUsageHeaders(t *testing.T) {
 		fyne.CurrentApp().Settings().SetTheme(NewBrandTheme(mode))
 		cfg := v.config
 		cfg.Theme = mode
-		cfg.Language = settings.LanguageKorean
+		cfg.Language = settings.Language(i18n.Korean)
 		cfg.UsageMode = settings.UsageUsed
 		v.SetConfig(cfg)
 		for _, screen := range []struct {

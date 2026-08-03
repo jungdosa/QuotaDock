@@ -60,8 +60,9 @@ Hovering a row shows a three-line tooltip: `provider · window / remaining / res
 
 - **Light · dark · system themes**, 12/24-hour date formats, per-provider color palettes
   and configurable warning thresholds
-- **Nine languages** — English, Korean, German, French, Italian, Indonesian,
-  Portuguese (Brazil), Spanish (Spain / Latin America). `System` follows your Windows
+- **Twelve languages** — English, Korean, German, French, Italian, Indonesian,
+  Portuguese (Brazil), Spanish (Spain / Latin America), Japanese, Simplified Chinese,
+  and Traditional Chinese (Taiwan). `System` follows your Windows
   display language
 - **Connection method buttons** — each provider row shows how it connects (`CLI`, `Auth`,
   `IDE`) with its state. If a CLI is missing, clicking the button expands install guidance

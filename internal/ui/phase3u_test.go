@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2"
+	"github.com/jungdosa/QuotaDock/internal/i18n"
 	"github.com/jungdosa/QuotaDock/internal/settings"
 )
 
@@ -91,7 +92,7 @@ func TestPhase3UCompactMeterAndWidthBudget(t *testing.T) {
 	v, window := phase2DTestView(t)
 	defer window.Close()
 	measured100 := compactPercentTextWidth()
-	for _, language := range []settings.Language{settings.LanguageEnglish, settings.LanguageKorean} {
+	for _, language := range []settings.Language{settings.Language(i18n.English), settings.Language(i18n.Korean)} {
 		cfg := v.config
 		cfg.Language = language
 		v.SetConfig(cfg)
@@ -155,7 +156,7 @@ func TestPhase3USoftwareRenderCaptures(t *testing.T) {
 	for _, themeMode := range []settings.Theme{settings.ThemeLight, settings.ThemeDark} {
 		cfg := v.config
 		cfg.Theme = themeMode
-		cfg.Language = settings.LanguageKorean
+		cfg.Language = settings.Language(i18n.Korean)
 		fyne.CurrentApp().Settings().SetTheme(NewBrandTheme(themeMode))
 		v.SetConfig(cfg)
 		for _, entry := range []struct {
