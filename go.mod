@@ -4,13 +4,13 @@ go 1.26.5
 
 require (
 	fyne.io/fyne/v2 v2.8.0
+	fyne.io/systray v1.12.2
 	github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef
 	golang.org/x/image v0.24.0
 )
 
 require (
-	fyne.io/systray v1.12.2 // indirect
 	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/anthonynsimon/bild v0.14.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.2.0 // indirect

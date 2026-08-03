@@ -425,7 +425,7 @@ func (v *View) makeNormalUsageRow(lane LaneState, row UsageRowState, now time.Ti
 	meter := NewSegmentedMeter(20, visual.percent, visual.meterColor, v.colors.Track)
 	meter.Height = NormalMeterHeight
 	meter.OnTapped = func() { v.showProviderPalette(meter, visual.colorKey) }
-	percentText := textLabel(fmt.Sprintf("%.0f", visual.percent), NormalPercentTextSize, visual.percentColor, visual.danger, false)
+	percentText := textLabel(formatUsagePercent(visual.percent), NormalPercentTextSize, visual.percentColor, visual.danger, false)
 	percentText.Alignment = fyne.TextAlignTrailing
 	percentSymbol := textLabel("%", NormalPercentTextSize-1, visual.percentColor, visual.danger, false)
 	percentBox := container.New(
@@ -480,7 +480,7 @@ func (v *View) updateNormalUsage(handles normalUsageView, lane LaneState, row Us
 	handles.meter.SetValue(visual.percent, visual.meterColor)
 	handles.resetBar.SetValue(visual.resetPercent, visual.resetBarColor, v.colors.Track)
 	setPercentWeight(handles.percent, handles.percentSymbol, visual.danger)
-	setCanvasText(handles.percent, fmt.Sprintf("%.0f", visual.percent), visual.percentColor)
+	setCanvasText(handles.percent, formatUsagePercent(visual.percent), visual.percentColor)
 	setCanvasText(handles.percentSymbol, "%", visual.percentColor)
 	setCanvasText(handles.until, visual.until, v.colors.Text)
 	for index, line := range wrapMonospace(visual.resetAt, normalRowColumns[2], NormalMetaTextSize) {
@@ -920,7 +920,7 @@ func (v *View) updateCompactUsage(handles compactUsageView, lane LaneState, row 
 }
 
 func setCompactPercent(column *fyne.Container, number, symbol *canvas.Text, percent float64, textColor color.Color) {
-	numberValue := fmt.Sprintf("%.0f", percent)
+	numberValue := formatUsagePercent(percent)
 	numberSize := CompactPercentTextSize
 	if numberValue == "100" {
 		numberSize = CompactHundredTextSize

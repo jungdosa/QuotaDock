@@ -114,6 +114,12 @@ func run(args []string) error {
 	var scheduler provider.Scheduler
 	var view *ui.View
 	var tray *platform.Tray
+	setTrayTooltip := func(state ui.ViewState) {
+		if tray == nil {
+			return
+		}
+		tray.SetTooltip(ui.BuildTrayTooltip(state, cfg, systemLanguage, time.Now()))
+	}
 	var lifecycle *platform.Lifecycle
 	var trayPromotionRetryTimer *time.Timer
 	stopTrayPromotionRetries := func() {
@@ -234,7 +240,9 @@ func run(args []string) error {
 		markActivity()
 		fyne.Do(func() { view.SetRefreshing(true) })
 		if demo {
-			view.SetState(ui.DemoViewState())
+			state := ui.DemoViewState()
+			view.SetState(state)
+			setTrayTooltip(state)
 			time.AfterFunc(350*time.Millisecond, func() {
 				fyne.Do(func() {
 					view.SetRefreshing(false)
@@ -250,6 +258,7 @@ func run(args []string) error {
 			rendering.Store(true)
 			fyne.DoAndWait(func() {
 				view.SetState(state)
+				setTrayTooltip(state)
 				view.SetRefreshing(false)
 			})
 			rendering.Store(false)
@@ -375,7 +384,9 @@ func run(args []string) error {
 		}()
 	})
 	if demo {
-		view.SetState(ui.DemoViewState())
+		state := ui.DemoViewState()
+		view.SetState(state)
+		setTrayTooltip(state)
 	}
 	w.SetContent(view.Root)
 	applyScreen(ui.ScreenForDisplayMode(cfg.DisplayMode))
@@ -406,6 +417,12 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	if demo {
+		setTrayTooltip(ui.DemoViewState())
+	} else {
+		setTrayTooltip(controller.State())
+	}
+	a.Lifecycle().SetOnStarted(tray.Ready)
 	if !demo && trayPromotionSupported && cfg.PromoteTrayIcon {
 		var applyTrayIconPromotion func(int)
 		applyTrayIconPromotion = func(attempt int) {

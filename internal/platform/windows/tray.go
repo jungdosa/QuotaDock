@@ -2,6 +2,8 @@ package windows
 
 import (
 	"errors"
+	"sync"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver/desktop"
 	"github.com/jungdosa/QuotaDock/internal/i18n"
@@ -14,6 +16,9 @@ type Tray struct {
 	show, settings, normal, compact, nano, quit *fyne.MenuItem
 	language, system                            i18n.Language
 	catalog                                     *i18n.Catalog
+	tooltipMu                                   sync.Mutex
+	tooltipValue                                string
+	registered, tooltipReady                    bool
 }
 
 func NewTray(app fyne.App, window fyne.Window, catalog *i18n.Catalog, language, system i18n.Language, onShow, onSettings func(), onMode func(settings.DisplayMode), onQuit func()) (*Tray, error) {
@@ -33,6 +38,7 @@ func NewTray(app fyne.App, window fyne.Window, catalog *i18n.Catalog, language, 
 	t.apply(settings.ModeNormal, false)
 	host.SetSystemTrayMenu(t.menu)
 	host.SetSystemTrayWindow(window)
+	t.registered = true
 	return t, nil
 }
 func (t *Tray) apply(mode settings.DisplayMode, refresh bool) {
@@ -55,3 +61,38 @@ func (t *Tray) Update(language, system i18n.Language, mode settings.DisplayMode)
 	t.apply(mode, true)
 }
 func (t *Tray) Menu() *fyne.Menu { return t.menu }
+
+// SetTooltip stores the latest summary after Fyne tray registration. The
+// native systray loop starts later with the app lifecycle, so early values are
+// delayed until Ready instead of being sent to an unregistered Windows icon.
+func (t *Tray) SetTooltip(value string) {
+	if t == nil {
+		return
+	}
+	t.tooltipMu.Lock()
+	defer t.tooltipMu.Unlock()
+	if !t.registered {
+		return
+	}
+	t.tooltipValue = value
+	if t.tooltipReady {
+		setTrayTooltip(value)
+	}
+}
+
+// Ready flushes the pending tooltip after Fyne has started the native systray
+// loop. Calling it before NewTray, or more than once, is harmless.
+func (t *Tray) Ready() {
+	if t == nil {
+		return
+	}
+	t.tooltipMu.Lock()
+	defer t.tooltipMu.Unlock()
+	if !t.registered {
+		return
+	}
+	t.tooltipReady = true
+	if t.tooltipValue != "" {
+		setTrayTooltip(t.tooltipValue)
+	}
+}
