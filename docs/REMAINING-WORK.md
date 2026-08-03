@@ -2,6 +2,11 @@
 
 ## 크레딧(유료 추가 사용량) 표시 활성화
 
+> **✅ 완료 (2026-07-31, Phase 4I, 0.7.17)** — `creditsDisplayEnabled` 게이트를 열고
+> OAuth usage 응답의 `extra_usage`·`spend` 블록을 파싱해 활성화했다. 아래 조사 기록은
+> 구현 근거로 보존한다. 미수용으로 남은 것: Codex `rateLimitResetCredits.availableCount`
+> (리셋권 개수)는 아직 파싱하지 않는다.
+
 - 코드는 구현 완료 상태로 `internal/ui/view_cache.go`의 `creditsDisplayEnabled = false`로 게이트되어 있다.
   활성화하면: 일반 모드 레인 헤더의 `크레딧 <잔액>` 메타 텍스트, 설정 CONNECTIONS의 크레딧 항목,
   설정의 제공자별 `크레딧` 토글(`ShowClaudeCredits`/`ShowCodexCredits`)이 켜진다.
@@ -39,6 +44,11 @@ spend:       used{amount_minor,currency,exponent} · limit{...} · percent · se
   스코프만 보고 불가능하다고 판단하지 말 것.
 
 ## 업데이트 버튼 활성화
+
+> **✅ 완료 (2026-07-30~31, Phase 4D, 0.7.10)** — 시작 시 1회 + 수동 확인, 다운로드 후와
+> 실행 직전 SHA-256 이중 검증, 무인 설치·재실행까지 구현했다. 실제 GitHub 릴리스로
+> 감지→다운로드→검증 전 경로를 라이브 테스트(`TestLiveGitHubUpdateFlow`)로 실증했다.
+> 아래 원래 계획은 기록으로 보존한다.
 
 - 현재 설정 타이틀바의 `업데이트` 버튼은 비활성(`업데이트 기능 준비 중`) 상태다.
 - GitHub 저장소 공개 후 GitHub Releases를 업데이트 채널로 사용해 활성화한다.
