@@ -380,9 +380,6 @@ func (v *View) windowTitle(mode settings.DisplayMode) *fyne.Container {
 	titleGroup := container.NewHBox(titleObjects...)
 	buttons := []*SmallButton{
 		NewSmallIconButton(displayModeResource(mode, v.colors), v.displayModeTooltip(mode), v.Actions.ToggleCompact, v.colors),
-		// Side-by-side comparison button carrying the predecessor's four-arrow
-		// glyph for the same mode change. Same action as the button on its left.
-		NewSmallIconButton(displayModeArrowVariant(mode, v.colors), v.displayModeTooltip(mode), v.Actions.ToggleCompact, v.colors),
 		v.newRefreshButton(),
 		v.newThemeButton(),
 		NewSmallIconButton(theme.SettingsIcon(), v.text(i18n.KeySettings), v.Actions.OpenSettings, v.colors),
@@ -397,7 +394,7 @@ func (v *View) windowTitle(mode settings.DisplayMode) *fyne.Container {
 		NewDragSurface(v.Actions.BeginWindowDrag, v.Actions.MoveWindow, v.Actions.EndWindowDrag),
 		container.New(layout.NewCustomPaddedLayout(0, 0, 8, 0), titleGroup),
 	)
-	widths := []float32{0, 24, 24, 24, 24, 24, 24, 24}
+	widths := []float32{0, 24, 24, 24, 24, 24, 24}
 	row := container.New(NewColumnLayout(widths, 2, TitleBarHeight), append([]fyne.CanvasObject{dragTitle}, buttonObjects...)...)
 	gradient := canvas.NewLinearGradient(v.colors.TitleTop, v.colors.TitleBottom, 0)
 	divider := canvas.NewRectangle(v.colors.TitleDivider)

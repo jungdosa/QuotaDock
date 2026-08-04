@@ -1,3 +1,11 @@
+param(
+    # 검증 대상 실행 파일. 기본값은 dist 의 최신 portable 빌드다.
+    [string]$Exe = (Get-ChildItem (Join-Path $PSScriptRoot "..\..\dist\*-portable.exe") -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName,
+    # 캡처 산출물 위치. 저장소 밖 임시 폴더에 남긴다.
+    [string]$OutDir = (Join-Path $env:TEMP "quotadock-qa")
+)
+if (-not $Exe) { throw "검증 대상 exe 를 찾지 못했습니다. dist 를 빌드하거나 -Exe 로 지정하십시오." }
+if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir | Out-Null }
 # 각 설정 변경 → 앱 실행 → 화면 캡처로 반영 확인 (일반 위젯)
 Add-Type -AssemblyName System.Drawing
 Add-Type @"
@@ -12,13 +20,13 @@ public class SV {
 }
 "@
 $cfg = "$env:APPDATA\QuotaDock\settings.json"
-$exe = "C:\dev\qd-352.exe"
+$exe = $Exe
 
 function CaptureWith($changes, $outFile) {
   $j = Get-Content $cfg -Raw | ConvertFrom-Json
   foreach ($k in $changes.Keys) { $j.$k = $changes[$k] }
   $j | ConvertTo-Json -Depth 5 | Out-File $cfg -Encoding utf8
-  Get-Process -Name qd-352 -ErrorAction SilentlyContinue | Stop-Process -Force
+  Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($Exe)) -ErrorAction SilentlyContinue | Stop-Process -Force
   Start-Sleep 2
   $p = Start-Process $exe -PassThru
   Start-Sleep 16
@@ -44,22 +52,22 @@ function CaptureWith($changes, $outFile) {
 Copy-Item $cfg "$cfg.svbak" -Force
 
 Write-Host "=== A. 표시 방법: 사용량 → 남은량 ==="
-$okA = CaptureWith @{ usageMode = "remaining"; language = "en" } "C:\dev\sv-remaining.png"
+$okA = CaptureWith @{ usageMode = "remaining"; language = "en" } (Join-Path $OutDir 'sv-remaining.png')
 Write-Host "  저장 유지: $okA"
 
 Write-Host "=== B. 표시 방법: 남은량 → 사용량 ==="
-$okB = CaptureWith @{ usageMode = "used"; language = "en" } "C:\dev\sv-used.png"
+$okB = CaptureWith @{ usageMode = "used"; language = "en" } (Join-Path $OutDir 'sv-used.png')
 Write-Host "  저장 유지: $okB"
 
 Write-Host "=== C. 테마: Light ==="
-$okC = CaptureWith @{ theme = "light"; language = "en" } "C:\dev\sv-light.png"
+$okC = CaptureWith @{ theme = "light"; language = "en" } (Join-Path $OutDir 'sv-light.png')
 Write-Host "  저장 유지: $okC"
 
 Write-Host "=== D. Claude 색상: blue → red ==="
 $j = Get-Content $cfg -Raw | ConvertFrom-Json
 $j.providerColors.claude = "red"; $j.theme = "dark"; $j.usageMode = "used"
 $j | ConvertTo-Json -Depth 5 | Out-File $cfg -Encoding utf8
-$okD = CaptureWith @{ language = "en" } "C:\dev\sv-claude-red.png"
+$okD = CaptureWith @{ language = "en" } (Join-Path $OutDir 'sv-claude-red.png')
 $saved = Get-Content $cfg -Raw | ConvertFrom-Json
 Write-Host "  Claude 색상 저장값: $($saved.providerColors.claude)"
 

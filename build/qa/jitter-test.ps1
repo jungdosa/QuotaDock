@@ -1,3 +1,11 @@
+param(
+    # 검증 대상 실행 파일. 기본값은 dist 의 최신 portable 빌드다.
+    [string]$Exe = (Get-ChildItem (Join-Path $PSScriptRoot "..\..\dist\*-portable.exe") -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName,
+    # 캡처 산출물 위치. 저장소 밖 임시 폴더에 남긴다.
+    [string]$OutDir = (Join-Path $env:TEMP "quotadock-qa")
+)
+if (-not $Exe) { throw "검증 대상 exe 를 찾지 못했습니다. dist 를 빌드하거나 -Exe 로 지정하십시오." }
+if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir | Out-Null }
 # 드래그 궤적 떨림 정량 측정
 Add-Type @"
 using System;
@@ -13,9 +21,9 @@ public class JT {
 }
 "@
 
-Get-Process -Name qd-352,qd-351,quotadock -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($Exe)),qd-351,quotadock -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep 2
-$p = Start-Process "C:\dev\qd-352.exe" -PassThru
+$p = Start-Process $Exe -PassThru
 Start-Sleep 18
 $h = $p.MainWindowHandle
 

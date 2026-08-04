@@ -1,3 +1,11 @@
+param(
+    # 검증 대상 실행 파일. 기본값은 dist 의 최신 portable 빌드다.
+    [string]$Exe = (Get-ChildItem (Join-Path $PSScriptRoot "..\..\dist\*-portable.exe") -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName,
+    # 캡처 산출물 위치. 저장소 밖 임시 폴더에 남긴다.
+    [string]$OutDir = (Join-Path $env:TEMP "quotadock-qa")
+)
+if (-not $Exe) { throw "검증 대상 exe 를 찾지 못했습니다. dist 를 빌드하거나 -Exe 로 지정하십시오." }
+if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir | Out-Null }
 # 라이트/다크 테마 실측 + 배경 픽셀 독립 검증
 Add-Type -AssemblyName System.Drawing
 Add-Type @"
@@ -12,14 +20,14 @@ public class TV {
 }
 "@
 $cfg = "$env:APPDATA\QuotaDock\settings.json"
-$exe = "C:\dev\qd-353.exe"
+$exe = $Exe
 Copy-Item $cfg "$cfg.tvbak" -Force
 
 function CapTheme($themeName, $out) {
   $j = Get-Content $cfg -Raw | ConvertFrom-Json
   $j.theme = $themeName; $j.language = "en"
   $j | ConvertTo-Json -Depth 5 | Out-File $cfg -Encoding utf8
-  Get-Process -Name qd-353 -ErrorAction SilentlyContinue | Stop-Process -Force
+  Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($Exe)) -ErrorAction SilentlyContinue | Stop-Process -Force
   Start-Sleep 2
   $p = Start-Process $exe -PassThru
   Start-Sleep 16
@@ -39,10 +47,10 @@ function CapTheme($themeName, $out) {
 }
 
 Write-Host "=== 라이트 테마 배경 픽셀 ==="
-$light = CapTheme "light" "C:\dev\tv-light.png"
+$light = CapTheme "light" (Join-Path $OutDir 'tv-light.png')
 Write-Host "  $light"
 Write-Host "=== 다크 테마 배경 픽셀 (회귀 확인) ==="
-$dark = CapTheme "dark" "C:\dev\tv-dark.png"
+$dark = CapTheme "dark" (Join-Path $OutDir 'tv-dark.png')
 Write-Host "  $dark"
 
 Write-Host "`n=== 판정 ==="

@@ -1,3 +1,11 @@
+param(
+    # 검증 대상 실행 파일. 기본값은 dist 의 최신 portable 빌드다.
+    [string]$Exe = (Get-ChildItem (Join-Path $PSScriptRoot "..\..\dist\*-portable.exe") -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName,
+    # 캡처 산출물 위치. 저장소 밖 임시 폴더에 남긴다.
+    [string]$OutDir = (Join-Path $env:TEMP "quotadock-qa")
+)
+if (-not $Exe) { throw "검증 대상 exe 를 찾지 못했습니다. dist 를 빌드하거나 -Exe 로 지정하십시오." }
+if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir | Out-Null }
 # conhost 가 "보이는 창" 을 가지는지 확인 (안 보이면 문제 아님)
 Add-Type @"
 using System;
@@ -22,9 +30,9 @@ public class Vis {
 }
 "@
 
-Get-Process -Name qd-351,quotadock -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($Exe)),quotadock -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep 2
-$p = Start-Process "C:\dev\qd-351.exe" -PassThru
+$p = Start-Process $Exe -PassThru
 $appPid = $p.Id
 Start-Sleep 20
 
@@ -54,4 +62,4 @@ foreach ($d in $descendants.GetEnumerator()) {
 }
 if (-not $foundVisible) { Write-Host "  없음 → 자식 프로세스 콘솔 창이 화면에 안 보임 PASS" }
 
-Get-Process -Name qd-351 -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($Exe)) -ErrorAction SilentlyContinue | Stop-Process -Force

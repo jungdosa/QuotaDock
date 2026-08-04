@@ -24,7 +24,7 @@ public class PV {
 }
 "@
 
-$portable = "C:\dev\QuotaDock\dist\QuotaDock-0.5.1-win-x64-portable.exe"
+$portable = (Join-Path $PSScriptRoot "..\..\dist\QuotaDock-0.5.1-win-x64-portable.exe")
 Write-Host "=== Portable 검증: $portable ==="
 Get-Process -Name "QuotaDock-0.5.1-win-x64-portable","quotadock" -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep 2

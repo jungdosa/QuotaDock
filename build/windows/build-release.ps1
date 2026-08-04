@@ -4,12 +4,18 @@
 
 param(
     [Parameter(Mandatory=$true)][string]$Version,
-    [string]$GoRoot = "C:\dev\gofresh\go",
+    # Resolved from whichever go is on PATH. The repo carries no machine
+    # specific toolchain path: a hardcoded one silently builds with the wrong
+    # Go the moment the toolchain moves, and it moved once already.
+    [string]$GoRoot = $(& go env GOROOT 2>$null),
     [string]$MinGW  = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin",
     [string]$ISCC   = "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
 )
 
 $ErrorActionPreference = "Stop"
+if (-not $GoRoot -or -not (Test-Path (Join-Path $GoRoot "bin\go.exe"))) {
+    throw "Go 툴체인을 찾지 못했습니다. go 를 PATH 에 두거나 -GoRoot 로 지정하십시오."
+}
 $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $dist = Join-Path $repo "dist"
 $env:GOROOT = $GoRoot

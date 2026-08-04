@@ -1,7 +1,15 @@
 # QuotaDock 표준 검수 도구 — FHD 모니터에서 실측 (잠금 시에도 마우스 주입 가능)
 # 사용: fhd-verify.ps1 <exe경로> [normal|settings|compact]
 # 핵심 발견: 4K 주모니터는 잠금 시 마우스 주입 차단되나, FHD 보조모니터는 항상 가능.
-param([string]$Exe = "C:\dev\qd-355.exe", [string]$Screen = "normal")
+param(
+    # 검증 대상 실행 파일. 기본값은 dist 의 최신 portable 빌드다.
+    [string]$Exe = (Get-ChildItem (Join-Path $PSScriptRoot "..\..\dist\*-portable.exe") -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName,
+    # 캡처 산출물 위치. 저장소 밖 임시 폴더에 남긴다.
+    [string]$OutDir = (Join-Path $env:TEMP "quotadock-qa"),
+    [ValidateSet("normal", "settings", "compact")][string]$Screen = "normal"
+)
+if (-not $Exe) { throw "검증 대상 exe 를 찾지 못했습니다. dist 를 빌드하거나 -Exe 로 지정하십시오." }
+if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir | Out-Null }
 
 Add-Type -AssemblyName System.Drawing
 Add-Type @"
@@ -56,7 +64,7 @@ Write-Host "오프셋: $($ctl.Y - $r.T)px"
 $bmp=New-Object System.Drawing.Bitmap $w,$ht
 $g=[System.Drawing.Graphics]::FromImage($bmp)
 $hdc=$g.GetHdc();[FHD]::PrintWindow($h,$hdc,2)|Out-Null;$g.ReleaseHdc($hdc);$g.Dispose()
-$out = "C:\dev\fhd-$Screen.png"
+$out = (Join-Path $OutDir "fhd-$Screen.png")
 $bmp.Save($out,[System.Drawing.Imaging.ImageFormat]::Png);$bmp.Dispose()
 Write-Host "캡처: $out"
 

@@ -278,9 +278,7 @@ func TestTitlebarButtonsReceiveCanvasClicks(t *testing.T) {
 	window.SetContent(bar)
 	window.Resize(fyne.NewSize(NormalWidth, TitleBarHeight))
 	row := bar.Objects[1].(*fyne.Container)
-	// Index 2 is the four-arrow comparison button, which shares ToggleCompact
-	// with index 1, so it is skipped here rather than double-counted.
-	for name, index := range map[string]int{"compact": 1, "refresh": 3, "settings": 5, "minimize": 6, "close": 7} {
+	for name, index := range map[string]int{"compact": 1, "refresh": 2, "settings": 4, "minimize": 5, "close": 6} {
 		button := row.Objects[index]
 		test.TapCanvas(window.Canvas(), fyne.NewPos(button.Position().X+button.Size().Width/2, TitleBarHeight/2))
 		if clicks[name] != 1 {
@@ -403,9 +401,7 @@ func TestCanvasClickTargetsReachTitlebarAndSettingsControls(t *testing.T) {
 	w.SetContent(titleBar)
 	w.Resize(fyne.NewSize(NormalWidth, TitleBarHeight))
 	row := titleBar.Objects[1].(*fyne.Container)
-	// Index 2 is the four-arrow comparison button sharing ToggleCompact with
-	// index 1; tapping both would count two clicks for one name.
-	for name, index := range map[string]int{"compact": 1, "refresh": 3, "settings": 5, "minimize": 6, "close": 7} {
+	for name, index := range map[string]int{"compact": 1, "refresh": 2, "settings": 4, "minimize": 5, "close": 6} {
 		button := row.Objects[index]
 		position := fyne.NewPos(button.Position().X+button.Size().Width/2, TitleBarHeight/2)
 		test.TapCanvas(w.Canvas(), position)

@@ -1,6 +1,14 @@
+param(
+    # 검증 대상 실행 파일. 기본값은 dist 의 최신 portable 빌드다.
+    [string]$Exe = (Get-ChildItem (Join-Path $PSScriptRoot "..\..\dist\*-portable.exe") -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName,
+    # 캡처 산출물 위치. 저장소 밖 임시 폴더에 남긴다.
+    [string]$OutDir = (Join-Path $env:TEMP "quotadock-qa")
+)
+if (-not $Exe) { throw "검증 대상 exe 를 찾지 못했습니다. dist 를 빌드하거나 -Exe 로 지정하십시오." }
+if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir | Out-Null }
 # 설정 저장/복원 실측: 값 변경 → 저장 확인 → 재시작 → 복원 확인
 $cfg = "$env:APPDATA\QuotaDock\settings.json"
-$exe = "C:\dev\qd-351.exe"
+$exe = $Exe
 
 Write-Host "=== 현재 settings.json ==="
 if (Test-Path $cfg) {
@@ -33,7 +41,7 @@ if (Test-Path $cfg) {
   Write-Host "  변경: theme $origTheme→$newTheme, refreshSeconds→900"
 
   # 앱 실행 → 종료 (앱이 로드→저장 시 값 보존하는지)
-  Get-Process -Name qd-351,quotadock -ErrorAction SilentlyContinue | Stop-Process -Force
+  Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($Exe)),quotadock -ErrorAction SilentlyContinue | Stop-Process -Force
   Start-Sleep 2
   $p = Start-Process $exe -PassThru
   Start-Sleep 12
