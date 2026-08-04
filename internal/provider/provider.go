@@ -4,10 +4,14 @@ package provider
 import (
 	"context"
 	"errors"
-	"github.com/jungdosa/QuotaDock/internal/model"
+	"log/slog"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
+
+	"github.com/jungdosa/QuotaDock/internal/diagnostics"
+	"github.com/jungdosa/QuotaDock/internal/model"
 )
 
 var (
@@ -53,13 +57,24 @@ func (c Coordinator) RefreshAll(ctx context.Context) map[model.ProviderID]Outcom
 	for id, implementation := range c.Providers {
 		id, implementation := id, implementation
 		wg.Add(1)
-		go func() {
+		diagnostics.Go("provider_refresh_worker", func() {
 			defer wg.Done()
+			started := time.Now()
 			snapshot, err := implementation.Refresh(ctx)
+			code := model.ErrNone
+			var safe model.SafeError
+			if errors.As(err, &safe) {
+				code = safe.Code
+			} else if errors.Is(err, context.DeadlineExceeded) {
+				code = model.ErrTimeout
+			} else if err != nil {
+				code = model.ErrUnavailable
+			}
+			slog.Info("provider.refresh", "provider", string(id), "ok", err == nil, "err", string(code), "ms", time.Since(started).Milliseconds())
 			mu.Lock()
 			output[id] = Outcome{Snapshot: snapshot, Err: err}
 			mu.Unlock()
-		}()
+		})
 	}
 	wg.Wait()
 	return output

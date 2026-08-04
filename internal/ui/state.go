@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 
@@ -127,10 +128,12 @@ func (c *Controller) Refresh(ctx context.Context) ViewState {
 		assignUniqueDisplayLabels(lane.Rows)
 	}
 	c.mu.Lock()
+	previous := cloneState(c.state)
 	c.state = next
 	listeners := append([]func(ViewState){}, c.listeners...)
 	snapshot := cloneState(next)
 	c.mu.Unlock()
+	logProviderStateTransitions(previous, snapshot)
 	for _, fn := range listeners {
 		fn(cloneState(snapshot))
 	}
@@ -144,6 +147,30 @@ func applyConnectionState(lane *LaneState, state model.ConnectionState) {
 	lane.CLIPath = state.CLIPath
 	lane.CLIVersion = state.CLIVersion
 	lane.Source = state.Source
+}
+
+func logProviderStateTransitions(previous, next ViewState) {
+	before := make(map[model.ProviderID]LaneState, len(previous.Lanes))
+	for _, lane := range previous.Lanes {
+		before[lane.Provider] = lane
+	}
+	for _, lane := range next.Lanes {
+		prior, ok := before[lane.Provider]
+		if ok && prior.Status == lane.Status && prior.Error == lane.Error {
+			continue
+		}
+		from := model.StatusUnavailable
+		if ok {
+			from = prior.Status
+		}
+		slog.Info(
+			"provider.state",
+			"provider", string(lane.Provider),
+			"from", string(from),
+			"to", string(lane.Status),
+			"err", string(lane.Error),
+		)
+	}
 }
 
 func sortLaneRows(providerID model.ProviderID, rows []UsageRowState) {

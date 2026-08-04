@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/jungdosa/QuotaDock/internal/diagnostics"
 	"github.com/jungdosa/QuotaDock/internal/security"
 )
 
@@ -79,12 +80,12 @@ func StartJSONLSession(spec CommandSpec, runner Runner) (*JSONLSession, error) {
 		log: runner.Log, done: make(chan struct{}), stderrDone: make(chan struct{}),
 		stderr: &limitedBuffer{limit: stderrLimit},
 	}
-	go func() {
+	diagnostics.Go("session_stderr", func() {
 		_, _ = io.Copy(session.stderr, stderrPipe)
 		close(session.stderrDone)
-	}()
-	go session.readLoop(stdout)
-	go func() {
+	})
+	diagnostics.Go("session_read", func() { session.readLoop(stdout) })
+	diagnostics.Go("session_wait", func() {
 		_ = cmd.Wait()
 		<-session.stderrDone
 		if session.stderr.Len() > 0 && session.log != nil {
@@ -92,7 +93,7 @@ func StartJSONLSession(spec CommandSpec, runner Runner) (*JSONLSession, error) {
 		}
 		session.mux.CloseAll()
 		close(session.done)
-	}()
+	})
 	return session, nil
 }
 

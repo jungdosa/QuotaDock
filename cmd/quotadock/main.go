@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -11,6 +12,7 @@ import (
 	"fyne.io/fyne/v2/lang"
 	"fyne.io/fyne/v2/widget"
 	appmetadata "github.com/jungdosa/QuotaDock"
+	"github.com/jungdosa/QuotaDock/internal/diagnostics"
 	"github.com/jungdosa/QuotaDock/internal/i18n"
 	"github.com/jungdosa/QuotaDock/internal/model"
 	platform "github.com/jungdosa/QuotaDock/internal/platform/windows"
@@ -38,12 +40,20 @@ func init() {
 }
 
 func main() {
-	if err := run(os.Args[1:]); err != nil {
-		slog.Error("QuotaDock stopped", "error", err)
+	diagnosticRuntime, err := diagnostics.NewDefault(version)
+	if err != nil {
+		os.Exit(1)
+	}
+	restoreDiagnostics := diagnosticRuntime.Install()
+	defer diagnosticRuntime.Close()
+	defer restoreDiagnostics()
+	defer diagnostics.Recover("main")
+	if err := run(os.Args[1:], diagnosticRuntime); err != nil {
+		_ = diagnosticRuntime.RecordFailure("main", err)
 		os.Exit(1)
 	}
 }
-func run(args []string) error {
+func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	debug.SetGCPercent(50)
 	debug.SetMemoryLimit(192 << 20)
 	instance, alreadyRunning, err := platform.AcquireSingleInstance()
@@ -55,6 +65,9 @@ func run(args []string) error {
 		return nil
 	}
 	defer instance.Close()
+	if err := diagnosticRuntime.BeginSession(); err != nil {
+		return err
+	}
 	hidden, portable, demo := false, false, false
 	for _, arg := range args {
 		switch arg {
@@ -97,7 +110,9 @@ func run(args []string) error {
 	w := desktopDriver.CreateSplashWindow()
 	w.SetTitle("QuotaDock")
 	configureMainWindow(w)
-	processLog := func(message string) { slog.Debug("provider process output", "message", message) }
+	// Provider stdout/stderr can contain response bodies, account data, and
+	// absolute CLI paths. Structured provider events below are the safe record.
+	processLog := func(string) {}
 	coordinator := provider.Coordinator{Providers: map[model.ProviderID]model.Provider{
 		model.ProviderClaude:      claudeprovider.New(claudeprovider.NewCLIClient(processLog), claudeprovider.MinimumCLIVersion),
 		model.ProviderCodex:       codexprovider.New(codexprovider.NewAppServerTransport(processLog), codexprovider.MinimumCLIVersion),
@@ -105,6 +120,7 @@ func run(args []string) error {
 	}}
 	controller := ui.NewController(coordinator, cfg)
 	native := platform.NewWindowController(w)
+	workAreas := platform.MonitorWorkAreas()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	idleTrimmer := platform.NewIdleTrimmer(time.Now(), platform.DefaultIdleTrimDelay, platform.DefaultBackgroundTrimDelay)
@@ -121,6 +137,8 @@ func run(args []string) error {
 		tray.SetTooltip(ui.BuildTrayTooltip(state, cfg, systemLanguage, time.Now()))
 	}
 	var lifecycle *platform.Lifecycle
+	var exitReason atomic.Value
+	exitReason.Store("exit_requested")
 	var trayPromotionRetryTimer *time.Timer
 	stopTrayPromotionRetries := func() {
 		if trayPromotionRetryTimer != nil {
@@ -150,6 +168,7 @@ func run(args []string) error {
 		},
 		quit: func() {
 			if lifecycle != nil {
+				exitReason.Store("update_install")
 				lifecycle.ExitRequested()
 			}
 		},
@@ -181,20 +200,33 @@ func run(args []string) error {
 			}
 		}
 		apply()
-		time.AfterFunc(100*time.Millisecond, func() { fyne.Do(apply) })
+		diagnostics.AfterFunc(100*time.Millisecond, "rounded_corners", func() { fyne.Do(apply) })
 	}
-	fitWindowToScreen := func() {
+	rectValue := func(rect platform.Rect) []int {
+		return []int{rect.X, rect.Y, rect.Width, rect.Height}
+	}
+	areasValue := func(areas []platform.Rect) [][]int {
+		value := make([][]int, 0, len(areas))
+		for _, area := range areas {
+			value = append(value, rectValue(area))
+		}
+		return value
+	}
+	fitWindowToAreas := func(areas []platform.Rect, reason string) {
 		position, positionErr := native.Position()
 		if positionErr != nil {
 			return
 		}
-		fitted := platform.FitToWorkArea(position, platform.MonitorWorkAreas())
+		fitted := platform.FitToWorkArea(position, areas)
 		if fitted == position {
 			return
 		}
-		if moveErr := native.MoveTo(fitted.X, fitted.Y); moveErr != nil {
-			slog.Debug("window could not be fitted to the work area", "error", moveErr)
+		if moveErr := native.MoveTo(fitted.X, fitted.Y); moveErr == nil {
+			slog.Debug("window.fit", "reason", reason, "from", rectValue(position), "to", rectValue(fitted))
 		}
+	}
+	fitWindowToScreen := func() {
+		fitWindowToAreas(platform.MonitorWorkAreas(), "resize")
 	}
 	var rememberedWidgetPosition platform.Rect
 	var widgetPositionRemembered bool
@@ -215,7 +247,7 @@ func run(args []string) error {
 			fitWindowToScreen()
 		}
 		applyPosition()
-		time.AfterFunc(100*time.Millisecond, func() { fyne.Do(applyPosition) })
+		diagnostics.AfterFunc(100*time.Millisecond, "window_position", func() { fyne.Do(applyPosition) })
 	}
 	applyScreen := func(screen ui.Screen) {
 		current := view.Screen()
@@ -243,7 +275,7 @@ func run(args []string) error {
 			state := ui.DemoViewState()
 			view.SetState(state)
 			setTrayTooltip(state)
-			time.AfterFunc(350*time.Millisecond, func() {
+			diagnostics.AfterFunc(350*time.Millisecond, "demo_refresh", func() {
 				fyne.Do(func() {
 					view.SetRefreshing(false)
 					refreshing.Store(false)
@@ -251,7 +283,7 @@ func run(args []string) error {
 			})
 			return
 		}
-		go func() {
+		diagnostics.Go("provider_refresh", func() {
 			refreshCtx, stop := context.WithTimeout(ctx, 12*time.Second)
 			defer stop()
 			state := controller.Refresh(refreshCtx)
@@ -264,7 +296,31 @@ func run(args []string) error {
 			rendering.Store(false)
 			refreshing.Store(false)
 			debug.FreeOSMemory()
-		}()
+		})
+	}
+	checkDisplayChange := func() {
+		current := platform.MonitorWorkAreas()
+		previous := workAreas
+		if platform.WorkAreasEqual(previous, current) {
+			return
+		}
+		workAreas = append([]platform.Rect(nil), current...)
+		slog.Info("display.change", "before", len(previous), "after", len(current), "areas", areasValue(current))
+		position, positionErr := native.Position()
+		if positionErr != nil {
+			return
+		}
+		_, fitted, shouldFit := platform.DisplayChange(previous, current, position)
+		if !shouldFit {
+			return
+		}
+		if moveErr := native.MoveTo(fitted.X, fitted.Y); moveErr == nil {
+			slog.Debug("window.fit", "reason", "display_change", "from", rectValue(position), "to", rectValue(fitted))
+		}
+	}
+	scheduledRefresh := func(context.Context) {
+		checkDisplayChange()
+		refresh()
 	}
 	applyConfig := func(next settings.Config) {
 		previous := cfg
@@ -299,7 +355,7 @@ func run(args []string) error {
 		}
 		scheduler.Stop()
 		if !demo {
-			scheduler.Start(ctx, time.Duration(cfg.RefreshSeconds)*time.Second, func(context.Context) { refresh() })
+			scheduler.Start(ctx, time.Duration(cfg.RefreshSeconds)*time.Second, scheduledRefresh)
 		}
 	}
 	setDisplayMode := func(mode settings.DisplayMode) {
@@ -316,16 +372,27 @@ func run(args []string) error {
 			refresh()
 			return
 		}
-		go func() {
+		diagnostics.Go("connection_action", func() {
 			connectCtx, stop := context.WithTimeout(ctx, 30*time.Second)
 			defer stop()
+			started := time.Now()
 			if reconnect {
-				_, _ = implementation.Reconnect(connectCtx)
+				_, reconnectErr := implementation.Reconnect(connectCtx)
+				code := model.ErrNone
+				var safe model.SafeError
+				if errors.As(reconnectErr, &safe) {
+					code = safe.Code
+				} else if errors.Is(reconnectErr, context.DeadlineExceeded) {
+					code = model.ErrTimeout
+				} else if reconnectErr != nil {
+					code = model.ErrUnavailable
+				}
+				slog.Info("session.reconnect", "provider", string(id), "ok", reconnectErr == nil, "err", string(code), "ms", time.Since(started).Milliseconds())
 			} else {
 				_ = implementation.Inspect(connectCtx)
 			}
 			refresh()
-		}()
+		})
 	}
 	actions := ui.Actions{AppVersion: version, TrayPromotionSupported: trayPromotionSupported, BeginWindowDrag: func() (int, int, error) {
 		cursorX, cursorY, cursorErr := native.CursorPos()
@@ -379,9 +446,9 @@ func run(args []string) error {
 		applyScreen(ui.SettingsScreen)
 	}
 	a.Settings().AddListener(func(fyne.Settings) {
-		go func() {
+		diagnostics.Go("theme_refresh", func() {
 			fyne.Do(func() { view.RefreshTheme() })
-		}()
+		})
 	})
 	if demo {
 		state := ui.DemoViewState()
@@ -396,6 +463,7 @@ func run(args []string) error {
 		stopTrayPromotionRetries()
 		scheduler.Stop()
 		_ = controller.Close()
+		_ = diagnosticRuntime.EndSession(exitReason.Load().(string))
 		a.Quit()
 	}}
 	w.SetCloseIntercept(lifecycle.CloseRequested)
@@ -412,7 +480,10 @@ func run(args []string) error {
 			})
 		},
 		func(mode settings.DisplayMode) { fyne.Do(func() { setDisplayMode(mode) }) },
-		func() { fyne.Do(lifecycle.ExitRequested) },
+		func() {
+			exitReason.Store("tray_quit")
+			fyne.Do(lifecycle.ExitRequested)
+		},
 	)
 	if err != nil {
 		return err
@@ -438,7 +509,7 @@ func run(args []string) error {
 			if !retry {
 				return
 			}
-			trayPromotionRetryTimer = time.AfterFunc(delay, func() {
+			trayPromotionRetryTimer = diagnostics.AfterFunc(delay, "tray_promotion_retry", func() {
 				if ctx.Err() != nil {
 					return
 				}
@@ -458,7 +529,20 @@ func run(args []string) error {
 	if err := native.Bind(); err != nil {
 		return err
 	}
-	go func() {
+	workAreas = platform.MonitorWorkAreas()
+	effectiveLanguage := i18n.Language(cfg.Language)
+	if cfg.Language == settings.LanguageSystem {
+		effectiveLanguage = systemLanguage
+	}
+	windowsBuild, _ := platform.CurrentWindowsBuild()
+	diagnosticRuntime.LogStart(
+		"windows_build", windowsBuild,
+		"monitors", len(workAreas),
+		"dpi_scale", native.DPIScale(),
+		"mode", string(cfg.DisplayMode),
+		"language", string(effectiveLanguage),
+	)
+	diagnostics.Go("idle_trimmer", func() {
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
 		wasForeground := native.IsForeground()
@@ -481,7 +565,7 @@ func run(args []string) error {
 				}
 			}
 		}
-	}()
+	})
 	_ = native.SetAlwaysOnTop(cfg.AlwaysOnTop)
 	_ = native.SetTaskbarVisible(cfg.ShowInTaskbar)
 	if cfg.WindowPositioned {
@@ -493,12 +577,12 @@ func run(args []string) error {
 		hideWindow()
 	}
 	if !demo {
-		scheduler.Start(ctx, time.Duration(cfg.RefreshSeconds)*time.Second, func(context.Context) { refresh() })
+		scheduler.Start(ctx, time.Duration(cfg.RefreshSeconds)*time.Second, scheduledRefresh)
 		refresh()
-		go func() { fyne.Do(func() { updates.Check(false) }) }()
+		diagnostics.Go("startup_update_check", func() { fyne.Do(func() { updates.Check(false) }) })
 	}
 	a.Run()
-	return nil
+	return diagnosticRuntime.EndSession("run_return")
 }
 func configureMainWindow(window fyne.Window) {
 	window.SetFixedSize(true)

@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
+	"github.com/jungdosa/QuotaDock/internal/diagnostics"
 	"github.com/jungdosa/QuotaDock/internal/i18n"
 	updater "github.com/jungdosa/QuotaDock/internal/update"
 )
@@ -39,7 +40,7 @@ func (u *updateController) Check(manual bool) {
 		checking = u.newModalPopup(u.text(i18n.KeyUpdate), container.NewPadded(label), fyne.NewSize(360, 100))
 		checking.Show()
 	}
-	go func() {
+	diagnostics.Go("update_check", func() {
 		checkContext, cancel := context.WithTimeout(u.rootContext, updateCheckTimeout)
 		defer cancel()
 		result := u.checker.Check(checkContext)
@@ -49,7 +50,7 @@ func (u *updateController) Check(manual bool) {
 			}
 			u.handleCheckResult(result, manual)
 		})
-	}()
+	})
 }
 
 func (u *updateController) handleCheckResult(result updater.CheckResult, manual bool) {
@@ -124,7 +125,7 @@ func (u *updateController) apply(release updater.Release) {
 	progressDialog = u.newModalPopup(u.text(i18n.KeyUpdate), content, fyne.NewSize(460, 180))
 	progressDialog.Show()
 
-	go func() {
+	diagnostics.Go("update_apply", func() {
 		_, err := u.flow.Apply(installContext, release, func(progress updater.Progress) {
 			renderProgress := func() {
 				switch progress.Stage {
@@ -162,7 +163,7 @@ func (u *updateController) apply(release updater.Release) {
 			}
 			slog.Warn("automatic update stopped", "error", err)
 		})
-	}()
+	})
 }
 
 func (u *updateController) showInformation(message string) {

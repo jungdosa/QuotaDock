@@ -9,6 +9,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	qdatetime "github.com/jungdosa/QuotaDock/internal/datetime"
+	"github.com/jungdosa/QuotaDock/internal/diagnostics"
 	"github.com/jungdosa/QuotaDock/internal/i18n"
 	"github.com/jungdosa/QuotaDock/internal/model"
 	"github.com/jungdosa/QuotaDock/internal/security"
@@ -516,7 +517,7 @@ func (v *View) scheduleAnchorTooltip(anchor tooltipAnchor) {
 	}
 	v.tooltipMu.Lock()
 	v.tooltipOwner = anchor
-	v.tooltipTimer = time.AfterFunc(TooltipDelay, func() {
+	v.tooltipTimer = diagnostics.AfterFunc(TooltipDelay, "tooltip_delay", func() {
 		fyne.Do(func() { v.showTooltip(anchor) })
 	})
 	v.tooltipMu.Unlock()

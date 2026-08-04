@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jungdosa/QuotaDock/internal/diagnostics"
 	"github.com/jungdosa/QuotaDock/internal/security"
 )
 
@@ -117,13 +118,13 @@ func (r Runner) RunJSONL(ctx context.Context, spec CommandSpec) ([]json.RawMessa
 		return nil, fmt.Errorf("attach process tree: %w", err)
 	}
 	finished := make(chan struct{})
-	go func() {
+	diagnostics.Go("process_timeout_guard", func() {
 		select {
 		case <-runCtx.Done():
 			_ = tree.Terminate(cmd)
 		case <-finished:
 		}
-	}()
+	})
 	records, scanErr := r.parse(stdout)
 	if scanErr != nil {
 		_ = tree.Terminate(cmd)

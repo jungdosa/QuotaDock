@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	"github.com/jungdosa/QuotaDock/internal/diagnostics"
 )
 
 // Scheduler owns at most one refresh timer. Start is idempotent until Stop.
@@ -26,7 +28,7 @@ func (s *Scheduler) Start(parent context.Context, interval time.Duration, refres
 	s.cancel = cancel
 	s.done = make(chan struct{})
 	done := s.done
-	go func() {
+	diagnostics.Go("refresh_scheduler", func() {
 		defer close(done)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -38,7 +40,7 @@ func (s *Scheduler) Start(parent context.Context, interval time.Duration, refres
 				return
 			}
 		}
-	}()
+	})
 	return true
 }
 

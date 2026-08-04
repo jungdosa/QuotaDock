@@ -179,10 +179,8 @@ func (t *AppServerTransport) Invalidate() {
 	if session == nil {
 		return
 	}
-	slog.Debug("Codex app-server session invalidated")
-	if err := session.Close(); err != nil {
-		slog.Debug("Codex app-server session close failed after invalidation", "error", err)
-	}
+	err := session.Close()
+	slog.Info("session.invalidate", "provider", "codex", "ok", err == nil)
 }
 
 func (t *AppServerTransport) Close() error {
