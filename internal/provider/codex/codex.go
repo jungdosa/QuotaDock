@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"sort"
 	"strconv"
 	"sync"
@@ -31,18 +32,23 @@ type executableSource interface {
 	ExecutablePath() (string, error)
 }
 
+const maxAutomaticReconnects = 3
+
 type Provider struct {
-	transport      Transport
-	minimumVersion string
-	state          *model.StateMachine
-	group          process.Group[model.UsageSnapshot]
-	mu             sync.Mutex
-	initialized    bool
-	handshakeOK    bool
-	accountType    string
-	plan           model.Plan
-	limits         rateEnvelope
-	now            func() time.Time
+	transport           Transport
+	minimumVersion      string
+	state               *model.StateMachine
+	group               process.Group[model.UsageSnapshot]
+	mu                  sync.Mutex
+	initialized         bool
+	handshakeOK         bool
+	accountType         string
+	plan                model.Plan
+	limits              rateEnvelope
+	consecutiveFailures int
+	reconnectAttempts   int
+	reconnectEligible   bool
+	now                 func() time.Time
 }
 
 func New(transport Transport, minimumVersion string) *Provider {
@@ -195,45 +201,114 @@ func safeTransportError(err error) error {
 
 func (p *Provider) Refresh(ctx context.Context) (model.UsageSnapshot, error) {
 	return p.group.Do(ctx, func() (model.UsageSnapshot, error) {
-		if err := p.initialize(ctx); err != nil {
-			return model.UsageSnapshot{}, err
+		if err := p.autoReconnectIfNeeded(); err != nil {
+			safeErr := model.SafeError{Code: model.ErrUnavailable, Key: "error.unavailable"}
+			p.recordRefreshResult(safeErr)
+			return model.UsageSnapshot{}, safeErr
 		}
-		p.mu.Lock()
-		accountType := p.accountType
-		p.mu.Unlock()
-		if accountType == "apiKey" {
-			return model.UsageSnapshot{}, model.SafeError{Code: model.ErrSubscriptionUnavailable, Key: "error.codex_api_key_no_limits"}
-		}
-		rateRaw, err := p.transport.Request(ctx, "account/rateLimits/read", map[string]any{})
-		if err != nil {
-			p.mu.Lock()
-			p.initialized = false
-			p.mu.Unlock()
-			return model.UsageSnapshot{}, p.postHandshakeError(err)
-		}
-		var limits rateEnvelope
-		if json.Unmarshal(rateRaw, &limits) != nil {
-			return model.UsageSnapshot{}, model.SafeError{Code: model.ErrInvalidResponse, Key: "error.invalid_response"}
-		}
-		p.mu.Lock()
-		p.limits = limits
-		if normalized := model.NormalizePlan(model.ProviderCodex, limits.RateLimits.PlanType); normalized != model.PlanUnknown {
-			p.plan = normalized
-		}
-		snapshot := snapshotFrom(p.plan, p.limits, p.now())
-		p.mu.Unlock()
-		return snapshot, nil
+		return p.refreshAndRecord(ctx)
 	})
 }
 
-func (p *Provider) Reconnect(ctx context.Context) (model.UsageSnapshot, error) {
+func (p *Provider) refreshAndRecord(ctx context.Context) (model.UsageSnapshot, error) {
+	snapshot, err := p.refresh(ctx)
+	p.recordRefreshResult(err)
+	return snapshot, err
+}
+
+func (p *Provider) refresh(ctx context.Context) (model.UsageSnapshot, error) {
+	if err := p.initialize(ctx); err != nil {
+		return model.UsageSnapshot{}, err
+	}
+	p.mu.Lock()
+	accountType := p.accountType
+	p.mu.Unlock()
+	if accountType == "apiKey" {
+		return model.UsageSnapshot{}, model.SafeError{Code: model.ErrSubscriptionUnavailable, Key: "error.codex_api_key_no_limits"}
+	}
+	rateRaw, err := p.transport.Request(ctx, "account/rateLimits/read", map[string]any{})
+	if err != nil {
+		p.mu.Lock()
+		p.initialized = false
+		p.mu.Unlock()
+		return model.UsageSnapshot{}, p.postHandshakeError(err)
+	}
+	var limits rateEnvelope
+	if json.Unmarshal(rateRaw, &limits) != nil {
+		return model.UsageSnapshot{}, model.SafeError{Code: model.ErrInvalidResponse, Key: "error.invalid_response"}
+	}
+	p.mu.Lock()
+	p.limits = limits
+	if normalized := model.NormalizePlan(model.ProviderCodex, limits.RateLimits.PlanType); normalized != model.PlanUnknown {
+		p.plan = normalized
+	}
+	snapshot := snapshotFrom(p.plan, p.limits, p.now())
+	p.mu.Unlock()
+	return snapshot, nil
+}
+
+func (p *Provider) autoReconnectIfNeeded() error {
+	p.mu.Lock()
+	if p.consecutiveFailures == 0 || !p.reconnectEligible || p.reconnectAttempts >= maxAutomaticReconnects {
+		p.mu.Unlock()
+		return nil
+	}
+	p.reconnectAttempts++
+	attempt := p.reconnectAttempts
+	failures := p.consecutiveFailures
+	p.mu.Unlock()
+
+	err := p.resetConnection()
+	slog.Debug("session.reconnect", "provider", "codex", "attempt", attempt, "failures", failures, "ok", err == nil)
+	return err
+}
+
+func (p *Provider) recordRefreshResult(err error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if err == nil {
+		p.consecutiveFailures = 0
+		p.reconnectAttempts = 0
+		p.reconnectEligible = false
+		return
+	}
+	p.consecutiveFailures++
+	p.reconnectEligible = reconnectableRefreshError(err, p.accountType)
+}
+
+func reconnectableRefreshError(err error, accountType string) bool {
+	var safe model.SafeError
+	if !errors.As(err, &safe) {
+		return true
+	}
+	switch safe.Code {
+	case model.ErrCLINotInstalled, model.ErrCLIOutdated, model.ErrNotLoggedIn:
+		return false
+	case model.ErrSubscriptionUnavailable:
+		return accountType != "apiKey"
+	default:
+		return true
+	}
+}
+
+func (p *Provider) resetConnection() error {
 	if err := p.transport.Close(); err != nil {
-		return model.UsageSnapshot{}, model.SafeError{Code: model.ErrUnavailable, Key: "error.unavailable"}
+		return err
 	}
 	p.mu.Lock()
 	p.initialized = false
+	p.handshakeOK = false
 	p.mu.Unlock()
-	return p.Refresh(ctx)
+	return nil
+}
+
+func (p *Provider) Reconnect(ctx context.Context) (model.UsageSnapshot, error) {
+	if err := p.resetConnection(); err != nil {
+		return model.UsageSnapshot{}, model.SafeError{Code: model.ErrUnavailable, Key: "error.unavailable"}
+	}
+	return p.group.Do(ctx, func() (model.UsageSnapshot, error) {
+		return p.refreshAndRecord(ctx)
+	})
 }
 
 func (p *Provider) Close() error {
