@@ -29,6 +29,7 @@ type fakeTransport struct {
 	active     bool
 	discarded  int
 	closed     int
+	closeErr   error
 }
 
 func (f *fakeTransport) Version(context.Context) (string, error) {
@@ -66,7 +67,7 @@ func (f *fakeTransport) Invalidate() {
 func (f *fakeTransport) Close() error {
 	f.closed++
 	f.active = false
-	return nil
+	return f.closeErr
 }
 func workingTransport(t *testing.T) *fakeTransport {
 	return &fakeTransport{version: "0.145.0", path: `/opt/codex/bin/codex`, responses: map[string]json.RawMessage{"initialize": json.RawMessage(`{"capabilities":{}}`), "account/read": json.RawMessage(`{"account":{"loggedIn":true,"planType":"plus"}}`), "account/rateLimits/read": fixture(t, "codex-rate-limits.json")}, fail: map[string]error{}}
@@ -345,6 +346,34 @@ func TestRepeatedRPCErrorReconnectsOnSecondRefresh(t *testing.T) {
 	failures, attempts, eligible := reconnectState(provider)
 	if transport.closed != 1 || transport.session != 2 || failures != 2 || attempts != 1 || !eligible {
 		t.Fatalf("closed=%d sessions=%d failures=%d attempts=%d eligible=%v", transport.closed, transport.session, failures, attempts, eligible)
+	}
+}
+
+// A dead app-server makes Close report process_exited. The reconnect must still
+// clear the handshake flags, otherwise the following refresh believes it owns a
+// session that no longer exists and never recovers.
+func TestReconnectClearsSessionEvenWhenCloseFails(t *testing.T) {
+	transport := workingTransport(t)
+	transport.fail["account/read"] = process.ErrRPCResponse
+	transport.closeErr = model.SafeError{Code: model.ErrProcessExited, Key: "error.process_exited"}
+	provider := New(transport, "0.100.0")
+
+	if _, err := provider.Refresh(context.Background()); err == nil {
+		t.Fatal("first refresh unexpectedly succeeded")
+	}
+	delete(transport.fail, "account/read")
+	if _, err := provider.Refresh(context.Background()); err != nil {
+		t.Fatalf("refresh after reconnect failed: %v", err)
+	}
+
+	provider.mu.Lock()
+	initialized, handshakeOK := provider.initialized, provider.handshakeOK
+	provider.mu.Unlock()
+	if !initialized || !handshakeOK {
+		t.Fatalf("handshake not re-established: initialized=%v handshakeOK=%v", initialized, handshakeOK)
+	}
+	if want := []string{"initialize", "initialized", "account/read", "account/rateLimits/read"}; !strings.Contains(strings.Join(transport.calls, ","), strings.Join(want, ",")) {
+		t.Fatalf("handshake was skipped after reconnect: calls=%v", transport.calls)
 	}
 }
 

@@ -201,11 +201,12 @@ func safeTransportError(err error) error {
 
 func (p *Provider) Refresh(ctx context.Context) (model.UsageSnapshot, error) {
 	return p.group.Do(ctx, func() (model.UsageSnapshot, error) {
-		if err := p.autoReconnectIfNeeded(); err != nil {
-			safeErr := model.SafeError{Code: model.ErrUnavailable, Key: "error.unavailable"}
-			p.recordRefreshResult(safeErr)
-			return model.UsageSnapshot{}, safeErr
-		}
+		// The reset error is deliberately not fatal here. Close reports
+		// process_exited whenever the app-server already died - the very case a
+		// reconnect exists to repair - and resetConnection clears the handshake
+		// state regardless. Aborting on it would spend the whole reconnect
+		// budget on refreshes that never actually retried.
+		_ = p.autoReconnectIfNeeded()
 		return p.refreshAndRecord(ctx)
 	})
 }
@@ -292,14 +293,18 @@ func reconnectableRefreshError(err error, accountType string) bool {
 }
 
 func (p *Provider) resetConnection() error {
-	if err := p.transport.Close(); err != nil {
-		return err
-	}
+	// Closing a transport whose process already exited reports an error, yet the
+	// goal - leaving no live session behind - is met either way. Returning early
+	// on that error used to leave initialized/handshakeOK set, so the next
+	// refresh skipped the handshake and talked to a session that no longer
+	// existed. Clear the flags unconditionally; the error still reaches the
+	// caller so Reconnect and the reconnect log keep reporting it.
+	err := p.transport.Close()
 	p.mu.Lock()
 	p.initialized = false
 	p.handshakeOK = false
 	p.mu.Unlock()
-	return nil
+	return err
 }
 
 func (p *Provider) Reconnect(ctx context.Context) (model.UsageSnapshot, error) {
