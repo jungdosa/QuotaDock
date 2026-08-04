@@ -777,22 +777,49 @@ func displayModeResource(mode settings.DisplayMode, colors BrandColors) fyne.Res
 	return displayModeIconResource(settings.NextDisplayMode(mode), colors)
 }
 
+func displayModeArrowVariant(mode settings.DisplayMode, colors BrandColors) fyne.Resource {
+	return displayModeArrowResource(settings.NextDisplayMode(mode), colors)
+}
+
 func displayModeIconResource(mode settings.DisplayMode, colors BrandColors) fyne.Resource {
 	ink := colorHex(colors.Label)
 	name := "display-normal.svg"
-	rect := fmt.Sprintf("<rect x='1.5' y='2' width='13' height='12' rx='2' fill='none' stroke='%s' stroke-width='1.8'/>", ink)
+	rect := fmt.Sprintf("<rect x='2' y='2' width='12' height='12' rx='2' fill='none' stroke='%s' stroke-width='1.6'/>", ink)
 	switch mode {
 	case settings.ModeCompact:
 		name = "display-compact.svg"
 		rect = fmt.Sprintf("<rect x='2' y='4' width='12' height='8' rx='2' fill='none' stroke='%s' stroke-width='1.6'/>", ink)
 	case settings.ModeNano:
 		// A thin line (W5): the filled bar read as a second rectangle next to
-		// the compact icon. Two pixels narrower than the other icons so the
-		// size hierarchy stays visible at a glance.
+		// the compact icon. Shorter than the rectangles above it so the size
+		// hierarchy stays visible at a glance.
 		name = "display-nano.svg"
-		rect = fmt.Sprintf("<path d='M2 8h12' fill='none' stroke='%s' stroke-width='2' stroke-linecap='round'/>", ink)
+		rect = fmt.Sprintf("<path d='M3 8h10' fill='none' stroke='%s' stroke-width='2' stroke-linecap='round'/>", ink)
 	}
 	svg := fmt.Sprintf("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'>%s</svg>", rect)
+	return fyne.NewStaticResource(name, []byte(svg))
+}
+
+// displayModeArrowResource draws the predecessor's four-arrow glyphs, kept for
+// side-by-side comparison against the rectangle set above. The originals were
+// authored on a 24-unit grid, so the viewBox stays at 24 and the resource is
+// scaled into the same 16x16 slot rather than being redrawn by hand.
+//
+// Only two glyphs ever existed - collapse (shrink) and expand (grow) - because
+// the predecessor had two modes. Nano has no arrow counterpart, so it falls
+// back to the current line icon.
+func displayModeArrowResource(mode settings.DisplayMode, colors BrandColors) fyne.Resource {
+	ink := colorHex(colors.Label)
+	name := "display-arrow-expand.svg"
+	path := "M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"
+	switch mode {
+	case settings.ModeCompact:
+		name = "display-arrow-collapse.svg"
+		path = "M4 14h6v6M20 10h-6V4M10 14l-7 7M14 10l7-7"
+	case settings.ModeNano:
+		return displayModeIconResource(mode, colors)
+	}
+	svg := fmt.Sprintf("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24'><path d='%s' fill='none' stroke='%s' stroke-width='2.15' stroke-linecap='round' stroke-linejoin='round'/></svg>", path, ink)
 	return fyne.NewStaticResource(name, []byte(svg))
 }
 

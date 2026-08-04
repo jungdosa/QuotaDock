@@ -89,11 +89,11 @@ func TestPhase4AThemeSunAndNextDisplayModeIcons(t *testing.T) {
 		paint     string
 		outerArea float32
 	}{
-		{settings.ModeNormal, "display-normal.svg", "x='1.5' y='2' width='13' height='12' rx='2'", "fill='none' stroke='#46586c' stroke-width='1.8'", 13 * 12},
+		{settings.ModeNormal, "display-normal.svg", "x='2' y='2' width='12' height='12' rx='2'", "fill='none' stroke='#46586c' stroke-width='1.6'", 12 * 12},
 		{settings.ModeCompact, "display-compact.svg", "x='2' y='4' width='12' height='8' rx='2'", "fill='none' stroke='#46586c' stroke-width='1.6'", 12 * 8},
-		// W5: the nano icon is a line, not a filled bar, and two pixels
-		// narrower than the rectangles above it.
-		{settings.ModeNano, "display-nano.svg", "d='M2 8h12'", "fill='none' stroke='#46586c' stroke-width='2' stroke-linecap='round'", 12 * 2},
+		// W5: the nano icon is a line, not a filled bar, and shorter than the
+		// rectangles above it.
+		{settings.ModeNano, "display-nano.svg", "d='M3 8h10'", "fill='none' stroke='#46586c' stroke-width='2' stroke-linecap='round'", 10 * 2},
 	}
 	for _, icon := range icons {
 		resource := displayModeIconResource(icon.mode, LightBrandColors)
@@ -219,7 +219,7 @@ func TestPhase4BSoftwareRenderCaptures(t *testing.T) {
 				name                   string
 				minimumInk, maximumInk float64
 			}{
-				{settings.ModeNormal, "normal", 30, 42},
+				{settings.ModeNormal, "normal", 26, 38},
 				{settings.ModeCompact, "compact", 20, 30},
 				// W5: the nano icon is a thin line, so its ink share is far
 				// below the rectangle outlines above it.
