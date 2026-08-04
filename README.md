@@ -117,8 +117,10 @@ QuotaDock is built so that it never sees your credentials in the first place.
 - **Credentials never reach the surface.** Tokens, cookies, and raw credential files are not
   rendered in the UI. Only normalized usage percentages, allowlist-validated plan labels, and
   reset timestamps do.
-- **No log file.** Nothing is written to disk as a log. Diagnostic output goes to standard
-  error only, and secrets, bearer tokens, and email addresses are redacted first.
+- **Local diagnostics only.** A small bounded JSON diagnostic log is kept at
+  `%LOCALAPPDATA%\QuotaDock\quotadock.log` during normal use. An abnormal exit may also leave
+  `crash.log` in that folder. Secrets and email addresses are redacted before writing, and
+  neither log is ever sent anywhere.
 - **Outbound traffic is a short allowlist.** Provider requests may only reach
   `api.anthropic.com` and `platform.claude.com`. Update checks may only reach
   `api.github.com` and GitHub's release hosts, and they carry no credentials. Everything else
