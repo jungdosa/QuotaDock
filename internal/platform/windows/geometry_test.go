@@ -95,3 +95,48 @@ func TestFitToWorkAreaAlwaysPreservesSize(t *testing.T) {
 		}
 	}
 }
+
+func TestDisplayChangeFitsWindowOnlyWhenAllWorkAreasAreOutside(t *testing.T) {
+	previous := []Rect{
+		{X: 0, Y: 0, Width: 1920, Height: 1040},
+		{X: 1920, Y: 0, Width: 1920, Height: 1040},
+	}
+	current := []Rect{{X: 0, Y: 0, Width: 1920, Height: 1040}}
+	window := Rect{X: 2200, Y: 100, Width: 560, Height: 300}
+
+	changed, fitted, shouldFit := DisplayChange(previous, current, window)
+
+	if !changed || !shouldFit {
+		t.Fatalf("display change changed=%v shouldFit=%v", changed, shouldFit)
+	}
+	if fitted != (Rect{X: 1360, Y: 100, Width: 560, Height: 300}) {
+		t.Fatalf("fitted window=%+v", fitted)
+	}
+}
+
+func TestDisplayChangeLeavesWindowAloneWhenAreasAreUnchanged(t *testing.T) {
+	areas := []Rect{
+		{X: 0, Y: 0, Width: 1920, Height: 1040},
+		{X: -1600, Y: 0, Width: 1600, Height: 900},
+	}
+	reordered := []Rect{areas[1], areas[0]}
+	window := Rect{X: -1400, Y: 50, Width: 560, Height: 300}
+
+	changed, fitted, shouldFit := DisplayChange(areas, reordered, window)
+
+	if changed || shouldFit || fitted != window {
+		t.Fatalf("unchanged areas changed=%v shouldFit=%v fitted=%+v", changed, shouldFit, fitted)
+	}
+}
+
+func TestDisplayChangeDoesNotMoveOverlappingWindow(t *testing.T) {
+	previous := []Rect{{X: 0, Y: 0, Width: 1920, Height: 1040}}
+	current := []Rect{{X: 0, Y: 0, Width: 1280, Height: 720}}
+	window := Rect{X: 1279, Y: 100, Width: 560, Height: 300}
+
+	changed, fitted, shouldFit := DisplayChange(previous, current, window)
+
+	if !changed || shouldFit || fitted != window {
+		t.Fatalf("overlapping window changed=%v shouldFit=%v fitted=%+v", changed, shouldFit, fitted)
+	}
+}

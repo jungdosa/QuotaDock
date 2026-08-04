@@ -205,6 +205,17 @@ func (c *WindowController) IsForeground() bool {
 	return foreground != 0 && foreground == c.HWND
 }
 
+func (c *WindowController) DPIScale() float64 {
+	if c.bound() != nil || getDPIForWindow.Find() != nil {
+		return 1
+	}
+	dpi, _, _ := getDPIForWindow.Call(c.HWND)
+	if dpi == 0 {
+		return 1
+	}
+	return float64(dpi) / defaultWindowDPI
+}
+
 // TrimWorkingSet asks Windows to evict unused resident pages after the widget is
 // minimized or hidden. SetProcessWorkingSetSize is retained as a documented
 // fallback for Windows variants where EmptyWorkingSet is unavailable or fails.

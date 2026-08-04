@@ -1,7 +1,11 @@
 // Package windows owns Windows-only desktop behavior and its testable geometry rules.
 package windows
 
-import "errors"
+import (
+	"cmp"
+	"errors"
+	"slices"
+)
 
 type Rect struct{ X, Y, Width, Height int }
 
@@ -26,6 +30,51 @@ func IsVisible(window Rect, monitors []Rect) bool {
 		}
 	}
 	return false
+}
+
+func WorkAreasEqual(left, right []Rect) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	left = append([]Rect(nil), left...)
+	right = append([]Rect(nil), right...)
+	order := func(a, b Rect) int {
+		if value := cmp.Compare(a.X, b.X); value != 0 {
+			return value
+		}
+		if value := cmp.Compare(a.Y, b.Y); value != 0 {
+			return value
+		}
+		if value := cmp.Compare(a.Width, b.Width); value != 0 {
+			return value
+		}
+		return cmp.Compare(a.Height, b.Height)
+	}
+	slices.SortFunc(left, order)
+	slices.SortFunc(right, order)
+	return slices.Equal(left, right)
+}
+
+func overlapsWorkArea(window Rect, areas []Rect) bool {
+	for _, area := range areas {
+		if intersection(window, area).Valid() {
+			return true
+		}
+	}
+	return false
+}
+
+// DisplayChange decides whether a changed monitor configuration requires the
+// existing FitToWorkArea safety net. A window with any overlap is left alone.
+func DisplayChange(previous, current []Rect, window Rect) (changed bool, fitted Rect, shouldFit bool) {
+	if WorkAreasEqual(previous, current) {
+		return false, window, false
+	}
+	if overlapsWorkArea(window, current) {
+		return true, window, false
+	}
+	fitted = FitToWorkArea(window, current)
+	return true, fitted, fitted != window
 }
 func RestoreRect(saved Rect, monitors []Rect) Rect {
 	if saved.Width <= 0 {

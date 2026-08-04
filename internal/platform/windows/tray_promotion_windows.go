@@ -16,7 +16,7 @@ const (
 	notifyIconSettingsKeyPath = "Control Panel\\NotifyIconSettings"
 )
 
-func currentWindowsBuild() (int, error) {
+func CurrentWindowsBuild() (int, error) {
 	key, err := registry.OpenKey(registry.LOCAL_MACHINE, currentVersionKeyPath, registry.QUERY_VALUE)
 	if err != nil {
 		return 0, err
@@ -35,7 +35,7 @@ func currentWindowsBuild() (int, error) {
 }
 
 func SupportsTrayIconPromotion() bool {
-	build, err := currentWindowsBuild()
+	build, err := CurrentWindowsBuild()
 	if err != nil {
 		slog.Debug("Windows build could not be read for tray icon promotion", "error", err)
 		return false
@@ -44,7 +44,7 @@ func SupportsTrayIconPromotion() bool {
 }
 
 func SetTrayIconPromoted(executable string, promoted bool) (TrayPromotionResult, error) {
-	build, err := currentWindowsBuild()
+	build, err := CurrentWindowsBuild()
 	if err != nil {
 		return TrayPromotionUnsupported, fmt.Errorf("read Windows build for tray icon promotion: %w", err)
 	}

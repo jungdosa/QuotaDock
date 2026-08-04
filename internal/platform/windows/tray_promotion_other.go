@@ -2,6 +2,10 @@
 
 package windows
 
+func CurrentWindowsBuild() (int, error) {
+	return 0, errUnsupportedPlatform
+}
+
 func SupportsTrayIconPromotion() bool {
 	return false
 }
