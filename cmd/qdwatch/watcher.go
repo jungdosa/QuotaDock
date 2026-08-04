@@ -159,7 +159,9 @@ func areaValues(areas []platform.Rect) [][]int {
 }
 
 func recordSystemEvents(ctx context.Context, logger *slog.Logger, gone time.Time) {
-	events, err := querySystemEvents(ctx, gone.Add(-eventWindow), gone.Add(eventWindow))
+	from := gone.Add(-eventWindow)
+	to := gone.Add(eventWindow)
+	events, err := querySystemEvents(ctx, from, to)
 	if err != nil {
 		if ctx.Err() != nil {
 			return
@@ -167,6 +169,16 @@ func recordSystemEvents(ctx context.Context, logger *slog.Logger, gone time.Time
 		logger.Info("watch.sysevent", "ok", false, "err", "event_query_failed")
 		return
 	}
+	// Record the query outcome even when it matched nothing. Without this line
+	// "collected nothing" and "never ran" are indistinguishable in the log,
+	// which is exactly the ambiguity a diagnostic tool must not have.
+	logger.Info(
+		"watch.sysevent",
+		"ok", true,
+		"count", len(events),
+		"from", from.Format(eventTimeLayout),
+		"to", to.Format(eventTimeLayout),
+	)
 	for _, event := range events {
 		logger.Info(
 			"watch.sysevent",
