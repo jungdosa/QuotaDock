@@ -147,14 +147,13 @@ QuotaDock は **そもそも認証情報を見ない** ように作られてい�
 |---|---|---|
 | 第 1 | Windows 10 22H2+ / 11, x64 | **動作**（0.7.x） |
 | 第 2 | macOS 14+, Apple Silicon | 予定 |
-| 第 3 | Linux x64 → arm64 | 予定 |
 
 ## ソースからのビルド
 
 Fyne は CGO を使うため、Go だけではビルドできません。
 
 - Go 1.26 以上
-- C コンパイラ（Windows: MinGW-w64 / macOS: Xcode Command Line Tools / Linux: gcc + X11 開発ヘッダー）
+- C コンパイラ（Windows: MinGW-w64 / macOS: Xcode Command Line Tools）
 
 ```sh
 git clone https://github.com/jungdosa/QuotaDock.git

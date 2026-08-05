@@ -131,14 +131,13 @@ QuotaDock 的设计前提是**它根本看不到你的凭据**。
 |---|---|---|
 | 第一 | Windows 10 22H2+ / 11, x64 | **可用**（0.7.x） |
 | 第二 | macOS 14+, Apple Silicon | 计划中 |
-| 第三 | Linux x64 → arm64 | 计划中 |
 
 ## 从源码构建
 
 Fyne 使用 CGO，仅有 Go 无法完成构建。
 
 - Go 1.26 或更高版本
-- C 编译器（Windows：MinGW-w64 / macOS：Xcode Command Line Tools / Linux：gcc + X11 开发头文件）
+- C 编译器（Windows：MinGW-w64 / macOS：Xcode Command Line Tools）
 
 ```sh
 git clone https://github.com/jungdosa/QuotaDock.git

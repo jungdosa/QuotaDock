@@ -137,14 +137,13 @@ QuotaDock은 **애초에 자격 증명을 보지 않도록** 만들어졌습니�
 |---|---|---|
 | 1차 | Windows 10 22H2+ / 11, x64 | **동작** (0.7.x) |
 | 2차 | macOS 14+, Apple Silicon | 예정 |
-| 3차 | Linux x64 → arm64 | 예정 |
 
 ## 소스 빌드
 
 Fyne은 CGO를 사용하므로 Go만으로는 빌드되지 않습니다.
 
 - Go 1.26 이상
-- C 컴파일러 (Windows: MinGW-w64 / macOS: Xcode Command Line Tools / Linux: gcc + X11 개발 헤더)
+- C 컴파일러 (Windows: MinGW-w64 / macOS: Xcode Command Line Tools)
 
 ```sh
 git clone https://github.com/jungdosa/QuotaDock.git

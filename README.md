@@ -147,14 +147,13 @@ QuotaDock is built so that it never sees your credentials in the first place.
 |---|---|---|
 | 1st | Windows 10 22H2+ / 11, x64 | **Working** (0.7.x) |
 | 2nd | macOS 14+, Apple Silicon | Planned |
-| 3rd | Linux x64 → arm64 | Planned |
 
 ## Building from source
 
 Fyne uses CGO, so Go alone is not enough.
 
 - Go 1.26 or newer
-- A C compiler (Windows: MinGW-w64 / macOS: Xcode Command Line Tools / Linux: gcc + X11 headers)
+- A C compiler (Windows: MinGW-w64 / macOS: Xcode Command Line Tools)
 
 ```sh
 git clone https://github.com/jungdosa/QuotaDock.git
