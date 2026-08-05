@@ -16,7 +16,7 @@ import (
 	"github.com/jungdosa/QuotaDock/internal/settings"
 )
 
-func TestPhase4KCJKLocaleTextInkCaptures(t *testing.T) {
+func TestCJKLocaleTextInkCaptures(t *testing.T) {
 	catalog, err := i18n.Load()
 	if err != nil {
 		t.Fatal(err)

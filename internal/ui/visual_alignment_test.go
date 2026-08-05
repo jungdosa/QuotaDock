@@ -22,7 +22,7 @@ import (
 	xdraw "golang.org/x/image/draw"
 )
 
-func TestPhase3TProviderNativeSVGInkCoverageColorsAndDistinctRasters(t *testing.T) {
+func TestProviderNativeSVGInkCoverageColorsAndDistinctRasters(t *testing.T) {
 	tests := []struct {
 		kind  ProviderIconKind
 		name  string
@@ -206,7 +206,7 @@ func sameAlphaMask(left, right image.Image) bool {
 	return true
 }
 
-func TestPhase3RNanoLabelsBarsAndIconsAreVerticallyCentered(t *testing.T) {
+func TestNanoLabelsBarsAndIconsAreVerticallyCentered(t *testing.T) {
 	v, w := phase2DTestView(t)
 	defer w.Close()
 	v.Show(NanoScreen)
@@ -225,7 +225,7 @@ func TestPhase3RNanoLabelsBarsAndIconsAreVerticallyCentered(t *testing.T) {
 	}
 }
 
-func TestPhase3TCompactAndNanoBarsUseRequestedThickness(t *testing.T) {
+func TestCompactAndNanoBarsUseRequestedThickness(t *testing.T) {
 	v, w := phase2DTestView(t)
 	defer w.Close()
 
@@ -277,7 +277,7 @@ func TestPhase3TCompactAndNanoBarsUseRequestedThickness(t *testing.T) {
 	}
 }
 
-func TestPhase3RThemeIconsUseBalancedSolidSilhouettes(t *testing.T) {
+func TestThemeIconsUseBalancedSolidSilhouettes(t *testing.T) {
 	tests := []struct {
 		name   string
 		mode   settings.Theme
@@ -335,7 +335,7 @@ func TestPhase3RThemeIconsUseBalancedSolidSilhouettes(t *testing.T) {
 	}
 }
 
-func TestPhase3RSettingsRadioAndInlineWarningSliders(t *testing.T) {
+func TestSettingsRadioAndInlineWarningSliders(t *testing.T) {
 	v, w := newTestView(t)
 	defer w.Close()
 	v.Show(SettingsScreen)
@@ -385,10 +385,10 @@ func TestPhase3RSettingsRadioAndInlineWarningSliders(t *testing.T) {
 	}
 }
 
-func TestPhase3RVisualReviewCaptures(t *testing.T) {
+func TestVisualAlignmentReviewCaptures(t *testing.T) {
 	directory := os.Getenv("QUOTADOCK_PHASE3R_SCREENSHOT_DIR")
 	if directory == "" {
-		t.Skip("set QUOTADOCK_PHASE3R_SCREENSHOT_DIR for Phase 3R captures")
+		t.Skip("set QUOTADOCK_PHASE3R_SCREENSHOT_DIR to write visual captures")
 	}
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		t.Fatal(err)

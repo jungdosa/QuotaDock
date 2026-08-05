@@ -14,7 +14,7 @@ import (
 	"github.com/jungdosa/QuotaDock/internal/settings"
 )
 
-func TestPhase3VAGClaudeUsesClaudePathWithGrayTint(t *testing.T) {
+func TestAGClaudeUsesClaudePathWithGrayTint(t *testing.T) {
 	mainImage := providerIconImage(ProviderIconClaude)
 	agImage := providerIconImage(ProviderIconAGClaude)
 	mainMetrics := providerIconMetrics[ProviderIconClaude]
@@ -42,7 +42,7 @@ func TestPhase3VAGClaudeUsesClaudePathWithGrayTint(t *testing.T) {
 		agMetrics.Asset, mainMetrics.InkCoverage, agMetrics.InkCoverage, mainMetrics.InkBounds, agMetrics.InkBounds, colorDistance)
 }
 
-func TestPhase3VCompactPercentWidthBudgetAndRightClearance(t *testing.T) {
+func TestCompactPercentWidthBudgetAndRightClearance(t *testing.T) {
 	v, window := phase2DTestView(t)
 	defer window.Close()
 	v.SetState(phase3VAllHundredState())
@@ -84,10 +84,10 @@ func TestPhase3VCompactPercentWidthBudgetAndRightClearance(t *testing.T) {
 	}
 }
 
-func TestPhase3VCompactSoftwareRenderCaptures(t *testing.T) {
+func TestClaudeIconCompactSoftwareRenderCaptures(t *testing.T) {
 	directory := os.Getenv("QUOTADOCK_PHASE3V_SCREENSHOT_DIR")
 	if directory == "" {
-		t.Skip("set QUOTADOCK_PHASE3V_SCREENSHOT_DIR for Phase 3V captures")
+		t.Skip("set QUOTADOCK_PHASE3V_SCREENSHOT_DIR to write visual captures")
 	}
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		t.Fatal(err)

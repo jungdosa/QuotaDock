@@ -44,7 +44,7 @@ func ScreenForDisplayMode(mode settings.DisplayMode) Screen {
 
 const (
 	NormalWidth float32 = 539
-	// CompactWidth grew with the reset column (W11): the previous 260 budget is
+	// CompactWidth grew with the reset column: the previous 260 budget is
 	// preserved for icon/label/meter/percent and the measured reset column plus
 	// one extra column gap is added on top, so meters keep their old width.
 	CompactWidth           float32 = 312
@@ -77,7 +77,7 @@ const (
 	UsageHeaderTextSize    float32 = 14
 	UsageHeaderRowHeight   float32 = 19
 	NanoBodyHeight float32 = 26
-	// NanoLabelTextSize is nano-scoped only (W7): compact/normal type tokens
+	// NanoLabelTextSize is nano-scoped only: compact/normal type tokens
 	// are separate constants, so this bump never leaks into other modes. The
 	// row line height stays pinned to the former 7.5px metric (nanoRowHeight),
 	// so the nano window height does not change.
@@ -90,7 +90,7 @@ const (
 	NormalRowGap           float32 = 5
 	NormalRowHeight        float32 = 38
 	NormalMeterHeight      float32 = 10
-	// The normal-mode reset bar is thicker than compact/nano's 2px (W2): the
+	// The normal-mode reset bar is thicker than compact/nano's 2px: the
 	// row has the room, and 2px vanishes on high-DPI and dark themes.
 	NormalResetBarHeight float32 = 3
 	NormalResetBarGap    float32 = 1
@@ -191,7 +191,7 @@ type View struct {
 	Nano                    *fyne.Container
 	Settings                *fyne.Container
 	normalBody, compactBody *fyne.Container
-	// Header wraps hold the full-width caption strips (W3): the strip sits
+	// Header wraps hold the full-width caption strips: the strip sits
 	// outside the padded body so its titlebar tone reaches both window edges.
 	normalHeaderWrap  *fyne.Container
 	compactHeaderWrap *fyne.Container
@@ -302,7 +302,7 @@ func (v *View) SetConfig(config settings.Config) {
 		return
 	}
 	v.renderCurrentScreen()
-	// Timestamps follow the date/time setting (W4), so a format change must
+	// Timestamps follow the date/time setting, so a format change must
 	// repaint the footer and refresh tooltips without waiting for new data.
 	v.refreshLastRefreshText()
 	v.resizeCurrentWidget()
@@ -843,7 +843,7 @@ func (v *View) resetRemainingPercent(row UsageRowState, now time.Time) float64 {
 	return 100 - resetProgress(row, now)
 }
 
-// resetBarColor keeps every reset-time bar achromatic and quiet (W2): the bar
+// resetBarColor keeps every reset-time bar achromatic and quiet: the bar
 // never borrows provider or severity hues, so it stays readable next to a
 // warning-colored meter in all three display modes.
 func (v *View) resetBarColor() color.Color {
@@ -1029,7 +1029,7 @@ func compactPercentColumnWidth() float32 {
 	return float32(math.Ceil(float64(compactPercentTextWidth() + CompactPercentMargin)))
 }
 
-// compactResetColumnWidth sizes the reset column (W11) for the widest countdown
+// compactResetColumnWidth sizes the reset column for the widest countdown
 // resetStrings can produce, so every row's reset time right-aligns on one edge.
 func compactResetColumnWidth() float32 {
 	maximum := float32(0)

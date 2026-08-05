@@ -2,7 +2,7 @@
 
 ## 크레딧(유료 추가 사용량) 표시 활성화
 
-> **✅ 완료 (2026-07-31, Phase 4I, 0.7.17)** — `creditsDisplayEnabled` 게이트를 열고
+> **✅ 완료 (2026-07-31, 0.7.17)** — `creditsDisplayEnabled` 게이트를 열고
 > OAuth usage 응답의 `extra_usage`·`spend` 블록을 파싱해 활성화했다. 아래 조사 기록은
 > 구현 근거로 보존한다. 미수용으로 남은 것: Codex `rateLimitResetCredits.availableCount`
 > (리셋권 개수)는 아직 파싱하지 않는다.
@@ -45,7 +45,7 @@ spend:       used{amount_minor,currency,exponent} · limit{...} · percent · se
 
 ## 업데이트 버튼 활성화
 
-> **✅ 완료 (2026-07-30~31, Phase 4D, 0.7.10)** — 시작 시 1회 + 수동 확인, 다운로드 후와
+> **✅ 완료 (2026-07-30~31, 0.7.10)** — 시작 시 1회 + 수동 확인, 다운로드 후와
 > 실행 직전 SHA-256 이중 검증, 무인 설치·재실행까지 구현했다. 실제 GitHub 릴리스로
 > 감지→다운로드→검증 전 경로를 라이브 테스트(`TestLiveGitHubUpdateFlow`)로 실증했다.
 > 아래 원래 계획은 기록으로 보존한다.

@@ -47,9 +47,21 @@ auth.json
 .env.*
 !.env.example
 
-# 에디터 · OS
+# 개발 진행용 내부 문서 — 공개 저장소에 포함하지 않는다.
+# 단계별 작업 지시서, 세션 기록, 내부 계획서는 로컬에만 둔다.
+/AGENTS.md
+/CLAUDE.md
+/GEMINI.md
+/.agents/
+/docs/PHASE-*.md
+/docs/CROSS-REVIEW-*.md
+# 단계별 QA 캡처 — README가 참조하는 최상위 4장만 추적한다.
+/docs/screenshots/phase*/
+
+# 에디터 · OS · 로컬 도구 설정
 .vscode/
 .idea/
+.claude/
 *.swp
 .DS_Store
 Thumbs.db

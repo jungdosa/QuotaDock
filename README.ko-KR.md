@@ -12,7 +12,7 @@ QuotaDock은 **Claude · OpenAI Codex · Google Antigravity**의 사용량 한�
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?logo=windows&logoColor=white)](#지원-대상)
 
 <p align="center">
-  <img src="docs/screenshots/normal-dark.png" alt="QuotaDock 일반 화면 — Claude / Codex / Antigravity 사용량과 리셋 타이머" width="539">
+  <img src="docs/marketing/quotadock-demo.gif" alt="움직이는 QuotaDock — Claude / Codex / Antigravity 사용량 막대와 리셋 카운트다운" width="539">
 </p>
 
 Claude Code, Codex CLI, Antigravity IDE를 쓰다 보면 "5시간 세션이 얼마나 남았지?",
@@ -20,7 +20,7 @@ Claude Code, Codex CLI, Antigravity IDE를 쓰다 보면 "5시간 세션이 얼�
 
 | 공급자 | 표시 항목 | 연결 방식 |
 |---|---|---|
-| **Claude** (Claude Code) | 5시간 세션 · 7일 주간 · Fable 주간 | 공식 Claude CLI 인증 재사용 |
+| **Claude** (Claude Code) | 5시간 세션 · 7일 주간 · Fable 주간 | Claude Code가 이미 갖고 있는 OAuth 자격 정보 사용(자격 파일 또는 환경변수). 앱에 붙여넣거나 브라우저 쿠키를 추출하지 않음 |
 | **OpenAI Codex** | 세션 · 주간 한도 | 공식 Codex CLI app-server (stdio JSONL) |
 | **Google Antigravity** | Gemini · Claude/GPT 그룹의 세션 · 주간 | 로컬 언어 서버 (loopback) |
 
@@ -81,7 +81,9 @@ Claude Code, Codex CLI, Antigravity IDE를 쓰다 보면 "5시간 세션이 얼�
 바이너리는 코드 서명이 없어 SmartScreen 경고가 나올 수 있습니다. `SHA256SUMS.txt`로
 무결성을 확인하세요. 별도 설정 없이, 이미 로그인된 공식 CLI/IDE를 자동 탐색해 연결합니다.
 
-> 현재 버전은 `0.7.15`입니다. Windows 기능 검증을 마치는 시점에 `1.0.0`이 됩니다.
+> 현재 버전은 이 문서 상단의 **릴리스 배지**와
+> [Releases](https://github.com/jungdosa/QuotaDock/releases) 페이지에서 확인할 수 있습니다.
+> Windows 기능 검증을 마치는 시점에 `1.0.0`이 됩니다.
 
 ## 처음 실행
 
@@ -104,14 +106,20 @@ CLI가 없다고 표시되면 **설정 → 연결**에서 해당 공급자의 `C
 
 ## 개인정보 보호
 
-QuotaDock은 **애초에 자격 증명을 보지 않도록** 만들어졌습니다.
+QuotaDock은 **공식 도구가 이미 맺어 둔 인증 상태를 사용합니다.** 비밀 값을 붙여넣으라고
+요구하지 않고, 브라우저 쿠키를 추출하지 않으며, 웹 스크래핑도, 텔레메트리 전송도,
+과금되는 AI 요청도 하지 않습니다.
 
-- **묻지 않고 읽습니다.** Claude 사용량은 Claude Code가 이미 이 PC에 저장해 둔 토큰에서
-  가져옵니다. Codex 사용량은 공식 Codex CLI의 app-server와 stdio로 주고받습니다.
-  Antigravity 사용량은 `127.0.0.1`의 언어 서버에서 읽습니다. 세션 키를 붙여넣는 칸도,
-  브라우저 쿠키 추출도, 브라우저 자동화도 없습니다.
-- **자격 증명은 화면에 도달하지 않습니다.** 토큰·쿠키·자격 파일 원문을 UI에 그리지 않습니다.
-  화면에 전달되는 것은 정규화된 사용률, 허용 목록으로 검증된 요금제 라벨, 초기화 시각뿐입니다.
+- **자격 정보를 새로 수집하지 않고 기존 로그인을 사용합니다.** Claude의 경우 Claude Code의
+  OAuth 자격 정보를 로컬 자격 파일 또는 환경변수에서 읽습니다. 파일 기반 자격 정보의 갱신이
+  필요하면 refresh token을 Anthropic 토큰 엔드포인트로 보내 그 파일을 원자적으로 갱신한 뒤,
+  access token을 Anthropic 사용량 엔드포인트로 보냅니다. Codex 사용량은 공식 Codex CLI의
+  app-server와 stdio로 주고받고, Antigravity 사용량은 검증된 `127.0.0.1` 언어 서버에서
+  읽습니다. 자격 정보를 입력하는 칸도, 브라우저 쿠키 추출도, 브라우저 자동화도,
+  비공식 웹 스크래핑도 없습니다.
+- **비밀 값은 화면과 로그에 남지 않습니다.** 토큰·쿠키·자격 파일 원문은 UI에 그려지지도,
+  로그에 기록되지도 않습니다. 화면에 전달되는 것은 정규화된 사용률, 허용 목록으로 검증된
+  요금제 라벨, 초기화 시각뿐입니다.
 - **진단 기록은 로컬에만 남습니다.** 평상시에는 작은 용량으로 제한된 JSON 진단 로그를
   `%LOCALAPPDATA%\QuotaDock\quotadock.log`에 기록합니다. 비정상 종료가 발생하면 같은 폴더에
   `crash.log`가 남을 수 있습니다. 비밀 값·이메일은 기록 전에 가려지며 어디로도 전송되지 않습니다.
@@ -126,7 +134,7 @@ QuotaDock은 **애초에 자격 증명을 보지 않도록** 만들어졌습니�
 ## 설계 원칙
 
 - **묻지 않습니다.** 공식 도구를 이미 설치하고 로그인했다면 자동으로 연결합니다. 최초 실행 로그인 마법사나 강제 팝업이 없습니다.
-- **비밀정보를 다루지 않습니다.** 토큰, 쿠키, `auth.json` 원문을 읽어 UI로 전달하거나 로그에 남기지 않습니다. UI에는 정규화된 사용률, 허용 목록으로 검증된 요금제 라벨, 초기화 시각만 전달됩니다.
+- **비밀정보를 화면과 로그에 남기지 않습니다.** 토큰, 쿠키, 자격 파일 원문을 UI로 전달하거나 로그에 기록하지 않습니다. UI에는 정규화된 사용률, 허용 목록으로 검증된 요금제 라벨, 초기화 시각만 전달됩니다.
 - **로컬에만 연결합니다.** 텔레메트리와 외부 분석 서버가 없습니다. loopback 연결은 검증된 프로세스와 고정된 endpoint에만 허용합니다. 유일한 외부 요청은 업데이트 확인이며, 인증 정보를 싣지 않고 시작 시 1회와 사용자 클릭에만 발생합니다.
 - **크레딧을 쓰지 않습니다.** 사용량을 갱신하려고 불필요한 AI 요청을 보내지 않습니다.
 - **가볍습니다.** Go + Fyne 네이티브 렌더링으로 유휴 CPU 0%, 메모리 사용을 적극 관리합니다.

@@ -11,7 +11,7 @@ import (
 	"github.com/jungdosa/QuotaDock/internal/model"
 )
 
-func TestPhase4CConnectionMethodCountsByProvider(t *testing.T) {
+func TestConnectionMethodCountsByProvider(t *testing.T) {
 	v, window := newTestView(t)
 	defer window.Close()
 	v.Show(SettingsScreen)
@@ -28,7 +28,7 @@ func TestPhase4CConnectionMethodCountsByProvider(t *testing.T) {
 	}
 }
 
-func TestPhase4CConnectionMethodStatesAreDerived(t *testing.T) {
+func TestConnectionMethodStatesAreDerived(t *testing.T) {
 	tests := []struct {
 		name          string
 		lane          LaneState
@@ -77,7 +77,7 @@ func TestPhase4CConnectionMethodStatesAreDerived(t *testing.T) {
 	}
 }
 
-func TestPhase4CConnectionPanelsAreAccordion(t *testing.T) {
+func TestConnectionPanelsAreAccordion(t *testing.T) {
 	v, window := newTestView(t)
 	defer window.Close()
 	v.Show(SettingsScreen)
@@ -98,7 +98,7 @@ func TestPhase4CConnectionPanelsAreAccordion(t *testing.T) {
 	}
 }
 
-func TestPhase4CClaudeAuthAndEnvironmentPanelsExposeNoLoginFlowOrToken(t *testing.T) {
+func TestClaudeAuthAndEnvironmentPanelsExposeNoLoginFlowOrToken(t *testing.T) {
 	const secret = "phase4c-token-must-not-appear"
 	t.Setenv(claudeOAuthTokenEnv, secret)
 	v, window := newTestView(t)

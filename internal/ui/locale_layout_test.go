@@ -17,7 +17,7 @@ import (
 	"github.com/jungdosa/QuotaDock/internal/settings"
 )
 
-func TestPhase4KExistingLocaleRenderCaptures(t *testing.T) {
+func TestExistingLocaleRenderCaptures(t *testing.T) {
 	outputDirectory := os.Getenv("QUOTADOCK_PHASE4F_SCREENSHOT_DIR")
 	if outputDirectory == "" {
 		outputDirectory = t.TempDir()
@@ -44,7 +44,7 @@ func TestPhase4KExistingLocaleRenderCaptures(t *testing.T) {
 
 			config := DemoConfig(settings.Default())
 			config.Language = settings.Language(language)
-			// Freeze the pre-version label so this capture isolates Phase 4F i18n pixels;
+			// Freeze the pre-version label so this capture isolates localization pixels;
 			// the mandatory 0.7.13 label is verified by the separate version test.
 			view := NewView(window.Canvas(), catalog, i18n.English, config, Actions{AppVersion: "0.7." + "12"})
 			window.SetContent(view.Root)
@@ -76,7 +76,7 @@ func TestPhase4KExistingLocaleRenderCaptures(t *testing.T) {
 	}
 }
 
-func TestPhase4KCompactNanoMinimumSizeAcrossTwelveLanguages(t *testing.T) {
+func TestCompactNanoMinimumSizeAcrossTwelveLanguages(t *testing.T) {
 	view, window := newTestView(t)
 	defer window.Close()
 	view.SetState(DemoViewState())
@@ -107,7 +107,7 @@ func TestPhase4KCompactNanoMinimumSizeAcrossTwelveLanguages(t *testing.T) {
 	}
 }
 
-func TestPhase4KEndonymLanguageSelectorHasSystemAndTwelveLocales(t *testing.T) {
+func TestEndonymLanguageSelectorHasSystemAndTwelveLocales(t *testing.T) {
 	view, window := newTestView(t)
 	defer window.Close()
 	config := view.config
@@ -146,7 +146,7 @@ func TestPhase4KEndonymLanguageSelectorHasSystemAndTwelveLocales(t *testing.T) {
 	}
 }
 
-func TestPhase4FDisplaySelectorsFitSettingsHalfRows(t *testing.T) {
+func TestDisplaySelectorsFitSettingsHalfRows(t *testing.T) {
 	view, window := newTestView(t)
 	defer window.Close()
 	for _, language := range i18n.Supported {

@@ -14,7 +14,7 @@ import (
 	"github.com/jungdosa/QuotaDock/internal/settings"
 )
 
-func TestPhase3USVGPathParserSupportsFullCommandGrammar(t *testing.T) {
+func TestSVGPathParserSupportsFullCommandGrammar(t *testing.T) {
 	source := "M1.5-2.5 3e0,4E+0 l1 2 H8 v3 C8 9 9 10 10 10 s2-1 3 0 Q14 12 15 10 t2-2 A2.5 1.5 30 0119 10 a2 2 0 10-2 0 z"
 	parsed, err := parseSVGPathData(source)
 	if err != nil {
@@ -38,7 +38,7 @@ func TestPhase3USVGPathParserSupportsFullCommandGrammar(t *testing.T) {
 	}
 }
 
-func TestPhase3UOfficialProviderPathsGeometryInkAndDistinctMasks(t *testing.T) {
+func TestOfficialProviderPathsGeometryInkAndDistinctMasks(t *testing.T) {
 	tests := []struct {
 		kind  ProviderIconKind
 		name  string
@@ -88,7 +88,7 @@ func TestPhase3UOfficialProviderPathsGeometryInkAndDistinctMasks(t *testing.T) {
 	}
 }
 
-func TestPhase3UCompactMeterAndWidthBudget(t *testing.T) {
+func TestCompactMeterAndWidthBudget(t *testing.T) {
 	v, window := phase2DTestView(t)
 	defer window.Close()
 	measured100 := compactPercentTextWidth()
@@ -142,10 +142,10 @@ func TestPhase3UCompactMeterAndWidthBudget(t *testing.T) {
 	}
 }
 
-func TestPhase3USoftwareRenderCaptures(t *testing.T) {
+func TestProviderSVGSoftwareRenderCaptures(t *testing.T) {
 	directory := os.Getenv("QUOTADOCK_PHASE3U_SCREENSHOT_DIR")
 	if directory == "" {
-		t.Skip("set QUOTADOCK_PHASE3U_SCREENSHOT_DIR for Phase 3U captures")
+		t.Skip("set QUOTADOCK_PHASE3U_SCREENSHOT_DIR to write visual captures")
 	}
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		t.Fatal(err)

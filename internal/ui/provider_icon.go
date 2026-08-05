@@ -68,8 +68,8 @@ func providerIconOfficialVerified(kind ProviderIconKind) bool {
 	return providerIconOfficial[kind]
 }
 
-// providerIconNativeVerified remains false: Fyne's native SVG path still uses
-// the broken oksvg route measured in Phase 3T. Phase 3U uses the direct parser.
+// providerIconNativeVerified remains false because Fyne's native SVG path still
+// uses the broken oksvg route; the direct parser avoids that path.
 func providerIconNativeVerified(ProviderIconKind) bool { return false }
 
 func providerIconAsset(kind ProviderIconKind) string {

@@ -20,7 +20,7 @@ const (
 	phase3SLegacyDateWidth        float32 = 260
 )
 
-func TestPhase3SSettingsLayoutMetrics(t *testing.T) {
+func TestSettingsLayoutMetrics(t *testing.T) {
 	v, w := newTestView(t)
 	defer w.Close()
 	v.Show(SettingsScreen)
@@ -94,7 +94,7 @@ func TestPhase3SSettingsLayoutMetrics(t *testing.T) {
 	}
 }
 
-func TestPhase3SCustomRadioAndSettingsButtons(t *testing.T) {
+func TestCustomRadioAndSettingsButtons(t *testing.T) {
 	selected := "Remaining"
 	radio := NewRadioGroup([]string{"Remaining", "Usage"}, selected, func(value string) { selected = value }, DarkBrandColors)
 	renderer := radio.CreateRenderer().(*radioGroupRenderer)
@@ -180,10 +180,10 @@ func TestPhase3SCustomRadioAndSettingsButtons(t *testing.T) {
 	}
 }
 
-func TestPhase3SSoftwareRenderCaptures(t *testing.T) {
+func TestSettingsSoftwareRenderCaptures(t *testing.T) {
 	directory := os.Getenv("QUOTADOCK_PHASE3S_SCREENSHOT_DIR")
 	if directory == "" {
-		t.Skip("set QUOTADOCK_PHASE3S_SCREENSHOT_DIR for Phase 3S software-canvas captures")
+		t.Skip("set QUOTADOCK_PHASE3S_SCREENSHOT_DIR to write software-canvas captures")
 	}
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		t.Fatal(err)

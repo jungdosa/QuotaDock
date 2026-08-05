@@ -10,7 +10,7 @@ import (
 	"github.com/jungdosa/QuotaDock/internal/settings"
 )
 
-func TestPhase4ETrayPromotionToggleVisibleOnlyWhenSupported(t *testing.T) {
+func TestTrayPromotionToggleVisibleOnlyWhenSupported(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	catalog, err := i18n.Load()

@@ -17,7 +17,7 @@ import (
 	"github.com/jungdosa/QuotaDock/internal/settings"
 )
 
-func TestPhase4ANanoBarLabelsSpacingAndCenters(t *testing.T) {
+func TestNanoBarLabelsSpacingAndCenters(t *testing.T) {
 	v, window := phase2DTestView(t)
 	defer window.Close()
 	v.Show(NanoScreen)
@@ -41,7 +41,7 @@ func TestPhase4ANanoBarLabelsSpacingAndCenters(t *testing.T) {
 			if labelCenter != bundleCenter {
 				t.Fatalf("nano cell %d row %d label/bar centers=%.2f/%.2f", cellIndex, rowIndex, labelCenter, bundleCenter)
 			}
-			// Rows are wrapped in a Stack with their hover region (W12), so the
+			// Rows are wrapped in a Stack with their hover region, so the
 			// object positioned by NanoLinesLayout is the wrapper one level up.
 			line := findContainerWithObject(v.Nano, findContainerWithObject(v.Nano, row.bar))
 			if previousLine != nil {
@@ -58,7 +58,7 @@ func TestPhase4ANanoBarLabelsSpacingAndCenters(t *testing.T) {
 	}
 }
 
-func TestPhase4AThemeSunAndNextDisplayModeIcons(t *testing.T) {
+func TestThemeSunAndNextDisplayModeIcons(t *testing.T) {
 	sun := rasterizeThemeSun(LightBrandColors.Label)
 	coverage := alphaCoverage(sun)
 	if coverage < 20 || coverage > 30 {
@@ -91,7 +91,7 @@ func TestPhase4AThemeSunAndNextDisplayModeIcons(t *testing.T) {
 	}{
 		{settings.ModeNormal, "display-normal.svg", "x='2' y='2' width='12' height='12' rx='2'", "fill='none' stroke='#46586c' stroke-width='1.6'", 12 * 12},
 		{settings.ModeCompact, "display-compact.svg", "x='2' y='4' width='12' height='8' rx='2'", "fill='none' stroke='#46586c' stroke-width='1.6'", 12 * 8},
-		// W5: the nano icon is a line, not a filled bar, and shorter than the
+		// The nano icon is a line, not a filled bar, and shorter than the
 		// rectangles above it.
 		{settings.ModeNano, "display-nano.svg", "d='M3 8h10'", "fill='none' stroke='#46586c' stroke-width='2' stroke-linecap='round'", 10 * 2},
 	}
@@ -143,7 +143,7 @@ func TestPhase4AThemeSunAndNextDisplayModeIcons(t *testing.T) {
 	}
 }
 
-func TestPhase4ANormalSeverityUsesMeterWithoutLabelStripe(t *testing.T) {
+func TestNormalSeverityUsesMeterWithoutLabelStripe(t *testing.T) {
 	v, window := phase2DTestView(t)
 	defer window.Close()
 	cfg := v.config
@@ -175,7 +175,7 @@ func TestPhase4ANormalSeverityUsesMeterWithoutLabelStripe(t *testing.T) {
 	}
 }
 
-func TestPhase4BSoftwareRenderCaptures(t *testing.T) {
+func TestNanoIconSoftwareRenderCaptures(t *testing.T) {
 	directory := os.Getenv("QUOTADOCK_PHASE4B_SCREENSHOT_DIR")
 	if directory == "" {
 		directory = os.Getenv("QUOTADOCK_PHASE4A_SCREENSHOT_DIR")
@@ -221,7 +221,7 @@ func TestPhase4BSoftwareRenderCaptures(t *testing.T) {
 			}{
 				{settings.ModeNormal, "normal", 26, 38},
 				{settings.ModeCompact, "compact", 20, 30},
-				// W5: the nano icon is a thin line, so its ink share is far
+				// The nano icon is a thin line, so its ink share is far
 				// below the rectangle outlines above it.
 				{settings.ModeNano, "nano", 6, 16},
 			} {

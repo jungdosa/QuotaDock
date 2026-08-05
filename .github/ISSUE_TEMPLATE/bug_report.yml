@@ -1,0 +1,74 @@
+name: Bug report
+description: Something is not working the way it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For anything security-sensitive, please use the private report form in
+        [SECURITY.md](https://github.com/jungdosa/QuotaDock/blob/main/SECURITY.md)
+        instead of this issue tracker.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you see, and what did you expect instead?
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: QuotaDock version
+      description: Shown in the widget title bar, e.g. 0.7.32
+    validations:
+      required: true
+
+  - type: dropdown
+    id: windows
+    attributes:
+      label: Windows version
+      options:
+        - Windows 11
+        - Windows 10 22H2
+        - Windows 10, older than 22H2
+        - Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: providers
+    attributes:
+      label: Which providers are you signed in to?
+      options:
+        - label: Claude (Claude Code)
+        - label: OpenAI Codex
+        - label: Google Antigravity
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      options:
+        - Installer (Setup.exe)
+        - Portable executable
+        - Built from source
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: If it only happens sometimes, say roughly how often.
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log excerpt
+      description: |
+        If the app crashed or the window came up blank, there may be something useful in
+        `%LOCALAPPDATA%\QuotaDock\quotadock.log`, or `crash.log` beside it. Secrets and
+        email addresses are redacted before writing, but please skim before pasting.
+      render: text

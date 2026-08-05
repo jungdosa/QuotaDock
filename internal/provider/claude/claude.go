@@ -136,7 +136,7 @@ func (p *Provider) Refresh(ctx context.Context) (model.UsageSnapshot, error) {
 			case errors.Is(err, errOAuthRateLimited):
 				return model.UsageSnapshot{}, model.SafeError{Code: model.ErrUsageUnavailable, Key: "error.usage_unavailable"}
 			default:
-				// Endpoint and refresh failures safely retain the Phase 2B fallback.
+				// Endpoint and refresh failures safely fall back to the CLI auth-status path.
 			}
 		}
 		return p.refreshCLI(ctx)

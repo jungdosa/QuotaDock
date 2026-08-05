@@ -120,7 +120,7 @@ func TestPhaseTwoSettingsValidation(t *testing.T) {
 		t.Fatalf("invalid display values survived: %+v", got)
 	}
 	if got.ShowClaude || !got.AlwaysOnTop {
-		t.Fatal("Phase 2 booleans were not preserved")
+		t.Fatal("existing booleans were not preserved")
 	}
 }
 

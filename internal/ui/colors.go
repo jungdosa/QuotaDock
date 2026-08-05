@@ -1,4 +1,4 @@
-// Package ui implements the three QuotaDock Fyne screens from PLAN §25.5.
+// Package ui implements QuotaDock's Fyne screens.
 package ui
 
 import (

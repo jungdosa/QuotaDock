@@ -563,7 +563,7 @@ func (r *connectionMethodButtonRenderer) Refresh() {
 // TooltipRegion is a transparent hover target that owns the shared passive
 // tooltip for a value rendered next to (or underneath) it. It deliberately
 // implements only desktop.Hoverable — never Tappable — so taps keep falling
-// through to the surface below it (W11 reset times, W12 nano rows).
+// through to the surface below it, including reset times and nano rows.
 type TooltipRegion struct {
 	widget.BaseWidget
 	Hovered bool
@@ -786,7 +786,7 @@ func displayModeIconResource(mode settings.DisplayMode, colors BrandColors) fyne
 		name = "display-compact.svg"
 		rect = fmt.Sprintf("<rect x='2' y='4' width='12' height='8' rx='2' fill='none' stroke='%s' stroke-width='1.6'/>", ink)
 	case settings.ModeNano:
-		// A thin line (W5): the filled bar read as a second rectangle next to
+		// A thin line: the filled bar read as a second rectangle next to
 		// the compact icon. Shorter than the rectangles above it so the size
 		// hierarchy stays visible at a glance.
 		name = "display-nano.svg"
@@ -852,7 +852,7 @@ func (r *paletteSwatchRenderer) Layout(size fyne.Size) {
 	r.box.Move(fyne.NewPos(2, 2))
 	r.box.Resize(fyne.NewSize(size.Width-4, size.Height-4))
 	// Full-size bounds centre the glyph on both axes; adding a manual offset on
-	// top of that pushed it below centre (same double-centering as W10).
+	// top of that pushed it below centre with the same double-centering error.
 	r.mark.Move(fyne.NewPos(0, 0))
 	r.mark.Resize(size)
 }

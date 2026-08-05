@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest something QuotaDock should do
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the situation rather than the solution. It usually leads somewhere better.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What did you have in mind?
+
+  - type: markdown
+    attributes:
+      value: |
+        Two things that are settled, so you know where the edges are:
+
+        - Usage has to come from the official local interfaces. No cookie extraction, no
+          pasting session tokens, no web scraping, and reading usage must never spend your
+          quota or credits.
+        - Windows is the supported platform. macOS is planned. Linux is not.

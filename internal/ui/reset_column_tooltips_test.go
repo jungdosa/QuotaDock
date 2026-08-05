@@ -1,7 +1,7 @@
 package ui
 
-// W11 — compact reset column, header caption, and hover tooltip through the
-// shared date/time formatter (W4) and the passive tooltip layer (W1).
+// Compact reset column, header caption, and hover tooltip use the
+// shared date/time formatter and the passive tooltip layer.
 
 import (
 	"testing"
@@ -12,7 +12,7 @@ import (
 	"github.com/jungdosa/QuotaDock/internal/settings"
 )
 
-func TestW11CompactResetColumnAlignsAndFollowsDateTimeFormat(t *testing.T) {
+func TestCompactResetColumnAlignsAndFollowsDateTimeFormat(t *testing.T) {
 	v, window := newTestView(t)
 	defer window.Close()
 	state := sampleState()
@@ -65,7 +65,7 @@ func TestW11CompactResetColumnAlignsAndFollowsDateTimeFormat(t *testing.T) {
 		t.Fatalf("reset caption x/width=%.1f/%.1f, column=%.1f/%.1f", header.Position().X, header.Size().Width, first.Objects[4].Position().X, first.Objects[4].Size().Width)
 	}
 
-	// Switching the date/time format immediately reformats the hover value (W4).
+	// Switching the date/time format immediately reformats the hover value.
 	before := v.compactCache.rows[0].resetRegion.tooltipValue()
 	cfg := v.config
 	cfg.DateTimeFormat = settings.Format24HourDateDay
@@ -88,9 +88,9 @@ func TestW11CompactResetColumnAlignsAndFollowsDateTimeFormat(t *testing.T) {
 	}
 }
 
-// W12 — nano rows carry a whole-row hover target that shows a two-line
+// Nano rows carry a whole-row hover target that shows a two-line
 // tooltip (remaining time + reset moment) in the passive layer.
-func TestW12NanoRowTooltipTwoLinesInPassiveLayer(t *testing.T) {
+func TestNanoRowTooltipTwoLinesInPassiveLayer(t *testing.T) {
 	v, window := newTestView(t)
 	defer window.Close()
 	v.SetState(sampleState())
@@ -139,7 +139,7 @@ func TestW12NanoRowTooltipTwoLinesInPassiveLayer(t *testing.T) {
 		}
 		switch object.(type) {
 		case fyne.Tappable, fyne.SecondaryTappable, fyne.Draggable:
-			t.Fatalf("nano tooltip contains event-consuming object %T (W1 regression)", object)
+			t.Fatalf("nano tooltip contains event-consuming object %T", object)
 		}
 	})
 	// Title ("Claude 5h"), remaining time, reset moment.
@@ -159,10 +159,10 @@ func TestW12NanoRowTooltipTwoLinesInPassiveLayer(t *testing.T) {
 	}
 }
 
-// W3 — every caption strip paints the titlebar tone edge to edge, so the
+// Every caption strip paints the titlebar tone edge to edge, so the
 // header reads as one block with the titlebar in both themes. Nano has no
 // caption strip, so normal and compact are the only screens to verify.
-func TestW3HeaderStripsShareTitlebarTone(t *testing.T) {
+func TestHeaderStripsShareTitlebarTone(t *testing.T) {
 	v, window := phase2DTestView(t)
 	defer window.Close()
 	for _, mode := range []settings.Theme{settings.ThemeLight, settings.ThemeDark} {

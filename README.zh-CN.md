@@ -12,7 +12,7 @@ Google Antigravity** 的用量额度 —— 会话/每周配额以及重置倒�
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?logo=windows&logoColor=white)](#支持平台)
 
 <p align="center">
-  <img src="docs/marketing/quotadock-normal-en.png" alt="QuotaDock 普通视图 —— Claude / Codex / Antigravity 用量与重置倒计时" width="539">
+  <img src="docs/marketing/quotadock-demo.gif" alt="运行中的 QuotaDock —— Claude / Codex / Antigravity 用量条与重置倒计时" width="539">
 </p>
 
 使用 Claude Code、Codex CLI 和 Antigravity IDE 时，你总在问同样的问题：*5 小时会话还剩多少？
@@ -20,7 +20,7 @@ Google Antigravity** 的用量额度 —— 会话/每周配额以及重置倒�
 
 | 服务商 | 显示内容 | 连接方式 |
 |---|---|---|
-| **Claude**（Claude Code） | 5 小时会话 · 7 天每周 · Fable 每周 | 复用官方 Claude CLI 的登录凭据 |
+| **Claude**（Claude Code） | 5 小时会话 · 7 天每周 · Fable 每周 | 使用 Claude Code 已有的 OAuth 凭据（凭据文件或环境变量）；无需在应用内粘贴，也不提取浏览器 Cookie |
 | **OpenAI Codex** | 会话 · 每周额度 | 官方 Codex CLI app-server（stdio JSONL） |
 | **Google Antigravity** | Gemini 与 Claude/GPT 组的会话 · 每周 | 本地语言服务器（loopback） |
 
@@ -76,7 +76,8 @@ Google Antigravity** 的用量额度 —— 会话/每周配额以及重置倒�
 二进制文件未做代码签名，SmartScreen 可能会提示。请用 `SHA256SUMS.txt` 校验完整性。
 无需任何配置 —— QuotaDock 会自动发现你已登录的官方 CLI 与 IDE。
 
-> 当前版本为 `0.7.15`。完成 Windows 功能验证后将升为 `1.0.0`。
+> 当前版本请查看本页顶部的**发布徽章**以及
+> [Releases](https://github.com/jungdosa/QuotaDock/releases) 页面。完成 Windows 功能验证后将升为 `1.0.0`。
 
 ## 首次运行
 
@@ -98,13 +99,16 @@ Google Antigravity** 的用量额度 —— 会话/每周配额以及重置倒�
 
 ## 隐私
 
-QuotaDock 的设计前提是**它根本看不到你的凭据**。
+QuotaDock **使用官方工具已经建立的认证状态**。它不要求你粘贴机密信息，不提取浏览器 Cookie，
+不做网页抓取，不发送遥测，也不产生计费的 AI 请求。
 
-- **只读取，不询问。** Claude 用量来自 Claude Code 早已保存在本机的令牌；Codex 用量通过 stdio
-  与官方 Codex CLI 的 app-server 通信；Antigravity 用量来自 `127.0.0.1` 上的语言服务器。
-  没有粘贴 session key 的输入框，不提取浏览器 Cookie，也没有浏览器自动化。
-- **凭据不会出现在界面上。** 令牌、Cookie 和凭据文件原文不会渲染到 UI，传给界面的只有归一化的
-  用量比例、经白名单校验的套餐标签和重置时刻。
+- **使用既有登录，而非收集凭据。** 对 Claude，QuotaDock 从本机凭据文件或环境变量读取
+  Claude Code 的 OAuth 凭据；当基于文件的凭据需要续期时，会把 refresh token 发送到 Anthropic
+  的令牌端点并原子性地更新该文件，随后把 access token 发送到 Anthropic 的用量端点。Codex 用量
+  通过 stdio 与官方 Codex CLI 的 app-server 通信，Antigravity 用量来自经校验的 `127.0.0.1`
+  语言服务器。没有输入凭据的输入框，不提取浏览器 Cookie，没有浏览器自动化，也没有非官方网页抓取。
+- **机密不会进入界面和日志。** 令牌、Cookie 和凭据文件原文既不会渲染到 UI，也不会写入日志。
+  传给界面的只有归一化的用量比例、经白名单校验的套餐标签和重置时刻。
 - **诊断记录仅保留在本机。** 正常使用时会把小型、限长的 JSON 诊断日志写入
   `%LOCALAPPDATA%\QuotaDock\quotadock.log`。异常退出时，同一目录还可能留下 `crash.log`。
   密钥和邮箱地址会在写入前脱敏，两份日志都不会发送到任何地方。

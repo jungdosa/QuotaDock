@@ -275,7 +275,7 @@ func (l *NanoUsageLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
 		height = l.BarHeight + l.ResetGap + l.ResetHeight
 	}
 	// The line height is pinned to the reference metric instead of the live
-	// label (W7): the nano label font grew for readability, but the row must
+	// label: the nano label font grew for readability, but the row must
 	// not push the window taller. The descender-free labels ("7D", "5h") fit
 	// the tighter box without visible clipping.
 	height = max(height, nanoRowLineHeight())
@@ -396,7 +396,7 @@ func (l *SettingRowLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
 
 // NormalMeterStackLayout stacks a percentage band directly above a meter so the
 // number reads as a label attached to the bar's right end rather than a separate
-// column. Objects are [percent band, meter, reset bar]: the reset bar (W2)
+// column. Objects are [percent band, meter, reset bar]: the reset bar
 // shares the meter's exact x and width so the two lengths compare directly.
 type NormalMeterStackLayout struct {
 	PercentHeight float32

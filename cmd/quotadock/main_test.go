@@ -61,7 +61,7 @@ func TestFyneDoMigrationIsDeclared(t *testing.T) {
 	}
 }
 
-func TestPhase4GVersionMetadataMatchesRuntime(t *testing.T) {
+func TestVersionMetadataMatchesRuntime(t *testing.T) {
 	metadataVersion := appmetadata.Version()
 	if metadataVersion == "" || version != metadataVersion {
 		t.Fatalf("runtime version=%q metadata version=%q", version, metadataVersion)

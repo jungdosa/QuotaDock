@@ -100,7 +100,7 @@ func newTestViewWithActions(t *testing.T, actions Actions) (*View, fyne.Window) 
 func TestNormalCompactNanoRenderingAndExactlyFourScreens(t *testing.T) {
 	v, w := newTestView(t)
 	defer w.Close()
-	// Four screens plus the passive tooltip layer stacked on top (W1).
+	// Four screens plus the passive tooltip layer stacked on top.
 	if len(v.Root.Objects) != 5 || v.Root.Objects[4] != v.tooltipLayer {
 		t.Fatalf("root objects=%d, want 4 screens + tooltip layer on top", len(v.Root.Objects))
 	}
@@ -685,12 +685,12 @@ func TestLongestLocalizedTextMeasuredInsideReservedColumns(t *testing.T) {
 	}
 }
 
-func TestPhase3HTypographyMeetsReadableMinimums(t *testing.T) {
+func TestTypographyMeetsReadableMinimums(t *testing.T) {
 	if TitleTextSize < 13 {
 		t.Fatalf("title text size=%.1f, want at least 13", TitleTextSize)
 	}
 	if PlanChipTextSize != 9 {
-		t.Fatalf("plan chip text size=%.1f, want Phase 3T size 9", PlanChipTextSize)
+		t.Fatalf("plan chip text size=%.1f, want 9", PlanChipTextSize)
 	}
 	for name, size := range map[string]float32{
 		"lane header":     LaneHeaderTextSize,
@@ -770,7 +770,7 @@ func compactTestRowContent(t *testing.T, row *fyne.Container) *fyne.Container {
 	return content
 }
 
-func TestPhase2DNormalEnglishLabelsMatchTerminology(t *testing.T) {
+func TestNormalEnglishLabelsMatchTerminology(t *testing.T) {
 	v, w := phase2DTestView(t)
 	defer w.Close()
 	got := make([]string, 0, 9)
@@ -785,7 +785,7 @@ func TestPhase2DNormalEnglishLabelsMatchTerminology(t *testing.T) {
 	}
 }
 
-func TestPhase2DCompactLabelsMatchNormalLabels(t *testing.T) {
+func TestCompactLabelsMatchNormalLabels(t *testing.T) {
 	v, w := phase2DTestView(t)
 	defer w.Close()
 	for _, lane := range v.state.Lanes {
@@ -799,7 +799,7 @@ func TestPhase2DCompactLabelsMatchNormalLabels(t *testing.T) {
 	}
 }
 
-func TestPhase3KCompactUsesVerifiedProviderIconOnEveryRow(t *testing.T) {
+func TestCompactUsesVerifiedProviderIconOnEveryRow(t *testing.T) {
 	v, w := phase2DTestView(t)
 	defer w.Close()
 	rows := compactTestRows(v)
@@ -818,7 +818,7 @@ func TestPhase3KCompactUsesVerifiedProviderIconOnEveryRow(t *testing.T) {
 	}
 }
 
-func TestPhase3KProviderIconsUseMappedEmbeddedAssets(t *testing.T) {
+func TestProviderIconsUseMappedEmbeddedAssets(t *testing.T) {
 	v, w := phase2DTestView(t)
 	defer w.Close()
 	rows := compactTestRows(v)
@@ -836,7 +836,7 @@ func TestPhase3KProviderIconsUseMappedEmbeddedAssets(t *testing.T) {
 	}
 }
 
-func TestPhase3KCompactRowsHaveResetBarsAndProviderTints(t *testing.T) {
+func TestCompactRowsHaveResetBarsAndProviderTints(t *testing.T) {
 	v, w := phase2DTestView(t)
 	defer w.Close()
 	if len(v.compactCache.rows) != 9 {
@@ -858,7 +858,7 @@ func TestPhase3KCompactRowsHaveResetBarsAndProviderTints(t *testing.T) {
 	}
 }
 
-func TestPhase3WCompactShowsUsageModeHeaderOnce(t *testing.T) {
+func TestCompactShowsUsageModeHeaderOnce(t *testing.T) {
 	v, w := phase2DTestView(t)
 	defer w.Close()
 	cfg := v.config
@@ -875,14 +875,14 @@ func TestPhase3WCompactShowsUsageModeHeaderOnce(t *testing.T) {
 	}
 }
 
-func TestPhase2DCompactLabelsUseCurrentLanguageDynamicWidth(t *testing.T) {
+func TestCompactLabelsUseCurrentLanguageDynamicWidth(t *testing.T) {
 	v, w := phase2DTestView(t)
 	defer w.Close()
 	if got := v.MinimumSize(CompactScreen).Width; got != CompactWidth {
 		t.Fatalf("compact width=%v, want %v", got, CompactWidth)
 	}
 	if got, limit := v.MinimumSize(CompactScreen).Height, float32(263)+UsageHeaderRowHeight+1+4*CompactDividerPaddingY; got > limit {
-		t.Fatalf("compact height=%v exceeds Phase 3W divider+header budget %.0f", got, limit)
+		t.Fatalf("compact height=%v exceeds divider+header budget %.0f", got, limit)
 	}
 	for _, language := range []settings.Language{settings.Language(i18n.English), settings.Language(i18n.Korean)} {
 		cfg := v.config
@@ -1278,7 +1278,7 @@ func TestDisplayModeStateSurvivesSettingsChanges(t *testing.T) {
 	}
 }
 
-func TestPhase3K2NanoStripUsesProviderCellsSeverityAndViewCache(t *testing.T) {
+func TestNanoStripUsesProviderCellsSeverityAndViewCache(t *testing.T) {
 	v, w := phase2DTestView(t)
 	defer w.Close()
 	cfg := v.config
@@ -1320,7 +1320,7 @@ func TestPhase3K2NanoStripUsesProviderCellsSeverityAndViewCache(t *testing.T) {
 	}
 }
 
-func TestPhase3K2NanoBodyTapReturnsToCompactAndSupportsDrag(t *testing.T) {
+func TestNanoBodyTapReturnsToCompactAndSupportsDrag(t *testing.T) {
 	selected := settings.ModeNano
 	starts, moves, ends := 0, 0, 0
 	surface := NewNanoSurface(func() (int, int, error) {
@@ -1341,7 +1341,7 @@ func TestPhase3K2NanoBodyTapReturnsToCompactAndSupportsDrag(t *testing.T) {
 	}
 }
 
-func TestPhase3K2DisplayModeIconsAndScreenMapping(t *testing.T) {
+func TestDisplayModeIconsAndScreenMapping(t *testing.T) {
 	if ScreenForDisplayMode(settings.ModeNormal) != NormalScreen || ScreenForDisplayMode(settings.ModeCompact) != CompactScreen || ScreenForDisplayMode(settings.ModeNano) != NanoScreen {
 		t.Fatal("display mode screen mapping mismatch")
 	}
@@ -1350,7 +1350,7 @@ func TestPhase3K2DisplayModeIconsAndScreenMapping(t *testing.T) {
 		want    string
 		marker  string
 	}{
-		// W5: rectangles for normal/compact targets, a line for the nano target.
+		// Rectangles mark normal/compact targets; a line marks the nano target.
 		{settings.ModeNormal, "display-compact.svg", "<rect"},
 		{settings.ModeCompact, "display-nano.svg", "<path"},
 		{settings.ModeNano, "display-normal.svg", "<rect"},
@@ -1362,10 +1362,10 @@ func TestPhase3K2DisplayModeIconsAndScreenMapping(t *testing.T) {
 	}
 }
 
-func TestPhase3K2VisualReviewCaptures(t *testing.T) {
+func TestNanoVisualReviewCaptures(t *testing.T) {
 	directory := os.Getenv("QUOTADOCK_PHASE3K2_SCREENSHOT_DIR")
 	if directory == "" {
-		t.Skip("set QUOTADOCK_PHASE3K2_SCREENSHOT_DIR for Phase 3K-2 captures")
+		t.Skip("set QUOTADOCK_PHASE3K2_SCREENSHOT_DIR to write visual captures")
 	}
 	v, w := phase2DTestView(t)
 	defer w.Close()
@@ -1403,10 +1403,10 @@ func TestPhase3K2VisualReviewCaptures(t *testing.T) {
 	save("compact-palette")
 }
 
-func TestPhase3PConnectionSettingsCaptures(t *testing.T) {
+func TestConnectionSettingsCaptures(t *testing.T) {
 	directory := os.Getenv("QUOTADOCK_PHASE3P_SCREENSHOT_DIR")
 	if directory == "" {
-		t.Skip("set QUOTADOCK_PHASE3P_SCREENSHOT_DIR for Phase 3P captures")
+		t.Skip("set QUOTADOCK_PHASE3P_SCREENSHOT_DIR to write visual captures")
 	}
 	for _, entry := range []struct {
 		name  string
@@ -1509,7 +1509,7 @@ func TestRefreshFeedbackAndLastRefreshLabel(t *testing.T) {
 	state := sampleState()
 	state.LastRefresh = time.Date(2026, 7, 25, 3, 4, 5, 0, time.Local)
 	v.SetState(state)
-	// The footer follows the global date/time setting (W4): default 12h-date.
+	// The footer follows the global date/time setting: default 12h-date.
 	if v.lastRefreshText == nil || !strings.Contains(v.lastRefreshText.Text, "Jul 25 3:04 AM") {
 		t.Fatalf("last refresh label=%v", v.lastRefreshText)
 	}
@@ -1556,7 +1556,7 @@ func TestDefaultProviderAndPlanChipColors(t *testing.T) {
 		{"Antigravity Gemini", model.ProviderAntigravity, UsageRowState{Label: "Gemini Models"}, color.NRGBA{R: 0x9B, G: 0x8C, B: 0xEC, A: 0xFF}},
 		{"Antigravity Claude/GPT", model.ProviderAntigravity, UsageRowState{Label: "Claude/GPT Models"}, color.NRGBA{R: 0x7E, G: 0x8F, B: 0xA6, A: 0xFF}},
 	}
-	// 네 공급자 그룹의 기본색은 서로 달라야 한다. 같으면 한 화면에서 구분되지 않는다.
+	// The four provider groups need distinct base colors to remain distinguishable on one screen.
 	seen := map[color.Color]string{}
 	for _, tc := range cases {
 		got := PaletteColor(providerColorID(tc.id, tc.row, config))
@@ -1577,7 +1577,7 @@ func TestDefaultProviderAndPlanChipColors(t *testing.T) {
 	}
 	if !sameColor(ColorPlanChip, color.NRGBA{R: 0x78, G: 0x8C, B: 0xA3, A: 0xFF}) ||
 		!sameColor(ColorPlanChipText, ColorBackground) {
-		t.Fatal("plan chip colors do not match PLAN §25.5")
+		t.Fatal("plan chip colors do not match the expected palette")
 	}
 
 	saved := config
@@ -1946,7 +1946,7 @@ func TestScreenCaptureArtifacts(t *testing.T) {
 			if entry.screen == CompactScreen {
 				// Both AG Claude demo rows sit in warning/danger, so their icon
 				// keeping its fixed brand colour while the meter wears a
-				// severity colour proves the W9 role split.
+				// severity colour proves the provider/severity role split.
 				agClaude := v.compactCache.rows[len(v.compactCache.rows)-1]
 				if agClaude.icon == nil {
 					t.Fatalf("%s compact AG Claude row has no provider icon", mode.name)
@@ -2024,7 +2024,7 @@ func TestScreenCaptureArtifacts(t *testing.T) {
 	w.Resize(v.MinimumSize(SettingsScreen))
 	saveCapture("settings-clean", w.Canvas().Capture())
 }
-func TestPhase2BDefectReviewCapture(t *testing.T) {
+func TestDefectReviewCapture(t *testing.T) {
 	v, w := newTestView(t)
 	defer w.Close()
 	cfg := v.config
@@ -2054,17 +2054,17 @@ func TestPhase2BDefectReviewCapture(t *testing.T) {
 	})
 	for _, expected := range []string{"사용량 정보 없음", "PRO LITE", "60", "%", "주간 · 6d", "주간 · 7d", "AI ULTRA", "Gemini 세션", "Gemini 주간", "Claude 세션", "Claude 주간"} {
 		if !texts[expected] {
-			t.Fatalf("Phase 2B review frame is missing %q", expected)
+			t.Fatalf("demo review frame is missing %q", expected)
 		}
 	}
 	for forbidden := range texts {
 		if forbidden == "0%" || strings.Contains(forbidden, "codex_bengalfo") {
-			t.Fatalf("Phase 2B review frame contains forbidden text %q", forbidden)
+			t.Fatalf("demo review frame contains forbidden text %q", forbidden)
 		}
 	}
 	img := w.Canvas().Capture()
 	if countExactPixels(img, ColorPlanChip) == 0 {
-		t.Fatal("Phase 2B review frame is missing plan chips")
+		t.Fatal("demo review frame is missing plan chips")
 	}
 	if path := os.Getenv("QUOTADOCK_PHASE2B_SCREENSHOT"); path != "" {
 		file, err := os.Create(path)
@@ -2131,7 +2131,7 @@ func TestSetStateReusesVisibleWidgetsWhenStructureIsStable(t *testing.T) {
 	}
 }
 
-func TestPhase3KCompactSetStateReusesMetersResetBarsAndBackgrounds(t *testing.T) {
+func TestCompactSetStateReusesMetersResetBarsAndBackgrounds(t *testing.T) {
 	v, w := phase2DTestView(t)
 	defer w.Close()
 	cache := v.compactCache

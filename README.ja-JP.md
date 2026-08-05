@@ -13,7 +13,7 @@ QuotaDock は、**Claude・OpenAI Codex・Google Antigravity** の利用上限 �
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?logo=windows&logoColor=white)](#対応プラットフォーム)
 
 <p align="center">
-  <img src="docs/marketing/quotadock-normal-en.png" alt="QuotaDock 通常ビュー —— Claude / Codex / Antigravity の使用量とリセットタイマー" width="539">
+  <img src="docs/marketing/quotadock-demo.gif" alt="動作中の QuotaDock —— Claude / Codex / Antigravity の使用量バーとリセットまでのカウントダウン" width="539">
 </p>
 
 Claude Code、Codex CLI、Antigravity IDE を使っていると、いつも同じことが気になります。
@@ -22,7 +22,7 @@ Claude Code、Codex CLI、Antigravity IDE を使っていると、いつも同�
 
 | プロバイダー | 表示内容 | 接続方法 |
 |---|---|---|
-| **Claude**（Claude Code） | 5 時間セッション · 7 日間の週間 · Fable 週間 | 公式 Claude CLI の認証情報を再利用 |
+| **Claude**（Claude Code） | 5 時間セッション · 7 日間の週間 · Fable 週間 | Claude Code が既に保持する OAuth 認証情報を利用（認証ファイルまたは環境変数）。アプリへの貼り付けやブラウザー Cookie の抽出は行わない |
 | **OpenAI Codex** | セッション · 週間上限 | 公式 Codex CLI app-server（stdio JSONL） |
 | **Google Antigravity** | Gemini および Claude/GPT グループのセッション · 週間 | ローカル言語サーバー（loopback） |
 
@@ -85,7 +85,9 @@ Claude Code、Codex CLI、Antigravity IDE を使っていると、いつも同�
 で整合性を確認してください。設定は不要です —— QuotaDock がログイン済みの公式 CLI / IDE を自動的に
 検出して接続します。
 
-> 現在のバージョンは `0.7.15` です。Windows の機能検証を終えた時点で `1.0.0` になります。
+> 現在のバージョンは、このページ上部の **リリースバッジ** と
+> [Releases](https://github.com/jungdosa/QuotaDock/releases) ページで確認できます。
+> Windows の機能検証を終えた時点で `1.0.0` になります。
 
 ## 初回起動
 
@@ -109,14 +111,20 @@ QuotaDock が探索する場所。導入後に `再スキャン` を押せば反
 
 ## プライバシー
 
-QuotaDock は **そもそも認証情報を見ない** ように作られています。
+QuotaDock は **公式ツールがすでに確立した認証状態を利用します。** 秘密情報の貼り付けを求めず、
+ブラウザー Cookie を抽出せず、ウェブスクレイピングも、テレメトリ送信も、課金される AI 要求も
+行いません。
 
-- **尋ねずに読みます。** Claude の使用量は Claude Code がすでにこの PC に保存したトークンから
-  取得します。Codex の使用量は公式 Codex CLI の app-server と stdio でやり取りします。
-  Antigravity の使用量は `127.0.0.1` の言語サーバーから読みます。セッションキーを貼り付ける欄も、
-  ブラウザー Cookie の抽出も、ブラウザー自動化もありません。
-- **認証情報は画面に届きません。** トークン・Cookie・認証ファイルの原文を UI に描画しません。
-  画面に渡るのは正規化された使用率、許可リストで検証したプランラベル、リセット時刻だけです。
+- **認証情報を新たに集めず、既存のサインインを利用します。** Claude では、Claude Code の
+  OAuth 認証情報をローカルの認証ファイルまたは環境変数から読み取ります。ファイルベースの
+  認証情報の更新が必要な場合は、refresh token を Anthropic のトークンエンドポイントへ送って
+  そのファイルをアトミックに更新し、その後 access token を Anthropic の使用量エンドポイントへ
+  送ります。Codex の使用量は公式 Codex CLI の app-server と stdio でやり取りし、Antigravity の
+  使用量は検証済みの `127.0.0.1` 言語サーバーから読みます。認証情報を入力する欄も、
+  ブラウザー Cookie の抽出も、ブラウザー自動化も、非公式なウェブスクレイピングもありません。
+- **秘密情報は画面とログに残りません。** トークン・Cookie・認証ファイルの原文は UI に描画されず、
+  ログにも書き込まれません。画面に渡るのは正規化された使用率、許可リストで検証したプランラベル、
+  リセット時刻だけです。
 - **診断記録はローカルだけに残ります。** 通常時は小さく上限を設けた JSON 診断ログを
   `%LOCALAPPDATA%\QuotaDock\quotadock.log` に記録します。異常終了時は同じフォルダーに
   `crash.log` が残ることがあります。秘密情報とメールアドレスは記録前に伏せられ、
@@ -133,8 +141,9 @@ QuotaDock は **そもそも認証情報を見ない** ように作られてい�
 
 - **尋ねません。** 公式ツールがインストール済みでログインしていれば、自動的に接続します。初回起動の
   ログインウィザードも、強制的なポップアップもありません。
-- **秘密情報を扱いません。** トークン、Cookie、`auth.json` の原文が UI やログに渡ることはありません。
-  UI に渡すのは正規化された使用率、許可リストで検証したプランラベル、リセット時刻だけです。
+- **秘密情報を画面とログに残しません。** トークン、Cookie、認証ファイルの原文が UI やログに
+  渡ることはありません。UI に渡すのは正規化された使用率、許可リストで検証したプランラベル、
+  リセット時刻だけです。
 - **ローカルにのみ接続します。** テレメトリも外部分析サーバーもありません。loopback 接続は検証済みの
   プロセスと固定エンドポイントにのみ許可します。唯一の外向き通信はアップデート確認で、認証情報は
   含まれず、起動時とクリック時にしか発生しません。

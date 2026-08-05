@@ -14,7 +14,7 @@ import (
 	"github.com/jungdosa/QuotaDock/internal/settings"
 )
 
-func TestPhase3WCodexLogoUsesThemeNeutralTintsWithContrast(t *testing.T) {
+func TestCodexLogoUsesThemeNeutralTintsWithContrast(t *testing.T) {
 	tests := []struct {
 		name       string
 		mode       settings.Theme
@@ -52,7 +52,7 @@ func TestPhase3WCodexLogoUsesThemeNeutralTintsWithContrast(t *testing.T) {
 	}
 }
 
-func TestPhase3WCompactPercentPartsFontsBaselineAndClearance(t *testing.T) {
+func TestCompactPercentPartsFontsBaselineAndClearance(t *testing.T) {
 	v, window := phase2DTestView(t)
 	defer window.Close()
 	state := DemoViewState()
@@ -101,7 +101,7 @@ func TestPhase3WCompactPercentPartsFontsBaselineAndClearance(t *testing.T) {
 		hundredWidth, ninetyNineWidth, compactPercentTextWidth(), columnWidth, CompactPercentMargin)
 }
 
-func TestPhase3WCompactMetersStaySquareAcrossDynamicLabelWidths(t *testing.T) {
+func TestCompactMetersStaySquareAcrossDynamicLabelWidths(t *testing.T) {
 	v, window := phase2DTestView(t)
 	defer window.Close()
 	for _, language := range []settings.Language{settings.Language(i18n.Korean), settings.Language(i18n.English)} {
@@ -138,7 +138,7 @@ func TestPhase3WCompactMetersStaySquareAcrossDynamicLabelWidths(t *testing.T) {
 	}
 }
 
-func TestPhase3WCompactProviderDividersOnlyBetweenGroups(t *testing.T) {
+func TestCompactProviderDividersOnlyBetweenGroups(t *testing.T) {
 	v, window := phase2DTestView(t)
 	defer window.Close()
 	for _, mode := range []settings.Theme{settings.ThemeLight, settings.ThemeDark} {
@@ -149,7 +149,7 @@ func TestPhase3WCompactProviderDividersOnlyBetweenGroups(t *testing.T) {
 		v.Show(CompactScreen)
 		window.Resize(v.MinimumSize(CompactScreen))
 
-		// The caption strip lives in the header wrap above the padded body (W3),
+		// The caption strip lives in the header wrap above the padded body,
 		// so the body holds only rows and dividers.
 		if len(v.compactCache.dividers) != 2 || len(v.compactBody.Objects) != len(v.compactCache.rows)+2 {
 			t.Fatalf("%s dividers/body/rows=%d/%d/%d, want 2/%d/%d", mode, len(v.compactCache.dividers), len(v.compactBody.Objects), len(v.compactCache.rows), len(v.compactCache.rows)+2, len(v.compactCache.rows))
@@ -176,7 +176,7 @@ func TestPhase3WCompactProviderDividersOnlyBetweenGroups(t *testing.T) {
 	}
 }
 
-func TestPhase3WNanoUsageAndResetBarsHaveOnePixelGapAndCenteredBundle(t *testing.T) {
+func TestNanoUsageAndResetBarsHaveOnePixelGapAndCenteredBundle(t *testing.T) {
 	v, window := phase2DTestView(t)
 	defer window.Close()
 	v.Show(NanoScreen)
@@ -193,7 +193,7 @@ func TestPhase3WNanoUsageAndResetBarsHaveOnePixelGapAndCenteredBundle(t *testing
 			if labelCenter != bundleCenter {
 				t.Fatalf("nano cell %d row %d label/bundle centers=%.2f/%.2f", cellIndex, rowIndex, labelCenter, bundleCenter)
 			}
-			// The row line is wrapped in a Stack with its hover region (W12);
+			// The row line is wrapped in a Stack with its hover region;
 			// the lines container sits one level above that wrapper.
 			line := findContainerWithObject(v.Nano, row.bar)
 			wrapper := findContainerWithObject(v.Nano, line)
@@ -207,7 +207,7 @@ func TestPhase3WNanoUsageAndResetBarsHaveOnePixelGapAndCenteredBundle(t *testing
 	t.Logf("nano usage/gap/reset=%.0fpx/%.0fpx/%.0fpx; bundle centered on 5h/7D labels; inter-line gap=%.0fpx", NanoUsageBarHeight, NanoResetGap, NanoResetBarHeight, NanoLineGap)
 }
 
-func TestPhase3WUsageHeadersAlignLocalizeAndUpdateImmediately(t *testing.T) {
+func TestUsageHeadersAlignLocalizeAndUpdateImmediately(t *testing.T) {
 	v, window := phase2DTestView(t)
 	defer window.Close()
 
@@ -300,10 +300,10 @@ func TestPhase3WUsageHeadersAlignLocalizeAndUpdateImmediately(t *testing.T) {
 		normalUsageX, normalResetX, compactUsageX, compactUsageWidth)
 }
 
-func TestPhase3WSoftwareRenderCapturesShowUsageHeaders(t *testing.T) {
+func TestUsageHeaderSoftwareRenderCaptures(t *testing.T) {
 	directory := os.Getenv("QUOTADOCK_PHASE3W_SCREENSHOT_DIR")
 	if directory == "" {
-		t.Skip("set QUOTADOCK_PHASE3W_SCREENSHOT_DIR for Phase 3W captures")
+		t.Skip("set QUOTADOCK_PHASE3W_SCREENSHOT_DIR to write visual captures")
 	}
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		t.Fatal(err)

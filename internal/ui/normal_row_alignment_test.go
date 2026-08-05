@@ -13,7 +13,7 @@ import (
 	"github.com/jungdosa/QuotaDock/internal/settings"
 )
 
-func TestPhase3TPlanChipPaddingAndNormalVerticalCenters(t *testing.T) {
+func TestPlanChipPaddingAndNormalVerticalCenters(t *testing.T) {
 	v, window := phase2DTestView(t)
 	defer window.Close()
 
@@ -110,10 +110,10 @@ func objectPosition(root *fyne.Container, target fyne.CanvasObject, offset fyne.
 	return fyne.Position{}, false
 }
 
-func TestPhase3TSoftwareRenderCaptures(t *testing.T) {
+func TestNormalRowSoftwareRenderCaptures(t *testing.T) {
 	directory := os.Getenv("QUOTADOCK_PHASE3T_SCREENSHOT_DIR")
 	if directory == "" {
-		t.Skip("set QUOTADOCK_PHASE3T_SCREENSHOT_DIR for Phase 3T captures")
+		t.Skip("set QUOTADOCK_PHASE3T_SCREENSHOT_DIR to write visual captures")
 	}
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		t.Fatal(err)
@@ -154,7 +154,7 @@ func TestPhase3TSoftwareRenderCaptures(t *testing.T) {
 	}
 }
 
-func TestPhase3TCompactPercentFontAndOffsetsRemainExact(t *testing.T) {
+func TestCompactPercentFontAndOffsetsRemainExact(t *testing.T) {
 	v, window := phase2DTestView(t)
 	defer window.Close()
 	v.Show(CompactScreen)

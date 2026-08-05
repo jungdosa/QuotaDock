@@ -13,7 +13,7 @@ import (
 	"github.com/jungdosa/QuotaDock/internal/settings"
 )
 
-func TestPhase3YNormalThreeColumnGeometryAndPercentBand(t *testing.T) {
+func TestNormalThreeColumnGeometryAndPercentBand(t *testing.T) {
 	v, window := phase2DTestView(t)
 	defer window.Close()
 	v.Show(NormalScreen)
@@ -36,7 +36,7 @@ func TestPhase3YNormalThreeColumnGeometryAndPercentBand(t *testing.T) {
 	if row.Objects[2].Position().X != wantResetX || row.Objects[2].Size().Width != 140 {
 		t.Fatalf("reset x/width=%.1f/%.1f, want %.1f/140", row.Objects[2].Position().X, row.Objects[2].Size().Width, wantResetX)
 	}
-	// The meter/reset-bar bundle (W2) is centred in the region below the
+	// The meter/reset-bar bundle is centred in the region below the
 	// percent band; the reset bar spans exactly the meter's x range.
 	bundle := NormalMeterHeight + NormalResetBarGap + NormalResetBarHeight
 	wantMeterY := NormalPercentBandHeight + (handles.meterStack.Size().Height-NormalPercentBandHeight-bundle)/2
@@ -85,7 +85,7 @@ func TestPhase3YNormalThreeColumnGeometryAndPercentBand(t *testing.T) {
 		NormalWidth, row.Size().Width, columns[0], wantMeterWidth, columns[2], wantResetX, percentRight)
 }
 
-func TestPhase3YTitleTooltipsDelayI18NStateAndLifecycle(t *testing.T) {
+func TestTitleTooltipsDelayI18NStateAndLifecycle(t *testing.T) {
 	v, window := newTestView(t)
 	defer window.Close()
 	state := sampleState()
@@ -144,7 +144,7 @@ func TestPhase3YTitleTooltipsDelayI18NStateAndLifecycle(t *testing.T) {
 		}
 		// The layer must stay pointer-transparent: no object in a visible
 		// tooltip may accept taps, hovers, or drags, or it would swallow the
-		// first click on the control underneath (W1 regression guard).
+		// first click on the control underneath. Keep this as a regression guard.
 		switch object.(type) {
 		case fyne.Tappable, fyne.SecondaryTappable, fyne.Draggable, desktop.Hoverable, fyne.Focusable:
 			t.Fatalf("tooltip layer contains an event-consuming object: %T", object)
@@ -200,7 +200,7 @@ func TestPhase3YTitleTooltipsDelayI18NStateAndLifecycle(t *testing.T) {
 	}
 }
 
-func TestPhase3YSeverityAndProviderUseSharedSixteenColorPopup(t *testing.T) {
+func TestSeverityAndProviderUseSharedSixteenColorPopup(t *testing.T) {
 	v, window := newTestView(t)
 	defer window.Close()
 	v.Show(SettingsScreen)
@@ -262,7 +262,7 @@ func palettePopupSwatches(popup *widget.PopUp) []*PaletteSwatch {
 	return result
 }
 
-func TestPhase3YTranslatedButtonsUseMeasuredWidths(t *testing.T) {
+func TestTranslatedButtonsUseMeasuredWidths(t *testing.T) {
 	for _, entry := range []struct {
 		label   string
 		minimum float32

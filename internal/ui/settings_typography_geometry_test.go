@@ -8,7 +8,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 )
 
-func TestPhase3ZSettingsTitleHierarchyAndSectionTypography(t *testing.T) {
+func TestSettingsTitleHierarchyAndSectionTypography(t *testing.T) {
 	v, window := newTestView(t)
 	defer window.Close()
 	bar := v.settingsTitleBar(NewSmallIconButton(theme.NavigateBackIcon(), "Back", nil, v.colors), testAppVersion, nil)
@@ -62,7 +62,7 @@ func TestPhase3ZSettingsTitleHierarchyAndSectionTypography(t *testing.T) {
 	}
 }
 
-func TestPhase3ZThresholdDisplayAndConnectionGeometry(t *testing.T) {
+func TestThresholdDisplayAndConnectionGeometry(t *testing.T) {
 	v, window := newTestView(t)
 	defer window.Close()
 	v.Show(SettingsScreen)

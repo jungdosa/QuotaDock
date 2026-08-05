@@ -31,7 +31,7 @@ func DemoConfig(config settings.Config) settings.Config {
 	return config.Validated()
 }
 
-// DemoViewState returns the fixed PLAN §25.5 visual-review fixture.
+// DemoViewState returns the fixed visual-review fixture.
 // It is UI-only and deliberately does not construct or call any provider.
 func DemoViewState() ViewState {
 	return ViewState{

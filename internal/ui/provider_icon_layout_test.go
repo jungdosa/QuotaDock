@@ -11,7 +11,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 )
 
-func TestPhase3QProviderIconSourcesTintsAndNativeResources(t *testing.T) {
+func TestProviderIconSourcesTintsAndNativeResources(t *testing.T) {
 	tests := []struct {
 		kind        ProviderIconKind
 		asset       string
@@ -47,7 +47,7 @@ func TestPhase3QProviderIconSourcesTintsAndNativeResources(t *testing.T) {
 	}
 }
 
-func TestPhase3QCompactPercentColumnAndSpacing(t *testing.T) {
+func TestCompactPercentColumnAndSpacing(t *testing.T) {
 	v, w := phase2DTestView(t)
 	defer w.Close()
 	state := DemoViewState()
@@ -91,10 +91,10 @@ func TestPhase3QCompactPercentColumnAndSpacing(t *testing.T) {
 	}
 }
 
-func TestPhase3QVisualReviewCaptures(t *testing.T) {
+func TestProviderIconLayoutVisualCaptures(t *testing.T) {
 	directory := os.Getenv("QUOTADOCK_PHASE3Q_SCREENSHOT_DIR")
 	if directory == "" {
-		t.Skip("set QUOTADOCK_PHASE3Q_SCREENSHOT_DIR for Phase 3Q captures")
+		t.Skip("set QUOTADOCK_PHASE3Q_SCREENSHOT_DIR to write visual captures")
 	}
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		t.Fatal(err)

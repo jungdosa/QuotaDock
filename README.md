@@ -13,7 +13,7 @@ glance.
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?logo=windows&logoColor=white)](#supported-platforms)
 
 <p align="center">
-  <img src="docs/marketing/quotadock-normal-en.png" alt="QuotaDock normal view — Claude / Codex / Antigravity usage and reset timers" width="539">
+  <img src="docs/marketing/quotadock-demo.gif" alt="QuotaDock in motion — usage bars and reset countdowns for Claude, Codex, and Antigravity" width="539">
 </p>
 
 When you work with Claude Code, Codex CLI, and Antigravity IDE, you keep asking the same
@@ -22,7 +22,7 @@ QuotaDock answers both without you having to check.
 
 | Provider | What it shows | How it connects |
 |---|---|---|
-| **Claude** (Claude Code) | 5-hour session · 7-day weekly · Fable weekly | Reuses your official Claude CLI credentials |
+| **Claude** (Claude Code) | 5-hour session · 7-day weekly · Fable weekly | Uses Claude Code's existing OAuth credentials (credentials file or environment override); no in-app paste or browser-cookie extraction |
 | **OpenAI Codex** | Session · weekly limits | Official Codex CLI app-server (stdio JSONL) |
 | **Google Antigravity** | Gemini and Claude/GPT group session · weekly | Local language server (loopback) |
 
@@ -78,14 +78,40 @@ Grab it from [**Releases**](https://github.com/jungdosa/QuotaDock/releases).
 
 | File | Purpose |
 |---|---|
-| `QuotaDock-<version>-win-x64-Setup.exe` | Installer — Start Menu entry, optional launch at startup |
-| `QuotaDock-<version>-win-x64-portable.exe` | Single portable executable |
+| `QuotaDock-<version>-win-x64-portable.exe` | One executable. Nothing to install, nothing to uninstall. Start here if you are just trying it out. |
+| `QuotaDock-<version>-win-x64-Setup.exe` | Installer. Adds a Start Menu entry and can launch at startup. |
 
-Binaries are unsigned, so SmartScreen may warn you. Verify integrity with `SHA256SUMS.txt`.
-There is nothing to configure — QuotaDock discovers your already-signed-in official CLIs and
-IDE on its own.
+There is nothing to configure either way. QuotaDock finds the official CLIs and IDE you are
+already signed in to and connects on its own.
 
-> Current version is `0.7.15`. It becomes `1.0.0` once Windows feature verification is done.
+> The current version is shown by the release badge at the top of this page and on the
+> [Releases](https://github.com/jungdosa/QuotaDock/releases) page. It becomes 1.0.0 once
+> Windows feature verification is done.
+
+### About the SmartScreen warning
+
+The binaries are not code-signed yet, so the first time you run one Windows will show a blue
+"Windows protected your PC" dialog. That is Windows telling you it has not seen this file
+before, not that it found anything wrong with it.
+
+You have three options, and I would rather you take one of the first two than click through:
+
+**Check the hash.** Every release ships `SHA256SUMS.txt`. In PowerShell:
+
+```powershell
+Get-FileHash .\QuotaDock-<version>-win-x64-portable.exe -Algorithm SHA256
+```
+
+Compare it with the matching line in `SHA256SUMS.txt` from the same release.
+
+**Build it yourself.** The source is here and the release script is in `build/windows/`. See
+[Building from source](#building-from-source).
+
+**Run it anyway.** Click *More info*, then *Run anyway*. If you took the portable
+executable, deleting the file is the whole uninstall.
+
+Code signing is being worked on. Until it lands, checksums and a public build are what I can
+offer instead of a certificate.
 
 ## First run
 
@@ -108,15 +134,21 @@ Day to day:
 
 ## Privacy
 
-QuotaDock is built so that it never sees your credentials in the first place.
+QuotaDock uses authentication state already established by the official tools; it does not ask
+you to paste secrets, extract browser cookies, scrape web pages, send telemetry, or make
+billable AI requests.
 
-- **It reads, it never asks.** Claude usage comes from the token Claude Code already stored on
-  your machine. Codex usage comes from the official Codex CLI's app-server over stdio.
-  Antigravity usage comes from its language server on `127.0.0.1`. There is no session-key
-  box, no cookie extraction, and no browser automation.
-- **Credentials never reach the surface.** Tokens, cookies, and raw credential files are not
-  rendered in the UI. Only normalized usage percentages, allowlist-validated plan labels, and
-  reset timestamps do.
+- **It uses existing sign-ins instead of collecting credentials.** For Claude, QuotaDock reads
+  Claude Code's OAuth credentials from its local credentials file or an environment override;
+  when file-based credentials need renewal, it sends the refresh token to Anthropic's token
+  endpoint and atomically updates that file, then sends the access token to Anthropic's usage
+  endpoint. Codex usage comes from the official Codex CLI app-server over stdio, and
+  Antigravity usage comes from its verified language server on `127.0.0.1`. There is no
+  credential-entry box, browser-cookie extraction, browser automation, or unofficial web
+  scraping.
+- **Secrets stay out of the interface and logs.** Tokens, cookies, and raw credential-file
+  contents are never rendered in the UI or written to logs. Only normalized usage rates,
+  allowlist-validated plan labels, and reset times reach the UI.
 - **Local diagnostics only.** A small bounded JSON diagnostic log is kept at
   `%LOCALAPPDATA%\QuotaDock\quotadock.log` during normal use. An abnormal exit may also leave
   `crash.log` in that folder. Secrets and email addresses are redacted before writing, and
@@ -133,8 +165,9 @@ QuotaDock is built so that it never sees your credentials in the first place.
 
 - **It doesn't ask.** If the official tools are installed and signed in, it connects on its
   own. No first-run login wizard, no forced popups.
-- **It doesn't handle secrets.** Tokens, cookies, and raw `auth.json` never reach the UI or
-  the logs. Only normalized usage rates, allowlist-validated plan labels, and reset times do.
+- **It keeps secrets out of the interface and logs.** Tokens, cookies, and raw credential-file
+  contents are never rendered in the UI or written to logs. Only normalized usage rates,
+  allowlist-validated plan labels, and reset times do.
 - **It stays local.** No telemetry, no external analytics. Loopback connections are allowed
   only to verified processes on fixed endpoints. The one outbound request is the update
   check, which carries no credentials and runs only at startup or when you click.
@@ -163,6 +196,18 @@ go build ./cmd/quotadock
 
 Release artifacts (Setup.exe, portable, SHA256SUMS) are produced by
 `build/windows/build-release.ps1`.
+
+## Bugs, questions, security
+
+- Something broken, or an idea: [open an issue](https://github.com/jungdosa/QuotaDock/issues)
+- Something exploitable: please
+  [report it privately](https://github.com/jungdosa/QuotaDock/security/advisories/new).
+  Details in [SECURITY.md](SECURITY.md).
+- What changed between versions: [CHANGELOG.md](CHANGELOG.md)
+- Sending a patch: [CONTRIBUTING.md](CONTRIBUTING.md)
+
+QuotaDock is maintained by one person, [@jungdosa](https://github.com/jungdosa), so please
+treat response times as best effort.
 
 ## License
 

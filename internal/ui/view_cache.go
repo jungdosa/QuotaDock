@@ -257,7 +257,7 @@ func (v *View) makeNormalColumnHeader() (*fyne.Container, *canvas.Text, *canvas.
 
 // headerStrip paints a caption row on the titlebar tone across the full window
 // width, merging the captions into the header block instead of leaving a band
-// of body background between the titlebar and the tinted rows (W3).
+// of body background between the titlebar and the tinted rows.
 func (v *View) headerStrip(columns fyne.CanvasObject, padLeft, padRight float32) *fyne.Container {
 	background := canvas.NewRectangle(v.colors.TitleBottom)
 	return container.NewStack(background, container.New(layout.NewCustomPaddedLayout(0, 0, padLeft, padRight), columns))
@@ -395,7 +395,7 @@ func (v *View) rowVisual(lane LaneState, row UsageRowState, now time.Time) rowVi
 	level, severityColor := v.severity(row.Percent)
 	providerColor := v.colors.PaletteColor(providerColorID(lane.Provider, row, v.config))
 	// The meter and number carry the state: they switch to the severity colour
-	// while the icon and row tint keep the provider colour (W9).
+	// while the icon and row tint keep the provider colour.
 	meterColor := providerColor
 	var percentColor color.Color = v.colors.PercentNormal
 	if level != model.AlertNormal {
@@ -433,7 +433,7 @@ func (v *View) makeNormalUsageRow(lane LaneState, row UsageRowState, now time.Ti
 		percentText,
 		percentSymbol,
 	)
-	// The reset-time bar (W2) is the continuous line under the segmented quota
+	// The reset-time bar is the continuous line under the segmented quota
 	// meter: same span, achromatic, and always showing the remaining time so
 	// it reads the same way in every mode and display method.
 	resetBar := NewSlimProgressBar(visual.resetPercent, visual.resetBarColor, v.colors.Track)
@@ -488,7 +488,7 @@ func (v *View) updateNormalUsage(handles normalUsageView, lane LaneState, row Us
 	}
 }
 
-// setPercentWeight applies the danger-only bold cue (W9) in place.
+// setPercentWeight applies the danger-only bold cue in place.
 func setPercentWeight(number, symbol *canvas.Text, bold bool) {
 	if number.TextStyle.Bold == bold && symbol.TextStyle.Bold == bold {
 		return
@@ -563,8 +563,8 @@ func (v *View) rebuildCompactBody(lanes []LaneState, signature string) {
 
 func (v *View) makeCompactColumnHeader(labelWidth float32) (*fyne.Container, *canvas.Text, *canvas.Text) {
 	// Centre the usage caption over the meter column and right-align the reset
-	// caption over the reset times (W11); the whole strip sits on the titlebar
-	// tone so it reads as part of the header block (W3).
+	// caption over the reset times; the whole strip sits on the titlebar tone so
+	// it reads as part of the header block.
 	usage := textLabel(v.usageColumnHeaderText(), UsageHeaderTextSize, v.colors.Secondary, false, false)
 	usage.Alignment = fyne.TextAlignCenter
 	reset := textLabel(v.text(i18n.KeyResetsAt), UsageHeaderTextSize, v.colors.Secondary, false, false)
@@ -643,7 +643,7 @@ func (v *View) makeCompactUsageRow(lane LaneState, row UsageRowState, showIcon b
 	var icon fyne.CanvasObject = layout.NewSpacer()
 	var iconImage *canvas.Image
 	if showIcon {
-		// The icon holds the provider identity (W9): it wears the official
+		// The icon holds the provider identity: it wears the official
 		// brand-logo colour, fixed even while the meter switches to warning or
 		// danger. The default palette hues mirror these logo colours, so the
 		// icon and its resting meter still read as one colour.
@@ -673,8 +673,8 @@ func (v *View) makeCompactUsageRow(lane LaneState, row UsageRowState, showIcon b
 		symbolText,
 	)
 	setCompactPercent(percentColumn, numberText, symbolText, visual.percent, visual.percentColor)
-	// The reset column (W11) shows the countdown; hovering it reveals the full
-	// reset moment, already rendered through the shared date/time format (W4).
+	// The reset column shows the countdown; hovering it reveals the full reset
+	// moment, already rendered through the shared date/time format.
 	untilText := textLabel(visual.until, CompactResetTextSize, v.colors.Text, false, true)
 	untilText.Alignment = fyne.TextAlignTrailing
 	resetRegion := NewTooltipRegion(v, visual.resetAt)
@@ -750,7 +750,7 @@ func (v *View) makeNanoCell(cell nanoCellState, now time.Time) (fyne.CanvasObjec
 	providerColor := v.colors.PaletteColor(v.config.ProviderColors[cell.key])
 	background := canvas.NewRectangle(compactRowBackground(v.colors.Background, providerColor))
 	background.CornerRadius = 4
-	// The icon holds the provider identity (W9): it wears the official brand
+	// The icon holds the provider identity: it wears the official brand
 	// colour, fixed even while the usage bar switches to warning or danger.
 	icon := NewProviderIcon(cell.kind, v.config.Theme)
 	if !cell.connected {
@@ -771,7 +771,7 @@ func (v *View) makeNanoCell(cell nanoCellState, now time.Time) (fyne.CanvasObjec
 			bar,
 			reset,
 		)
-		// The whole row is the hover target (W12): the bars alone are a few
+		// The whole row is the hover target: the bars alone are a few
 		// pixels tall, far too small to hit reliably.
 		region := NewTooltipRegion(v, v.nanoRowTooltip(cell, state, now))
 		lines = append(lines, container.NewStack(line, region))
@@ -782,9 +782,9 @@ func (v *View) makeNanoCell(cell nanoCellState, now time.Time) (fyne.CanvasObjec
 	return container.NewStack(background, container.New(layout.NewCustomPaddedLayout(3, 3, 3, 3), content)), handles
 }
 
-// nanoRowTooltip is the three-line nano hover text (W12): the provider and
+// nanoRowTooltip is the three-line nano hover text: the provider and
 // window ("Claude 5h") on top, then the remaining time, then the reset moment
-// through the shared date/time format (W4).
+// through the shared date/time format.
 func (v *View) nanoRowTooltip(cell nanoCellState, state nanoUsageState, now time.Time) string {
 	if !state.available {
 		return ""
@@ -866,12 +866,12 @@ func filterNanoRows(rows []UsageRowState, gemini bool) []UsageRowState {
 	return filtered
 }
 
-// Nano unit-casing rule (W8) — deliberate, do not "fix" back to lowercase:
-// nano labels show a single unit, and at 9-10px a lone "d" is easily confused
-// with "h", so ONLY the day unit is uppercased here ("7D" vs "5h", "45m").
-// Normal and compact show two units side by side ("4d 2h") where order makes
-// them unambiguous, so they keep all-lowercase units (see resetStrings).
-// Never uppercase minutes: "M" reads as months.
+// Nano shows a single unit, and at 9-10px a lone "d" is easy to mistake for
+// "h", so the day unit is the one that gets uppercased here: "7D" against "5h"
+// and "45m". Normal and compact show two units side by side ("4d 2h"), where
+// the order already disambiguates them, so those stay lowercase throughout
+// (see resetStrings). Minutes stay lowercase everywhere, since "M" reads as
+// months.
 func selectNanoRows(rows []UsageRowState, weeklyOnly bool) []nanoUsageState {
 	var session, weekly *UsageRowState
 	for index := range rows {

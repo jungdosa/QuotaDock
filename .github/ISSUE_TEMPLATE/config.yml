@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/jungdosa/QuotaDock/security/advisories/new
+    about: Please report privately rather than opening a public issue.
+  - name: Question or idea
+    url: https://github.com/jungdosa/QuotaDock/discussions
+    about: For anything that is not a bug report or a concrete feature request.

@@ -12,7 +12,7 @@ Google Antigravity** 的用量額度 —— 工作階段/每週配額，以及�
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?logo=windows&logoColor=white)](#支援平台)
 
 <p align="center">
-  <img src="docs/marketing/quotadock-normal-en.png" alt="QuotaDock 一般檢視 —— Claude / Codex / Antigravity 用量與重設倒數" width="539">
+  <img src="docs/marketing/quotadock-demo.gif" alt="運作中的 QuotaDock —— Claude / Codex / Antigravity 用量條與重設倒數" width="539">
 </p>
 
 使用 Claude Code、Codex CLI 與 Antigravity IDE 時，你總是在問同樣的問題：*5 小時的工作階段還剩多少？
@@ -20,7 +20,7 @@ Google Antigravity** 的用量額度 —— 工作階段/每週配額，以及�
 
 | 服務供應商 | 顯示內容 | 連線方式 |
 |---|---|---|
-| **Claude**（Claude Code） | 5 小時工作階段 · 7 天每週 · Fable 每週 | 沿用官方 Claude CLI 的登入認證 |
+| **Claude**（Claude Code） | 5 小時工作階段 · 7 天每週 · Fable 每週 | 使用 Claude Code 既有的 OAuth 認證資訊（認證檔案或環境變數）；無須在應用程式內貼上，也不擷取瀏覽器 Cookie |
 | **OpenAI Codex** | 工作階段 · 每週上限 | 官方 Codex CLI app-server（stdio JSONL） |
 | **Google Antigravity** | Gemini 與 Claude/GPT 群組的工作階段 · 每週 | 本機語言伺服器（loopback） |
 
@@ -76,7 +76,8 @@ Google Antigravity** 的用量額度 —— 工作階段/每週配額，以及�
 執行檔未經程式碼簽署，SmartScreen 可能會出現警告。請用 `SHA256SUMS.txt` 驗證完整性。
 不需要任何設定 —— QuotaDock 會自動尋找你已登入的官方 CLI 與 IDE 並連線。
 
-> 目前版本為 `0.7.15`。完成 Windows 功能驗證後將提升為 `1.0.0`。
+> 目前版本請查看本頁頂端的**發行徽章**以及
+> [Releases](https://github.com/jungdosa/QuotaDock/releases) 頁面。完成 Windows 功能驗證後將提升為 `1.0.0`。
 
 ## 初次執行
 
@@ -98,13 +99,17 @@ Google Antigravity** 的用量額度 —— 工作階段/每週配額，以及�
 
 ## 隱私
 
-QuotaDock 的設計前提是**它根本看不到你的認證資訊**。
+QuotaDock **使用官方工具已經建立的認證狀態**。它不要求你貼上機密資訊，不擷取瀏覽器 Cookie，
+不做網頁抓取，不傳送遙測，也不產生計費的 AI 請求。
 
-- **只讀取，不詢問。** Claude 用量來自 Claude Code 早已存在本機的權杖；Codex 用量透過 stdio
-  與官方 Codex CLI 的 app-server 溝通；Antigravity 用量來自 `127.0.0.1` 上的語言伺服器。
-  沒有貼上 session key 的欄位，不擷取瀏覽器 Cookie，也沒有瀏覽器自動化。
-- **認證資訊不會出現在畫面上。** 權杖、Cookie 與認證檔案原文不會繪製到介面，傳給介面的只有
-  正規化後的用量比例、經允許清單驗證的方案標籤，以及重設時刻。
+- **使用既有登入，而非蒐集認證資訊。** 對 Claude，QuotaDock 會從本機認證檔案或環境變數讀取
+  Claude Code 的 OAuth 認證資訊；當檔案型認證資訊需要續期時，會將 refresh token 傳送至
+  Anthropic 的權杖端點並以原子方式更新該檔案，接著將 access token 傳送至 Anthropic 的用量端點。
+  Codex 用量透過 stdio 與官方 Codex CLI 的 app-server 溝通，Antigravity 用量來自經驗證的
+  `127.0.0.1` 語言伺服器。沒有輸入認證資訊的欄位，不擷取瀏覽器 Cookie，沒有瀏覽器自動化，
+  也沒有非官方網頁抓取。
+- **機密不會進入介面與記錄。** 權杖、Cookie 與認證檔案原文既不會繪製到介面，也不會寫入記錄。
+  傳給介面的只有正規化後的用量比例、經允許清單驗證的方案標籤，以及重設時刻。
 - **診斷記錄只保留在本機。** 正常使用時會將小型且有大小上限的 JSON 診斷記錄寫入
   `%LOCALAPPDATA%\QuotaDock\quotadock.log`。異常結束時，同一資料夾還可能留下 `crash.log`。
   密鑰與電子郵件位址會在寫入前遮蔽，兩份記錄都不會傳送到任何地方。
