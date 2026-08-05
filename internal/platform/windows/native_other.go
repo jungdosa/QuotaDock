@@ -21,6 +21,7 @@ func (*WindowController) CursorPos() (int, int, error)  { return 0, 0, nil }
 func (*WindowController) MoveTo(int, int) error         { return nil }
 func (*WindowController) Minimize()                     {}
 func (*WindowController) IsForeground() bool            { return true }
+func (*WindowController) IsVisible() bool               { return true }
 func (*WindowController) DPIScale() float64              { return 1 }
 func (*WindowController) TrimWorkingSet() error         { return nil }
 func (*WindowController) SetAlwaysOnTop(bool) error     { return nil }

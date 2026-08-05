@@ -43,6 +43,7 @@ var appEvents = []string{
 	"window.fit",
 	"render.paint",
 	"render.blank",
+	"render.skip",
 }
 
 var watchEvents = []string{

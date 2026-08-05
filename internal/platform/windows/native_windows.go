@@ -39,6 +39,8 @@ var (
 	setWindowPos          = user32.NewProc("SetWindowPos")
 	setWindowRgn          = user32.NewProc("SetWindowRgn")
 	showWindow            = user32.NewProc("ShowWindow")
+	isWindowVisible       = user32.NewProc("IsWindowVisible")
+	isIconic              = user32.NewProc("IsIconic")
 	getWindowRect         = user32.NewProc("GetWindowRect")
 	getForegroundWindow   = user32.NewProc("GetForegroundWindow")
 	getCursorPos          = user32.NewProc("GetCursorPos")
@@ -203,6 +205,29 @@ func (c *WindowController) IsForeground() bool {
 	}
 	foreground, _, _ := getForegroundWindow.Call()
 	return foreground != 0 && foreground == c.HWND
+}
+
+// IsVisible reports the window's real visibility, straight from Windows.
+//
+// Tracking it in a Go flag does not work: the single-instance guard restores
+// the window with ShowWindow from a *second* process, so the running process
+// is never told it became visible. Only the window station knows.
+func (c *WindowController) IsVisible() bool {
+	if c.bound() != nil || isWindowVisible.Find() != nil {
+		return false
+	}
+	visible, _, _ := isWindowVisible.Call(c.HWND)
+	if visible == 0 {
+		return false
+	}
+	// A minimised window still counts as visible to IsWindowVisible, yet it has
+	// nothing on screen to inspect.
+	if isIconic.Find() == nil {
+		if iconic, _, _ := isIconic.Call(c.HWND); iconic != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *WindowController) DPIScale() float64 {

@@ -173,17 +173,11 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 			}
 		},
 	}
-	// windowShown tracks whether the window is on screen. The paint watchdog
-	// needs it: a window in the tray or minimised is blank for entirely
-	// legitimate reasons, and inspecting it would manufacture false faults.
-	var windowShown atomic.Bool
 	showWindow := func() {
 		w.Show()
-		windowShown.Store(true)
 	}
 	hideWindow := func() {
 		w.Hide()
-		windowShown.Store(false)
 		if trimErr := native.TrimWorkingSet(); trimErr != nil {
 			slog.Debug("working set was not trimmed", "error", trimErr)
 		} else {
@@ -439,7 +433,6 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		widget.NewPopUpMenu(tray.Menu(), w.Canvas()).ShowAtPosition(position)
 	}, Refresh: refresh, ResizeWindow: resizeWindow, OpenSettings: func() { applyScreen(ui.SettingsScreen) }, Minimize: func() {
 		native.Minimize()
-		windowShown.Store(false)
 		idleTrimmer.MarkTrimmed()
 	}, Close: hideWindow, CloseSettings: func() {
 		applyScreen(ui.ScreenForDisplayMode(cfg.DisplayMode))
@@ -591,7 +584,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		refresh()
 		diagnostics.Go("startup_update_check", func() { fyne.Do(func() { updates.Check(false) }) })
 	}
-	startPaintWatch(&windowShown, w, func() { view.Show(view.Screen()) })
+	startPaintWatch(ctx, native.IsVisible, w, func() { view.Show(view.Screen()) })
 	a.Run()
 	return diagnosticRuntime.EndSession("run_return")
 }

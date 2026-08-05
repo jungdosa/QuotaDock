@@ -130,8 +130,9 @@ func TestPaintWatchGivesUpLoudlyAfterEveryAttempt(t *testing.T) {
 }
 
 // A window in the tray is blank for a legitimate reason, so the watchdog must
-// not look at all - no capture, no repair, no log noise.
-func TestPaintWatchSkipsHiddenWindow(t *testing.T) {
+// not repair it - but it must still say that it looked and stood down. Silence
+// here is what made the first version indistinguishable from one that never ran.
+func TestPaintWatchSkipsHiddenWindowButSaysSo(t *testing.T) {
 	var events []paintEvent
 	captures, repaired := 0, 0
 	watch := &paintWatch{
@@ -142,8 +143,41 @@ func TestPaintWatchSkipsHiddenWindow(t *testing.T) {
 	if !watch.step(false) {
 		t.Fatal("watchdog did not finish on a hidden window")
 	}
-	if captures != 1 || repaired != 0 || len(events) != 0 {
-		t.Fatalf("captures=%d repaired=%d events=%+v, want 1/0/none", captures, repaired, events)
+	if captures != 1 || repaired != 0 {
+		t.Fatalf("captures=%d repaired=%d, want 1/0", captures, repaired)
+	}
+	if len(events) != 1 || events[0].name != "render.skip" || events[0].attrs["reason"] != "hidden" {
+		t.Fatalf("events=%+v, want one render.skip reason=hidden", events)
+	}
+}
+
+// Arming again after a finished round has to start over. A hidden start ends
+// the first round immediately, and the round that matters is the one armed when
+// the tray finally brings the window up.
+func TestPaintWatchResetAllowsANewRound(t *testing.T) {
+	var events []paintEvent
+	hidden := true
+	watch := &paintWatch{
+		capture: func() (image.Image, bool) {
+			if hidden {
+				return nil, false
+			}
+			return paintedImage(), true
+		},
+		logEvent: recordEvents(&events),
+	}
+	watch.step(false)
+	hidden = false
+	watch.step(false)
+	if len(events) != 1 {
+		t.Fatalf("events=%+v, want the finished round to stay finished without a reset", events)
+	}
+	watch.reset()
+	if !watch.step(false) {
+		t.Fatal("reset round did not run")
+	}
+	if len(events) != 2 || events[1].name != "render.paint" || events[1].attrs["attempt"] != 1 {
+		t.Fatalf("events=%+v, want render.skip then render.paint attempt=1", events)
 	}
 }
 
