@@ -44,6 +44,7 @@
   "settings.warning_threshold": "Avisar al",
   "settings.danger_threshold": "Umbral de peligro",
   "settings.auto_start": "Iniciar con Windows",
+  "settings.start_minimized": "Iniciar minimizado",
   "settings.refresh_interval": "Actualización",
   "settings.always_on_top": "Siempre encima",
   "settings.promote_tray": "Anclar a la barra de tareas",

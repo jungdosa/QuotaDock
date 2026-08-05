@@ -44,6 +44,7 @@
   "settings.warning_threshold": "Soglia avviso",
   "settings.danger_threshold": "Soglia pericolo",
   "settings.auto_start": "Avvia con Windows",
+  "settings.start_minimized": "Avvia ridotto a icona",
   "settings.refresh_interval": "Aggiornamento",
   "settings.always_on_top": "Sempre in primo piano",
   "settings.promote_tray": "Aggiungi alla barra delle applicazioni",

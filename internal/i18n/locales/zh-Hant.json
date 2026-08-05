@@ -44,6 +44,7 @@
   "settings.warning_threshold": "警告門檻值",
   "settings.danger_threshold": "危險門檻值",
   "settings.auto_start": "隨 Windows 啟動",
+  "settings.start_minimized": "啟動時最小化",
   "settings.refresh_interval": "重新整理間隔",
   "settings.always_on_top": "永遠置頂",
   "settings.promote_tray": "釘選到工作列",

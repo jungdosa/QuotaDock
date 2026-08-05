@@ -44,6 +44,7 @@
   "settings.warning_threshold": "Seuil d'alerte",
   "settings.danger_threshold": "Seuil de danger",
   "settings.auto_start": "Lancer au démarrage",
+  "settings.start_minimized": "Démarrer réduit",
   "settings.refresh_interval": "Actualisation",
   "settings.always_on_top": "Toujours devant",
   "settings.promote_tray": "Épingler à la barre des tâches",

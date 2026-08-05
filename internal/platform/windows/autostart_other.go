@@ -24,6 +24,7 @@ func NewAutoStartManager(appName, executable string, portable bool) *AutoStartMa
 func NewAutoStartManagerWithKey(appName, executable string, portable bool, key RunKey) *AutoStartManager {
 	return &AutoStartManager{AppName: appName, Executable: executable, Portable: portable, key: key}
 }
-func (*AutoStartManager) Enable() error          { return errUnsupportedPlatform }
-func (*AutoStartManager) Disable() error         { return nil }
-func (*AutoStartManager) Enabled() (bool, error) { return false, nil }
+func (*AutoStartManager) Enable(bool) error              { return errUnsupportedPlatform }
+func (*AutoStartManager) Disable() error                 { return nil }
+func (*AutoStartManager) Enabled() (bool, error)         { return false, nil }
+func (*AutoStartManager) StartsMinimized() (bool, error) { return false, nil }

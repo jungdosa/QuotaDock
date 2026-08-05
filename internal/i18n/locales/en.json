@@ -44,6 +44,7 @@
   "settings.warning_threshold": "Warning threshold",
   "settings.danger_threshold": "Danger threshold",
   "settings.auto_start": "Start with Windows",
+  "settings.start_minimized": "Start minimized",
   "settings.refresh_interval": "Refresh interval",
   "settings.always_on_top": "Always on top",
   "settings.promote_tray": "Pin to taskbar",

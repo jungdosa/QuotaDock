@@ -44,6 +44,7 @@
   "settings.warning_threshold": "Batas peringatan",
   "settings.danger_threshold": "Batas bahaya",
   "settings.auto_start": "Mulai otomatis",
+  "settings.start_minimized": "Mulai diperkecil",
   "settings.refresh_interval": "Interval",
   "settings.always_on_top": "Selalu di atas",
   "settings.promote_tray": "Sematkan ke taskbar",

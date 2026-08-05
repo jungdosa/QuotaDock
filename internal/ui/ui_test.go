@@ -182,11 +182,14 @@ func TestSettingsUsesRequiredTwoColumnRows(t *testing.T) {
 	}
 
 	behavior := v.behaviorSettings().(*fyne.Container)
-	if len(behavior.Objects) != 2 {
-		t.Fatalf("behavior rows=%d, want 2", len(behavior.Objects))
+	if len(behavior.Objects) != 3 {
+		t.Fatalf("behavior rows=%d, want 3", len(behavior.Objects))
 	}
 	assertPair("behavior row 1", behavior.Objects[0])
 	assertPair("behavior row 2", behavior.Objects[1])
+	// Row 3 carries the start-minimized toggle alone; its right column is an
+	// empty spacer, so the two-column geometry check does not apply to it.
+	assertPair("behavior row 3", behavior.Objects[2])
 
 	display := v.displaySettings().(*fyne.Container)
 	if len(display.Objects) != 1 {

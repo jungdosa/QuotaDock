@@ -84,6 +84,23 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		return fmt.Errorf("locate current executable: %w", err)
 	}
 	auto := platform.NewAutoStartManager("QuotaDock", executable, portable)
+	// Existing installs carry a Run entry that always said --hidden, written
+	// before the choice existed. Rewrite it once so the registry matches the
+	// setting instead of waiting for the user to toggle something.
+	reconcileAutoStart := func(cfg settings.Config) {
+		if portable || !cfg.AutoStart {
+			return
+		}
+		if enabled, err := auto.Enabled(); err != nil || !enabled {
+			return
+		}
+		if minimized, err := auto.StartsMinimized(); err == nil && minimized == cfg.StartMinimized {
+			return
+		}
+		if err := auto.Enable(cfg.StartMinimized); err != nil {
+			slog.Warn("automatic start entry was not reconciled", "error", err)
+		}
+	}
 	trayPromotionSupported := platform.SupportsTrayIconPromotion()
 	configDir, err := os.UserConfigDir()
 	if err != nil {
@@ -93,6 +110,8 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	cfg := loadSettings(settingsPath, !demo)
 	if demo {
 		cfg = ui.DemoConfig(cfg)
+	} else {
+		reconcileAutoStart(cfg)
 	}
 	catalog, err := i18n.Load()
 	if err != nil {
@@ -341,9 +360,11 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 			}
 		}
 		refreshWindowCorners()
-		if !demo && cfg.AutoStart != previous.AutoStart {
+		// The minimized choice is part of the registered command, so a change to
+		// either setting has to rewrite the Run entry.
+		if !demo && (cfg.AutoStart != previous.AutoStart || cfg.StartMinimized != previous.StartMinimized) {
 			if cfg.AutoStart {
-				if autoErr := auto.Enable(); autoErr != nil {
+				if autoErr := auto.Enable(cfg.StartMinimized); autoErr != nil {
 					slog.Warn("automatic start was not enabled", "error", autoErr)
 				}
 			} else if autoErr := auto.Disable(); autoErr != nil {

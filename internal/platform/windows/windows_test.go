@@ -59,10 +59,10 @@ func (m *memoryRunKey) Delete(name string) error { delete(m.values, name); retur
 func TestAutoStartEnableDisableAndDuplicatePrevention(t *testing.T) {
 	key := &memoryRunKey{}
 	manager := NewAutoStartManagerWithKey("QuotaDock", `C:\Apps\QuotaDock.exe`, false, key)
-	if err := manager.Enable(); err != nil {
+	if err := manager.Enable(false); err != nil {
 		t.Fatal(err)
 	}
-	if err := manager.Enable(); err != nil {
+	if err := manager.Enable(false); err != nil {
 		t.Fatal(err)
 	}
 	if key.sets != 1 {
@@ -75,9 +75,48 @@ func TestAutoStartEnableDisableAndDuplicatePrevention(t *testing.T) {
 		t.Fatal("run entry remains")
 	}
 }
+// --hidden belongs in the Run entry only when the user asked for it, and
+// flipping the choice has to rewrite the entry rather than leave a stale one.
+func TestAutoStartRecordsTheMinimizedChoice(t *testing.T) {
+	key := &memoryRunKey{}
+	manager := NewAutoStartManagerWithKey("QuotaDock", `C:\Apps\QuotaDock.exe`, false, key)
+
+	if err := manager.Enable(false); err != nil {
+		t.Fatal(err)
+	}
+	if got := key.values["QuotaDock"]; got != `"C:\Apps\QuotaDock.exe"` {
+		t.Fatalf("visible start command=%q", got)
+	}
+	if minimized, err := manager.StartsMinimized(); err != nil || minimized {
+		t.Fatalf("StartsMinimized=%v err=%v, want false", minimized, err)
+	}
+
+	if err := manager.Enable(true); err != nil {
+		t.Fatal(err)
+	}
+	if got := key.values["QuotaDock"]; got != `"C:\Apps\QuotaDock.exe" --hidden` {
+		t.Fatalf("minimized start command=%q", got)
+	}
+	if minimized, err := manager.StartsMinimized(); err != nil || !minimized {
+		t.Fatalf("StartsMinimized=%v err=%v, want true", minimized, err)
+	}
+}
+
+// Installs made before the choice existed carry the always-hidden command.
+// Enabled must still report them as registered, or the settings screen would
+// show autostart as off for everyone upgrading.
+func TestAutoStartRecognisesTheOlderHiddenEntry(t *testing.T) {
+	key := &memoryRunKey{values: map[string]string{"QuotaDock": `"C:\Apps\QuotaDock.exe" --hidden`}}
+	manager := NewAutoStartManagerWithKey("QuotaDock", `C:\Apps\QuotaDock.exe`, false, key)
+	enabled, err := manager.Enabled()
+	if err != nil || !enabled {
+		t.Fatalf("Enabled=%v err=%v, want true", enabled, err)
+	}
+}
+
 func TestPortableAutoStartIsRejected(t *testing.T) {
 	manager := NewAutoStartManagerWithKey("QuotaDock", `D:\QuotaDock.exe`, true, &memoryRunKey{})
-	if !errors.Is(manager.Enable(), ErrPortableAutoStart) {
+	if !errors.Is(manager.Enable(false), ErrPortableAutoStart) {
 		t.Fatal("portable autostart was accepted")
 	}
 }

@@ -1692,6 +1692,10 @@ func (v *View) behaviorSettings() fyne.CanvasObject {
 			v.halfToggleRow(i18n.KeyAlwaysOnTop, v.config.AlwaysOnTop, v.settingLabelWidth(), func(c *settings.Config, b bool) { c.AlwaysOnTop = b }),
 			promoteTrayIcon,
 		),
+		settingsPair(
+			v.halfToggleRow(i18n.KeyStartMinimized, v.config.StartMinimized, v.settingLabelWidth(), func(c *settings.Config, b bool) { c.StartMinimized = b }),
+			layout.NewSpacer(),
+		),
 	)
 }
 func (v *View) displaySettings() fyne.CanvasObject {

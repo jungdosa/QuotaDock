@@ -44,6 +44,7 @@
   "settings.warning_threshold": "警告阈值",
   "settings.danger_threshold": "危险阈值",
   "settings.auto_start": "随 Windows 启动",
+  "settings.start_minimized": "启动时最小化",
   "settings.refresh_interval": "刷新间隔",
   "settings.always_on_top": "始终置顶",
   "settings.promote_tray": "固定到任务栏",

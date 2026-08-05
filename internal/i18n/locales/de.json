@@ -44,6 +44,7 @@
   "settings.warning_threshold": "Warnen ab",
   "settings.danger_threshold": "Gefahr ab",
   "settings.auto_start": "Mit Windows starten",
+  "settings.start_minimized": "Minimiert starten",
   "settings.refresh_interval": "Aktualisierung",
   "settings.always_on_top": "Immer im Vordergrund",
   "settings.promote_tray": "An Taskleiste anheften",

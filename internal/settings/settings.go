@@ -90,7 +90,12 @@ type Config struct {
 	// the toggle is wired so the surface lights up the moment data exists.
 	ShowClaudeCredits bool `json:"showClaudeCredits"`
 	ShowCodexCredits  bool `json:"showCodexCredits"`
-	AutoStart        bool              `json:"autoStart"`
+	AutoStart bool `json:"autoStart"`
+	// StartMinimized controls whether a launch at Windows startup goes straight
+	// to the tray. It defaults to false: a widget the user asked to start with
+	// Windows should be on screen, and the old always-hidden behaviour left
+	// people wondering whether the app had started at all.
+	StartMinimized   bool              `json:"startMinimized"`
 	AlwaysOnTop      bool              `json:"alwaysOnTop"`
 	ShowInTaskbar    bool              `json:"showInTaskbar"`
 	PromoteTrayIcon  bool              `json:"promoteTrayIcon"`

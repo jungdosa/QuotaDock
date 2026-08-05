@@ -71,6 +71,7 @@ const (
 	KeyWarningThreshold          = "settings.warning_threshold"
 	KeyDangerThreshold           = "settings.danger_threshold"
 	KeyAutoStart                 = "settings.auto_start"
+	KeyStartMinimized            = "settings.start_minimized"
 	KeyRefreshInterval           = "settings.refresh_interval"
 	KeyAlwaysOnTop               = "settings.always_on_top"
 	KeyPromoteTray               = "settings.promote_tray"
@@ -315,6 +316,7 @@ var RequiredKeys = []string{
 	KeyWarningThreshold,
 	KeyDangerThreshold,
 	KeyAutoStart,
+	KeyStartMinimized,
 	KeyRefreshInterval,
 	KeyAlwaysOnTop,
 	KeyPromoteTray,
