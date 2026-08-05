@@ -1686,14 +1686,18 @@ func (v *View) behaviorSettings() fyne.CanvasObject {
 			v.settingRowSized(v.text(i18n.KeyRefreshInterval), refresh, v.settingLabelWidth(), halfSettingGap, 110),
 		),
 		settingsPair(
+			// Start-minimized sits directly under the startup toggle it belongs
+			// to: it only means anything when starting with Windows is on, and
+			// putting an unrelated row between them hid that relationship.
+			//
 			// The taskbar toggle was removed from the UI: ✕ already hides to
 			// the tray, so the entry only added noise. The stored setting and
 			// platform behaviour remain (default: visible in taskbar).
-			v.halfToggleRow(i18n.KeyAlwaysOnTop, v.config.AlwaysOnTop, v.settingLabelWidth(), func(c *settings.Config, b bool) { c.AlwaysOnTop = b }),
+			v.halfToggleRow(i18n.KeyStartMinimized, v.config.StartMinimized, v.settingLabelWidth(), func(c *settings.Config, b bool) { c.StartMinimized = b }),
 			promoteTrayIcon,
 		),
 		settingsPair(
-			v.halfToggleRow(i18n.KeyStartMinimized, v.config.StartMinimized, v.settingLabelWidth(), func(c *settings.Config, b bool) { c.StartMinimized = b }),
+			v.halfToggleRow(i18n.KeyAlwaysOnTop, v.config.AlwaysOnTop, v.settingLabelWidth(), func(c *settings.Config, b bool) { c.AlwaysOnTop = b }),
 			layout.NewSpacer(),
 		),
 	)
