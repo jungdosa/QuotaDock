@@ -29,12 +29,12 @@ func TestURLAllowlist(t *testing.T) {
 }
 
 func TestProviderRequestURLAllowlist(t *testing.T) {
-	for _, value := range []string{"https://api.anthropic.com/api/oauth/usage", "https://platform.claude.com/v1/oauth/token"} {
+	for _, value := range []string{"https://api.anthropic.com/api/oauth/usage", "https://platform.claude.com/v1/oauth/token", "https://grok.com/grok_api_v2.GrokBuildBilling/GetGrokCreditsConfig"} {
 		if !IsAllowedProviderRequestURL(value) {
 			t.Errorf("expected provider request URL to be allowed: %s", value)
 		}
 	}
-	for _, value := range []string{"http://api.anthropic.com/api/oauth/usage", "https://anthropic.com/api/oauth/usage", "https://api.anthropic.com.evil.invalid/", "https://user@platform.claude.com/"} {
+	for _, value := range []string{"http://api.anthropic.com/api/oauth/usage", "https://anthropic.com/api/oauth/usage", "https://api.anthropic.com.evil.invalid/", "https://user@platform.claude.com/", "https://api.grok.com/", "https://grok.com.evil.invalid/"} {
 		if IsAllowedProviderRequestURL(value) {
 			t.Errorf("expected provider request URL to be rejected: %s", value)
 		}

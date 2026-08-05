@@ -40,6 +40,7 @@ func MaskSecrets(value string) string {
 var officialDomains = []string{"anthropic.com", "claude.ai", "claude.com", "openai.com", "chatgpt.com", "google.com", "github.com"}
 var providerRequestHosts = map[string]struct{}{
 	"api.anthropic.com":   {},
+	"grok.com":            {},
 	"platform.claude.com": {},
 }
 // Exact-host matching, unlike officialDomains. github.com is required because a

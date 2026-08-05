@@ -21,6 +21,7 @@ const (
 	ProviderClaude      ProviderID = "claude"
 	ProviderCodex       ProviderID = "codex"
 	ProviderAntigravity ProviderID = "antigravity"
+	ProviderGrok        ProviderID = "grok"
 )
 
 type ConnectionStatus string
