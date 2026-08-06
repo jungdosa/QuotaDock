@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QuotaDock — see what's left of your Claude, Codex and Antigravity quota</title>
+<meta name="description" content="A Windows desktop widget showing how much Claude Code, OpenAI Codex and Google Antigravity quota you have left, and exactly when each resets. Free, open source, no telemetry.">
+<link rel="icon" href="icon-64.png">
+<meta property="og:title" content="QuotaDock">
+<meta property="og:description" content="See how much Claude, Codex and Antigravity quota you have left — and when it resets. A small Windows widget.">
+<meta property="og:image" content="https://jungdosa.github.io/QuotaDock/marketing/quotadock-normal-en.png">
+<meta property="og:type" content="website">
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --line: #30363d;
+    --text: #e6edf3; --dim: #9198a1; --accent: #d97757; --link: #6cb6ff;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #ffffff; --panel: #f6f8fa; --line: #d0d7de;
+      --text: #1f2328; --dim: #59636e; --accent: #bc4c00; --link: #0969da;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.65 -apple-system, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 80px; }
+  header { padding: 72px 0 40px; text-align: center; }
+  h1 { font-size: 2.6rem; margin: 0 0 12px; letter-spacing: -0.02em; }
+  .tag { color: var(--dim); font-size: 1.15rem; margin: 0 auto 28px; max-width: 30em; }
+  .shot { width: 100%; max-width: 539px; border-radius: 10px; border: 1px solid var(--line); }
+  a { color: var(--link); }
+  .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin: 32px 0 12px; }
+  .btn {
+    display: inline-block; padding: 11px 22px; border-radius: 7px;
+    background: var(--accent); color: #fff; text-decoration: none; font-weight: 600;
+  }
+  .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+  .note { color: var(--dim); font-size: 0.9rem; }
+  h2 { font-size: 1.45rem; margin: 56px 0 14px; letter-spacing: -0.01em; }
+  h3 { font-size: 1.05rem; margin: 28px 0 8px; }
+  table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 0.94rem; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; }
+  code {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+  }
+  pre {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 14px 16px; overflow-x: auto; font-size: 0.88rem;
+  }
+  pre code { background: none; border: 0; padding: 0; }
+  ul { padding-left: 1.2em; }
+  li { margin: 6px 0; }
+  .langs { text-align: center; color: var(--dim); font-size: 0.9rem; margin-top: 10px; }
+  footer { margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--line); color: var(--dim); font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>QuotaDock</h1>
+  <p class="tag">A small Windows widget that shows how much Claude, Codex and Antigravity
+  quota you have <strong>left</strong> — and exactly when each one resets.</p>
+  <img class="shot" src="marketing/quotadock-demo.gif"
+       alt="QuotaDock showing usage bars and reset countdowns for Claude, Codex and Antigravity">
+  <div class="cta">
+    <a class="btn" href="https://github.com/jungdosa/QuotaDock/releases">Download</a>
+    <a class="btn ghost" href="https://github.com/jungdosa/QuotaDock">Source on GitHub</a>
+  </div>
+  <p class="note">Windows 10 22H2+ / 11 · MIT · free · no account</p>
+</header>
+
+<h2>What it does</h2>
+
+<p>If you work with Claude Code, Codex CLI or Antigravity, you end up asking the same two
+questions all day: how much of the 5-hour session is left, and when does the weekly limit
+come back. QuotaDock answers both without you having to go and look.</p>
+
+<p>Each row draws remaining quota above a thin bar counting down to reset. Comparing the two
+tells you whether you are burning through the window faster than the clock is.</p>
+
+<table>
+  <tr><th>Provider</th><th>What it shows</th><th>How it connects</th></tr>
+  <tr>
+    <td><strong>Claude</strong></td>
+    <td>5-hour session · 7-day weekly · Fable weekly</td>
+    <td>Claude Code's existing OAuth credentials</td>
+  </tr>
+  <tr>
+    <td><strong>OpenAI Codex</strong></td>
+    <td>Session · weekly limits</td>
+    <td>Official Codex CLI app-server over stdio</td>
+  </tr>
+  <tr>
+    <td><strong>Google Antigravity</strong></td>
+    <td>Gemini and Claude/GPT group session · weekly</td>
+    <td>Its language server on <code>127.0.0.1</code></td>
+  </tr>
+</table>
+
+<p>Use one of them or all three. If a provider fails, the others keep going.</p>
+
+<h2>What it doesn't do</h2>
+
+<ul>
+  <li>No login screen, and nothing to paste. It uses sign-ins you already have.</li>
+  <li>No browser-cookie extraction, no browser automation, no web scraping.</li>
+  <li>No telemetry, no analytics, no crash reporting.</li>
+  <li>Reading usage never spends your quota or credits.</li>
+</ul>
+
+<p>The precise details of what it reads and where it connects are in
+<a href="https://github.com/jungdosa/QuotaDock/blob/main/SECURITY.md">SECURITY.md</a>,
+written to match the code rather than to sound reassuring.</p>
+
+<h2>Before you download</h2>
+
+<p>The binaries are not code-signed yet, so Windows will show a
+<em>"Windows protected your PC"</em> dialog the first time you run one. That means Windows
+hasn't seen the file before, not that it found something wrong.</p>
+
+<p>Every release ships <code>SHA256SUMS.txt</code>. In PowerShell:</p>
+
+<pre><code>Get-FileHash .\QuotaDock-&lt;version&gt;-win-x64-portable.exe -Algorithm SHA256</code></pre>
+
+<p>Compare that against the matching line in the release. You can also build from source —
+the release script is in <code>build/windows/</code>. If you would rather not run an
+installer, the portable executable is one file and deleting it is the whole uninstall.</p>
+
+<h2 id="code-signing-policy">Code signing policy</h2>
+
+<p>QuotaDock is maintained by one person,
+<a href="https://github.com/jungdosa">jungdosa</a>, who writes the code, reviews it and
+approves every release. Release artifacts are produced from the public source in this
+repository using the build script under <code>build/windows/</code>.</p>
+
+<h3>Roles</h3>
+<table>
+  <tr><th>Role</th><th>Held by</th></tr>
+  <tr><td>Author</td><td>jungdosa</td></tr>
+  <tr><td>Reviewer</td><td>jungdosa</td></tr>
+  <tr><td>Release approver</td><td>jungdosa</td></tr>
+</table>
+
+<h3>Release process</h3>
+<p>Releases are cut by hand from the public source, not by an unattended pipeline. Each one
+is built with the script in <code>build/windows/</code>, checksummed, and published with its
+<code>SHA256SUMS.txt</code>. Signing, once in place, will require a deliberate approval step
+for every release rather than running automatically.</p>
+
+<h3>Privacy</h3>
+<p>QuotaDock collects nothing. It has no telemetry, no analytics and no crash reporting, and
+it does not transmit any personal data. Diagnostic logs stay on your machine with secrets and
+email addresses redacted before they are written. Update checks reach GitHub without
+credentials attached.</p>
+
+<h3>Verification</h3>
+<p>Until code signing is in place, each release carries SHA-256 checksums for its binaries,
+and the full source and build script are public. Verified integrity is checked twice during
+in-app updates: after the download and again immediately before the installer runs.</p>
+
+<h2>Languages</h2>
+<p>Twelve, following your Windows display language or picked in Settings: English, Korean,
+German, French, Italian, Indonesian, Portuguese (Brazil), Spanish (Spain and Latin America),
+Japanese, Simplified Chinese and Traditional Chinese.</p>
+
+<p class="langs">
+  <a href="https://github.com/jungdosa/QuotaDock/blob/main/README.md">English</a> ·
+  <a href="https://github.com/jungdosa/QuotaDock/blob/main/README.ko-KR.md">한국어</a> ·
+  <a href="https://github.com/jungdosa/QuotaDock/blob/main/README.ja-JP.md">日本語</a> ·
+  <a href="https://github.com/jungdosa/QuotaDock/blob/main/README.zh-CN.md">简体中文</a> ·
+  <a href="https://github.com/jungdosa/QuotaDock/blob/main/README.zh-TW.md">繁體中文</a>
+</p>
+
+<footer>
+  <p>MIT licensed. Provider logos are trademarks of Anthropic, OpenAI and Google, used only
+  to identify the services whose usage QuotaDock displays.</p>
+  <p>
+    <a href="https://github.com/jungdosa/QuotaDock">Source</a> ·
+    <a href="https://github.com/jungdosa/QuotaDock/releases">Releases</a> ·
+    <a href="https://github.com/jungdosa/QuotaDock/blob/main/CHANGELOG.md">Changelog</a> ·
+    <a href="https://github.com/jungdosa/QuotaDock/issues">Issues</a> ·
+    <a href="https://github.com/jungdosa/QuotaDock/blob/main/SECURITY.md">Security</a>
+  </p>
+</footer>
+
+</div>
+</body>
+</html>
