@@ -20,6 +20,10 @@ var (
 	jsonSecret   = regexp.MustCompile(`(?i)("(?:access[_-]?token|refresh[_-]?token|csrf(?:[_-]?token)?|cookie|password|api[_-]?key)"\s*:\s*")[^"]*(")`)
 	pairSecret   = regexp.MustCompile(`(?i)\b(access[_-]?token|refresh[_-]?token|csrf(?:[_-]?token)?|cookie|password|api[_-]?key|token)\s*=\s*[^\s,;&]+`)
 	bearer       = regexp.MustCompile(`(?i)\bbearer\s+[a-z0-9._~+/=-]+`)
+	// Go module paths carry an "@version" suffix that the email pattern happily
+	// swallows: "fyne.io/fyne/v2@v2.8.0" reads as a local part, an @, and a domain.
+	// Stack traces are full of those, and redacting them leaves a crash log unreadable.
+	moduleVersion = regexp.MustCompile(`^v[0-9]+([.][0-9]+)*(-[0-9A-Za-z.-]+)?([+][0-9A-Za-z.-]+)?$`)
 )
 
 func MaskSecrets(value string) string {
@@ -32,7 +36,23 @@ func MaskSecrets(value string) string {
 		return "[REDACTED]"
 	})
 	value = bearer.ReplaceAllString(value, "Bearer [REDACTED]")
-	return emailPattern.ReplaceAllString(value, "[REDACTED_EMAIL]")
+	return emailPattern.ReplaceAllStringFunc(value, func(match string) string {
+		if isModulePath(match) {
+			return match
+		}
+		return "[REDACTED_EMAIL]"
+	})
+}
+
+// isModulePath reports whether an email-shaped match is really a Go module path
+// with a version suffix. Requiring both a slash before the @ and a semver-looking
+// version after it keeps real addresses redacted: no reachable domain is "v2.8.0".
+func isModulePath(match string) bool {
+	at := strings.LastIndex(match, "@")
+	if at < 0 {
+		return false
+	}
+	return strings.Contains(match[:at], "/") && moduleVersion.MatchString(match[at+1:])
 }
 
 // External URL matching is boundary-aware suffix matching, so allowing
@@ -43,6 +63,7 @@ var providerRequestHosts = map[string]struct{}{
 	"grok.com":            {},
 	"platform.claude.com": {},
 }
+
 // Exact-host matching, unlike officialDomains. github.com is required because a
 // release asset's browser_download_url is served from github.com itself; the
 // githubusercontent hosts are the CDN targets it redirects to.

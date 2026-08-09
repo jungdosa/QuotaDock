@@ -74,3 +74,44 @@ func TestPaletteValidation(t *testing.T) {
 		t.Fatal("palette allowlist mismatch")
 	}
 }
+
+func TestModulePathsSurviveMasking(t *testing.T) {
+	// A real crash stack. The email pattern used to swallow "fyne.io/fyne/v2@v2.8.0"
+	// and leave "[REDACTED_EMAIL]/internal/driver/glfw/...", which made panics
+	// impossible to read.
+	stack := `fyne.io/fyne/v2/internal/driver/glfw.getMonitorScale
+	fyne.io/fyne/v2@v2.8.0/internal/driver/glfw/window_desktop.go:297
+github.com/go-gl/glfw/v3.4/glfw.PollEvents
+	github.com/go-gl/glfw/v3.4@v3.4.0-20240506104042-037f3cc74f2a/v3.4/glfw/window.go:1010
+github.com/jungdosa/QuotaDock/cmd/quotadock/main.go:609`
+
+	masked := MaskSecrets(stack)
+	for _, keep := range []string{
+		"fyne.io/fyne/v2@v2.8.0",
+		"github.com/go-gl/glfw/v3.4@v3.4.0-20240506104042-037f3cc74f2a",
+		"window_desktop.go:297",
+	} {
+		if !strings.Contains(masked, keep) {
+			t.Errorf("module path %q was redacted out of the stack: %s", keep, masked)
+		}
+	}
+	if strings.Contains(masked, "[REDACTED_EMAIL]") {
+		t.Errorf("stack trace should contain no addresses to redact: %s", masked)
+	}
+}
+
+func TestEmailsAreStillMasked(t *testing.T) {
+	// The module-path exemption must not become a way to smuggle an address past
+	// the redactor, so check the shapes that sit closest to the exemption.
+	for _, address := range []string{
+		"user@example.invalid",
+		"first.last+tag@sub.example.invalid",
+		"someone@v2.example.invalid",
+		"a/b@example.invalid",
+	} {
+		masked := MaskSecrets("contact " + address + " for details")
+		if strings.Contains(masked, "@example.invalid") {
+			t.Errorf("address %q survived masking: %s", address, masked)
+		}
+	}
+}
