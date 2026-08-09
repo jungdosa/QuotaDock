@@ -7,6 +7,20 @@ plus checksums for its binaries.
 Versions follow [Semantic Versioning](https://semver.org/). The project reaches 1.0.0 once
 Windows feature verification is finished.
 
+## Unreleased
+
+### Fixed
+
+- Switching a monitor off no longer takes the app down with it. The panic was in
+  Fyne: a display that has just been freed still shows up in the monitor list, so
+  reading its video mode returns nil and the dereference happens inside the event
+  loop, where the app cannot catch it. Four crashes in three days here. Pinned to a
+  Fyne fork carrying the missing nil checks until the fix is upstream.
+- Crash logs no longer mangle Go module paths. The redactor treated
+  "fyne.io/fyne/v2@v2.8.0" as an email address, so every stack frame came out as
+  "[REDACTED_EMAIL]/internal/..." and traces were unreadable. Real addresses are
+  still redacted.
+
 ## [0.7.32] — 2026-08-05
 
 ### Changed

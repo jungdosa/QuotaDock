@@ -32,6 +32,12 @@ cd QuotaDock
 go build ./cmd/quotadock
 ```
 
+The `replace` directive in `go.mod` points Fyne at a fork. Upstream v2.8.0
+dereferences a monitor that GLFW has already freed when you switch a display
+off, which crashes the app from inside the event loop where nothing can catch
+it. The fork adds the missing nil checks and changes nothing else; it goes away
+once the fix is upstream. `go build` picks it up on its own.
+
 Before sending a change:
 
 ```sh
