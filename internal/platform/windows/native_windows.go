@@ -17,10 +17,16 @@ const (
 	wsCaption                      = 0x00C00000
 	wsExAppWindow                  = 0x00040000
 	wsExToolWindow                 = 0x00000080
+	wsExTopmost                    = 0x00000008
+	wsExTransparent                = 0x00000020
+	wsExNoActivate                 = 0x08000000
 	swpNoSize                      = 0x0001
 	swpNoMove                      = 0x0002
 	swpNoZOrder                    = 0x0004
+	swpNoActivate                  = 0x0010
 	swpFrameChanged                = 0x0020
+	gwHwndNext                     = 2
+	dwmwaCloaked                   = 14
 	swMinimize                     = 6
 	monitorDefaultToNearest        = 2
 	defaultWindowDPI               = 96
@@ -43,6 +49,10 @@ var (
 	isIconic              = user32.NewProc("IsIconic")
 	getWindowRect         = user32.NewProc("GetWindowRect")
 	getForegroundWindow   = user32.NewProc("GetForegroundWindow")
+	getTopWindow          = user32.NewProc("GetTopWindow")
+	getNextWindow         = user32.NewProc("GetWindow")
+	getClassNameW         = user32.NewProc("GetClassNameW")
+	monitorFromWindow     = user32.NewProc("MonitorFromWindow")
 	getCursorPos          = user32.NewProc("GetCursorPos")
 	getDPIForWindow       = user32.NewProc("GetDpiForWindow")
 	enumDisplayMonitors   = user32.NewProc("EnumDisplayMonitors")
@@ -50,6 +60,7 @@ var (
 	createRoundRectRgn    = gdi32.NewProc("CreateRoundRectRgn")
 	deleteObject          = gdi32.NewProc("DeleteObject")
 	dwmSetWindowAttribute = dwmapi.NewProc("DwmSetWindowAttribute")
+	dwmGetWindowAttribute = dwmapi.NewProc("DwmGetWindowAttribute")
 	getCurrentProcess     = kernel32.NewProc("GetCurrentProcess")
 	setWorkingSetSize     = kernel32.NewProc("SetProcessWorkingSetSize")
 	emptyWorkingSet       = psapi.NewProc("EmptyWorkingSet")
@@ -281,6 +292,137 @@ func (c *WindowController) SetAlwaysOnTop(enabled bool) error {
 	}
 	return nil
 }
+
+// FullscreenCover walks the z-order for the frontmost normal window that
+// touches this window's monitor and reports its handle when it is a
+// borderless surface covering the whole monitor — a fullscreen video or
+// game. Foreground state is deliberately ignored: a paused fullscreen video
+// keeps covering the screen without holding the foreground. Returns 0 when
+// the front window on the monitor is an ordinary one.
+func (c *WindowController) FullscreenCover() (uintptr, error) {
+	if err := c.bound(); err != nil {
+		return 0, err
+	}
+	monitor, _, _ := monitorFromWindow.Call(c.HWND, monitorDefaultToNearest)
+	if monitor == 0 {
+		return 0, fmt.Errorf("window monitor is unavailable")
+	}
+	var info monitorInfo
+	info.Size = uint32(unsafe.Sizeof(info))
+	if ok, _, _ := getMonitorInfo.Call(monitor, uintptr(unsafe.Pointer(&info))); ok == 0 {
+		return 0, fmt.Errorf("monitor info is unavailable")
+	}
+	handle, _, _ := getTopWindow.Call(0)
+	for steps := 0; handle != 0 && steps < 4096; steps++ {
+		hwnd := handle
+		handle, _, _ = getNextWindow.Call(hwnd, gwHwndNext)
+		if hwnd == c.HWND {
+			continue
+		}
+		if visible, _, _ := isWindowVisible.Call(hwnd); visible == 0 {
+			continue
+		}
+		if minimized, _, _ := isIconic.Call(hwnd); minimized != 0 {
+			continue
+		}
+		exStyle, _, _ := getWindowLongPtr.Call(hwnd, signedIndex(gwlExStyle))
+		// Skip the topmost band (QuotaDock's own layer plus taskbars and
+		// overlays) and non-interactive surfaces such as input hosts and
+		// click-through overlays — none of them are the watched content.
+		if exStyle&(wsExTopmost|wsExTransparent|wsExNoActivate) != 0 {
+			continue
+		}
+		var cloaked uint32
+		dwmGetWindowAttribute.Call(hwnd, dwmwaCloaked, uintptr(unsafe.Pointer(&cloaked)), unsafe.Sizeof(cloaked))
+		if cloaked != 0 {
+			continue
+		}
+		var rect winRect
+		if ok, _, _ := getWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&rect))); ok == 0 {
+			continue
+		}
+		if !rectsIntersect(rect, info.Monitor) {
+			continue
+		}
+		if desktopWindowClass(windowClassName(hwnd)) {
+			continue
+		}
+		// First normal window on the monitor decides: either it is the
+		// fullscreen surface, or an ordinary window sits in front of one and
+		// the widget does not need to yield.
+		style, _, _ := getWindowLongPtr.Call(hwnd, signedIndex(gwlStyle))
+		if fullscreenSurface(style, rect, info.Monitor) {
+			return hwnd, nil
+		}
+		return 0, nil
+	}
+	return 0, nil
+}
+
+// LowerBelow drops the window out of the topmost band so it sits directly
+// beneath the given window without taking focus. RaiseTopmost undoes it.
+func (c *WindowController) LowerBelow(after uintptr) error {
+	if err := c.bound(); err != nil {
+		return err
+	}
+	r, _, e := setWindowPos.Call(c.HWND, after, 0, 0, 0, 0, swpNoMove|swpNoSize|swpNoActivate)
+	if r == 0 {
+		return e
+	}
+	return nil
+}
+
+// RaiseTopmost re-enters the topmost band without taking focus.
+func (c *WindowController) RaiseTopmost() error {
+	if err := c.bound(); err != nil {
+		return err
+	}
+	topmost := ^uintptr(0)
+	if unsafe.Sizeof(uintptr(0)) == 4 {
+		topmost = uintptr(uint32(topmost))
+	}
+	r, _, e := setWindowPos.Call(c.HWND, topmost, 0, 0, 0, 0, swpNoMove|swpNoSize|swpNoActivate)
+	if r == 0 {
+		return e
+	}
+	return nil
+}
+
+// fullscreenSurface reports whether a window with the given style and rect is
+// a fullscreen surface on the monitor: borderless and covering it entirely.
+// Maximized ordinary windows keep their caption style and stay excluded.
+func fullscreenSurface(style uintptr, window, monitor winRect) bool {
+	if style&wsCaption == wsCaption {
+		return false
+	}
+	return window.Left <= monitor.Left && window.Top <= monitor.Top &&
+		window.Right >= monitor.Right && window.Bottom >= monitor.Bottom
+}
+
+func rectsIntersect(a, b winRect) bool {
+	return a.Left < b.Right && a.Right > b.Left && a.Top < b.Bottom && a.Bottom > b.Top
+}
+
+// desktopWindowClass reports window classes that sit behind every
+// application window yet span whole monitors; deciding on them would make an
+// empty desktop look like a fullscreen surface.
+func desktopWindowClass(name string) bool {
+	switch name {
+	case "Progman", "WorkerW", "Windows.UI.Core.CoreWindow":
+		return true
+	}
+	return false
+}
+
+func windowClassName(hwnd uintptr) string {
+	var buffer [64]uint16
+	length, _, _ := getClassNameW.Call(hwnd, uintptr(unsafe.Pointer(&buffer[0])), uintptr(len(buffer)))
+	if length == 0 {
+		return ""
+	}
+	return syscall.UTF16ToString(buffer[:length])
+}
+
 func (c *WindowController) SetTaskbarVisible(visible bool) error {
 	if err := c.bound(); err != nil {
 		return err

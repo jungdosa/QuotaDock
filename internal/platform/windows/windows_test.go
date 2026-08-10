@@ -155,3 +155,48 @@ func TestWindowCloseHidesAndTrayExitQuits(t *testing.T) {
 		t.Fatalf("exit quit=%d exiting=%v", quit, lifecycle.Exiting())
 	}
 }
+
+func TestFullscreenSurfaceRequiresBorderlessFullCover(t *testing.T) {
+	monitor := winRect{Left: 0, Top: 0, Right: 3840, Bottom: 2160}
+	const caption = 0x00C00000
+	tests := []struct {
+		name   string
+		style  uintptr
+		window winRect
+		want   bool
+	}{
+		{"fullscreen chrome video", 0x96000000, winRect{Left: 0, Top: 0, Right: 3840, Bottom: 2160}, true},
+		{"borderless overshooting the monitor", 0, winRect{Left: -8, Top: -8, Right: 3848, Bottom: 2168}, true},
+		{"maximized window keeps its caption", caption, winRect{Left: -8, Top: -8, Right: 3848, Bottom: 2168}, false},
+		{"borderless but smaller than the monitor", 0, winRect{Left: 0, Top: 0, Right: 1920, Bottom: 2160}, false},
+		{"borderless on another monitor", 0, winRect{Left: 3840, Top: 0, Right: 5760, Bottom: 1080}, false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := fullscreenSurface(test.style, test.window, monitor); got != test.want {
+				t.Fatalf("fullscreenSurface(%#x, %+v) = %t, want %t", test.style, test.window, got, test.want)
+			}
+		})
+	}
+}
+
+func TestRectsIntersectNeedsPositiveArea(t *testing.T) {
+	monitor := winRect{Left: 1920, Top: 2160, Right: 3840, Bottom: 3240}
+	if !rectsIntersect(winRect{Left: 3220, Top: 2160, Right: 3840, Bottom: 2872}, monitor) {
+		t.Fatal("overlapping rect was not detected")
+	}
+	if rectsIntersect(winRect{Left: 0, Top: 0, Right: 1920, Bottom: 2160}, monitor) {
+		t.Fatal("edge-touching rect must not count as intersecting")
+	}
+}
+
+func TestDesktopWindowClassesAreExcluded(t *testing.T) {
+	for _, name := range []string{"Progman", "WorkerW", "Windows.UI.Core.CoreWindow"} {
+		if !desktopWindowClass(name) {
+			t.Fatalf("%s must be excluded from fullscreen detection", name)
+		}
+	}
+	if desktopWindowClass("Chrome_WidgetWin_1") {
+		t.Fatal("application classes must stay eligible")
+	}
+}

@@ -41,6 +41,7 @@ var appEvents = []string{
 	"session.reconnect",
 	"display.change",
 	"window.fit",
+	"window.yield",
 	"render.paint",
 	"render.blank",
 	"render.skip",

@@ -146,6 +146,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	markActivity := func() { idleTrimmer.Activity(time.Now()) }
 	var refreshing atomic.Bool
 	var rendering atomic.Bool
+	var alwaysOnTop atomic.Bool
 	var scheduler provider.Scheduler
 	var view *ui.View
 	var tray *platform.Tray
@@ -350,6 +351,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		controller.SetConfig(cfg)
 		a.Settings().SetTheme(ui.NewBrandTheme(cfg.Theme))
 		_ = native.SetAlwaysOnTop(cfg.AlwaysOnTop)
+		alwaysOnTop.Store(cfg.AlwaysOnTop)
 		_ = native.SetTaskbarVisible(cfg.ShowInTaskbar)
 		if !demo && trayPromotionSupported && tray != nil {
 			if !cfg.PromoteTrayIcon {
@@ -590,6 +592,48 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 			}
 		}
 	})
+	alwaysOnTop.Store(cfg.AlwaysOnTop)
+	if !demo {
+		// Always-on-top yields to fullscreen surfaces: while a borderless
+		// window covers the widget's monitor (a video or a game — foreground
+		// or not), drop directly beneath it, and rejoin the topmost band once
+		// it is gone. Z-order only; hiding the window is off-limits since the
+		// blank-window bug taught Fyne must not be bypassed with ShowWindow.
+		diagnostics.Go("fullscreen_yield", func() {
+			ticker := time.NewTicker(2 * time.Second)
+			defer ticker.Stop()
+			var yieldedTo uintptr
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					if !alwaysOnTop.Load() {
+						yieldedTo = 0
+						continue
+					}
+					cover, coverErr := native.FullscreenCover()
+					if coverErr != nil {
+						continue
+					}
+					if cover != 0 {
+						if cover == yieldedTo {
+							continue
+						}
+						if lowerErr := native.LowerBelow(cover); lowerErr == nil {
+							yieldedTo = cover
+							slog.Info("window.yield", "reason", "fullscreen_cover")
+						}
+					} else if yieldedTo != 0 {
+						if raiseErr := native.RaiseTopmost(); raiseErr == nil {
+							yieldedTo = 0
+							slog.Info("window.yield", "reason", "cover_gone")
+						}
+					}
+				}
+			}
+		})
+	}
 	_ = native.SetAlwaysOnTop(cfg.AlwaysOnTop)
 	_ = native.SetTaskbarVisible(cfg.ShowInTaskbar)
 	if cfg.WindowPositioned {
