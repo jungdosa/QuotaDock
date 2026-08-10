@@ -11,6 +11,7 @@
   "usage.credits": "积分 %s",
   "usage.credits_spend": "积分 %s / %s",
   "usage.credits_unlimited": "积分不限量",
+  "lane.reset_credits": "重置次数 %d",
   "error.cli_not_installed": "尚未安装 CLI。",
   "error.not_logged_in": "请先登录以继续。",
   "error.cli_outdated": "请更新 CLI 以继续。",

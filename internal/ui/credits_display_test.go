@@ -35,6 +35,16 @@ func TestCreditsTextFormatsSpendBalanceAndUnlimited(t *testing.T) {
 			credits: &model.Credits{Unlimited: true, Spend: &model.CreditSpend{Used: 47.61, Limit: 100, Currency: "USD"}},
 			want:    "Unlimited credits",
 		},
+		{
+			name:    "reset credits appended",
+			credits: &model.Credits{Balance: 2.39, ResetCredits: 3},
+			want:    "Credits 2.39 · Reset credits: 3",
+		},
+		{
+			name:    "zero reset credits hidden",
+			credits: &model.Credits{Balance: 2.39, ResetCredits: 0},
+			want:    "Credits 2.39",
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -48,5 +58,20 @@ func TestCreditsTextFormatsSpendBalanceAndUnlimited(t *testing.T) {
 	eur := &model.Credits{Spend: &model.CreditSpend{Used: 47.61, Limit: 100, Currency: "EUR"}}
 	if got := view.creditsText(eur); got != "Guthaben 47,61 EUR / 100 EUR" {
 		t.Fatalf("non-USD creditsText() = %q", got)
+	}
+}
+
+func TestCodexResetCreditsFollowExistingCreditsToggle(t *testing.T) {
+	config := settings.Default()
+	config.ShowCodexCredits = true
+	view := &View{config: config}
+	lane := LaneState{Provider: model.ProviderCodex, Credits: &model.Credits{ResetCredits: 3}}
+	if !view.laneCreditsVisible(lane) {
+		t.Fatal("Codex reset credits should be visible with ShowCodexCredits enabled")
+	}
+
+	view.config.ShowCodexCredits = false
+	if view.laneCreditsVisible(lane) {
+		t.Fatal("Codex reset credits should be hidden with ShowCodexCredits disabled")
 	}
 }

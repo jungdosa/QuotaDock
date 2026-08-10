@@ -96,6 +96,14 @@ type Credits struct {
 	Unlimited bool
 	// Spend is populated only when a provider reports a paid extra-usage meter.
 	Spend *CreditSpend
+	// ResetCredits is the number of rate-limit reset passes the account holds.
+	// Zero means none, which is also what an account without the feature
+	// reports, so the two are indistinguishable and both hide the surface.
+	ResetCredits int
+	// HasCredits mirrors the server's own flag rather than being derived from
+	// Balance: a zero balance with the feature enabled is not the same thing as
+	// the feature being absent.
+	HasCredits bool
 }
 
 type CreditSpend struct {

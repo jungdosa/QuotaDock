@@ -11,6 +11,7 @@
   "usage.credits": "クレジット %s",
   "usage.credits_spend": "クレジット %s / %s",
   "usage.credits_unlimited": "クレジット無制限",
+  "lane.reset_credits": "リセット権 %d",
   "error.cli_not_installed": "CLI がインストールされていません。",
   "error.not_logged_in": "続行するにはログインしてください。",
   "error.cli_outdated": "CLI を更新して続行してください。",

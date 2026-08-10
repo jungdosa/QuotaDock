@@ -11,6 +11,7 @@
   "usage.credits": "Kredit %s",
   "usage.credits_spend": "Kredit %s / %s",
   "usage.credits_unlimited": "Kredit tanpa batas",
+  "lane.reset_credits": "Kredit reset: %d",
   "error.cli_not_installed": "Codex CLI belum terpasang.",
   "error.not_logged_in": "Perlu masuk",
   "error.cli_outdated": "Perbarui CLI untuk melanjutkan.",

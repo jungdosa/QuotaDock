@@ -328,8 +328,13 @@ type rateWindow struct {
 }
 
 type creditState struct {
-	Balance   json.RawMessage `json:"balance"`
-	Unlimited *bool           `json:"unlimited"`
+	Balance    json.RawMessage `json:"balance"`
+	Unlimited  *bool           `json:"unlimited"`
+	HasCredits *bool           `json:"hasCredits"`
+}
+
+type resetCreditState struct {
+	AvailableCount int `json:"availableCount"`
 }
 
 type rateSnapshot struct {
@@ -364,9 +369,10 @@ func (b *rateBucket) UnmarshalJSON(raw []byte) error {
 }
 
 type rateEnvelope struct {
-	RateLimits          rateSnapshot           `json:"rateLimits"`
-	RateLimitsByLimitID map[string]*rateBucket `json:"rateLimitsByLimitId"`
-	Credits             *creditState           `json:"credits"`
+	RateLimitResetCredits resetCreditState       `json:"rateLimitResetCredits"`
+	RateLimits            rateSnapshot           `json:"rateLimits"`
+	RateLimitsByLimitID   map[string]*rateBucket `json:"rateLimitsByLimitId"`
+	Credits               *creditState           `json:"credits"`
 }
 
 func (p *Provider) ApplyRateLimitsUpdated(raw json.RawMessage) error {
@@ -461,6 +467,9 @@ func mergeCredits(current, update *creditState) *creditState {
 	if update.Unlimited != nil {
 		copy.Unlimited = update.Unlimited
 	}
+	if update.HasCredits != nil {
+		copy.HasCredits = update.HasCredits
+	}
 	return &copy
 }
 
@@ -550,13 +559,22 @@ func snapshotFrom(plan model.Plan, envelope rateEnvelope, fetchedAt time.Time) m
 			}
 		}
 	}
-	if credits != nil {
-		value := &model.Credits{}
-		if balance, ok := parseBalance(credits.Balance); ok {
-			value.Balance = balance
-		}
-		if credits.Unlimited != nil {
-			value.Unlimited = *credits.Unlimited
+	resetCredits := envelope.RateLimitResetCredits.AvailableCount
+	if resetCredits < 0 {
+		resetCredits = 0
+	}
+	if credits != nil || resetCredits > 0 {
+		value := &model.Credits{ResetCredits: resetCredits}
+		if credits != nil {
+			if balance, ok := parseBalance(credits.Balance); ok {
+				value.Balance = balance
+			}
+			if credits.Unlimited != nil {
+				value.Unlimited = *credits.Unlimited
+			}
+			if credits.HasCredits != nil {
+				value.HasCredits = *credits.HasCredits
+			}
 		}
 		snapshot.Credits = value
 	}

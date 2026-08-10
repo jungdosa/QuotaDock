@@ -136,6 +136,51 @@ func TestCodexCreditsRemainBalanceAndUnlimitedOnly(t *testing.T) {
 	}
 }
 
+func TestCodexResetCreditsAndHasCredits(t *testing.T) {
+	tests := []struct {
+		name             string
+		response         string
+		wantResetCredits int
+		wantHasCredits   bool
+	}{
+		{
+			name:             "observed fields",
+			response:         `{"rateLimitResetCredits":{"availableCount":3,"credits":[]},"rateLimits":{"credits":{"balance":"0","hasCredits":true,"unlimited":false}}}`,
+			wantResetCredits: 3,
+			wantHasCredits:   true,
+		},
+		{
+			name:     "fields missing from older response",
+			response: `{"rateLimits":{"credits":{"balance":"0","unlimited":false}}}`,
+		},
+		{
+			name:     "fields null",
+			response: `{"rateLimitResetCredits":null,"rateLimits":{"credits":{"balance":"0","hasCredits":null,"unlimited":false}}}`,
+		},
+		{
+			name:           "negative count clamps to zero",
+			response:       `{"rateLimitResetCredits":{"availableCount":-2,"credits":[]},"rateLimits":{"credits":{"balance":"0","hasCredits":true,"unlimited":false}}}`,
+			wantHasCredits: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			transport := workingTransport(t)
+			transport.responses["account/rateLimits/read"] = json.RawMessage(test.response)
+			snapshot, err := New(transport, "0.100.0").Refresh(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if snapshot.Credits == nil {
+				t.Fatal("Codex credits were not populated")
+			}
+			if snapshot.Credits.ResetCredits != test.wantResetCredits || snapshot.Credits.HasCredits != test.wantHasCredits {
+				t.Fatalf("Codex credits = %+v, want reset=%d hasCredits=%t", snapshot.Credits, test.wantResetCredits, test.wantHasCredits)
+			}
+		})
+	}
+}
+
 func TestSparseRateLimitEventMerge(t *testing.T) {
 	provider := New(workingTransport(t), "0.100.0")
 	before, err := provider.Refresh(context.Background())

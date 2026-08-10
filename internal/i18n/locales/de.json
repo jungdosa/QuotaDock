@@ -11,6 +11,7 @@
   "usage.credits": "Guthaben %s",
   "usage.credits_spend": "Guthaben %s / %s",
   "usage.credits_unlimited": "Unbegrenztes Guthaben",
+  "lane.reset_credits": "Reset-Guthaben: %d",
   "error.cli_not_installed": "Codex CLI ist nicht installiert.",
   "error.not_logged_in": "Anmeldung nötig",
   "error.cli_outdated": "Aktualisieren Sie das CLI, um fortzufahren.",

@@ -326,15 +326,20 @@ func (v *View) creditsText(credits *model.Credits) string {
 	if credits == nil {
 		return ""
 	}
+	var text string
 	if credits.Unlimited {
-		return v.text(i18n.KeyCreditsUnlimited)
-	}
-	if credits.Spend != nil {
+		text = v.text(i18n.KeyCreditsUnlimited)
+	} else if credits.Spend != nil {
 		used := v.creditAmountText(credits.Spend.Used, credits.Spend.Currency)
 		limit := v.creditAmountText(credits.Spend.Limit, credits.Spend.Currency)
-		return fmt.Sprintf(v.text(i18n.KeyCreditsSpend), used, limit)
+		text = fmt.Sprintf(v.text(i18n.KeyCreditsSpend), used, limit)
+	} else {
+		text = fmt.Sprintf(v.text(i18n.KeyCredits), i18n.FormatDecimal(v.resolvedLanguage(), credits.Balance))
 	}
-	return fmt.Sprintf(v.text(i18n.KeyCredits), i18n.FormatDecimal(v.resolvedLanguage(), credits.Balance))
+	if credits.ResetCredits > 0 {
+		text += " · " + fmt.Sprintf(v.text(i18n.KeyResetCredits), credits.ResetCredits)
+	}
+	return text
 }
 
 func (v *View) creditAmountText(amount float64, currency string) string {

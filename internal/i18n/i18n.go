@@ -39,6 +39,7 @@ const (
 	KeyCredits                   = "usage.credits"
 	KeyCreditsSpend              = "usage.credits_spend"
 	KeyCreditsUnlimited          = "usage.credits_unlimited"
+	KeyResetCredits              = "lane.reset_credits"
 	KeyCreditsToggle             = "settings.credits"
 	KeyErrorCLINotInstalled      = "error.cli_not_installed"
 	KeyErrorNotLoggedIn          = "error.not_logged_in"
@@ -285,6 +286,7 @@ var RequiredKeys = []string{
 	KeyUntilReset,
 	KeyResetsAt,
 	KeyCreditsSpend,
+	KeyResetCredits,
 	KeyErrorCLINotInstalled,
 	KeyErrorNotLoggedIn,
 	KeyErrorCLIOutdated,

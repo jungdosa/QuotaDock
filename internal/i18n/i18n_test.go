@@ -60,7 +60,7 @@ func TestLoadAllTwelveLocalesWithoutMissingKeys(t *testing.T) {
 	}
 }
 
-func TestAllLocalesHaveSame140Keys(t *testing.T) {
+func TestAllLocalesHaveSame141Keys(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
 		t.Fatal(err)
@@ -70,8 +70,8 @@ func TestAllLocalesHaveSame140Keys(t *testing.T) {
 		englishKeys = append(englishKeys, key)
 	}
 	slices.Sort(englishKeys)
-	if len(englishKeys) != 140 {
-		t.Fatalf("English key count = %d, want 140", len(englishKeys))
+	if len(englishKeys) != 141 {
+		t.Fatalf("English key count = %d, want 141", len(englishKeys))
 	}
 	for _, language := range Supported {
 		keys := make([]string, 0, len(catalog.translations[language]))

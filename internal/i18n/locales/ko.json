@@ -11,6 +11,7 @@
   "usage.credits": "크레딧 %s",
   "usage.credits_spend": "크레딧 %s / %s",
   "usage.credits_unlimited": "크레딧 무제한",
+  "lane.reset_credits": "리셋권 %d",
   "error.cli_not_installed": "CLI가 설치되지 않았습니다.",
   "error.not_logged_in": "로그인이 필요합니다.",
   "error.cli_outdated": "CLI 업데이트가 필요합니다.",

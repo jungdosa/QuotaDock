@@ -11,6 +11,7 @@
   "usage.credits": "Credits %s",
   "usage.credits_spend": "Credits %s / %s",
   "usage.credits_unlimited": "Unlimited credits",
+  "lane.reset_credits": "Reset credits: %d",
   "error.cli_not_installed": "CLI is not installed.",
   "error.not_logged_in": "Sign in to continue.",
   "error.cli_outdated": "Update the CLI to continue.",

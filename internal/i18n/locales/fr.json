@@ -11,6 +11,7 @@
   "usage.credits": "Crédits %s",
   "usage.credits_spend": "Crédits %s / %s",
   "usage.credits_unlimited": "Crédits illimités",
+  "lane.reset_credits": "Crédits de réinitialisation : %d",
   "error.cli_not_installed": "Codex CLI n'est pas installée.",
   "error.not_logged_in": "Connexion requise",
   "error.cli_outdated": "Mettez à jour la CLI pour continuer.",
