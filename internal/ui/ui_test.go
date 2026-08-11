@@ -174,10 +174,10 @@ func TestSettingsUsesRequiredTwoColumnRows(t *testing.T) {
 	}
 
 	usage := v.usageSettings().(*fyne.Container)
-	if len(usage.Objects) != 4 {
-		t.Fatalf("expanded usage rows=%d, want 4", len(usage.Objects))
+	if len(usage.Objects) != 5 {
+		t.Fatalf("expanded usage rows=%d, want 5", len(usage.Objects))
 	}
-	for index, name := range map[int]string{0: "provider row 1", 1: "provider row 2", 2: "display and alerts", 3: "thresholds"} {
+	for index, name := range map[int]string{0: "provider row 1", 1: "provider row 2", 2: "grok row", 3: "display and alerts", 4: "thresholds"} {
 		assertPair(name, usage.Objects[index])
 	}
 

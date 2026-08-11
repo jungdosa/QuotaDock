@@ -37,6 +37,7 @@
   "settings.show_codex": "Codex 표시",
   "settings.show_ag_gemini": "AG Gemini 표시",
   "settings.show_ag_claude": "AG Claude 표시",
+  "settings.show_grok": "Grok 표시",
   "settings.usage_mode": "표시 방법",
   "settings.usage_used": "사용량",
   "settings.usage_remaining": "잔여량",

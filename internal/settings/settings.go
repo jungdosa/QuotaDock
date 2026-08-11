@@ -86,6 +86,9 @@ type Config struct {
 	ShowCodex        bool              `json:"showCodex"`
 	ShowAGGemini     bool              `json:"showAGGemini"`
 	ShowAGClaude     bool              `json:"showAGClaude"`
+	// ShowGrok defaults to off: the lane would only report "sign in" noise
+	// for users without the Grok CLI, and existing screens stay unchanged.
+	ShowGrok bool `json:"showGrok"`
 	// Per-provider paid-credit visibility. Claude has no credit feed yet, but
 	// the toggle is wired so the surface lights up the moment data exists.
 	ShowClaudeCredits bool `json:"showClaudeCredits"`
@@ -110,7 +113,7 @@ type Config struct {
 // violet, AG Claude slate. (An earlier draft banned warm provider hues;
 // that reservation was withdrawn when defaults were matched to the logos.)
 func Default() Config {
-	return Config{SchemaVersion: CurrentSchemaVersion, Language: LanguageSystem, DateTimeFormat: Format12HourDate, Theme: ThemeLight, UsageMode: UsageUsed, RefreshSeconds: 300, WarningsEnabled: true, WarningPercent: 80, DangerPercent: 90, WarningColor: "amber", DangerColor: "red", ProviderColors: map[string]string{"claude": "orange", "codex": "gray", "antigravity": "slate", "antigravity-gemini": "violet"}, ShowClaude: true, ShowCodex: true, ShowAGGemini: true, ShowAGClaude: true, ShowClaudeCredits: true, ShowCodexCredits: true, ShowInTaskbar: true, PromoteTrayIcon: true, DisplayMode: ModeNormal}
+	return Config{SchemaVersion: CurrentSchemaVersion, Language: LanguageSystem, DateTimeFormat: Format12HourDate, Theme: ThemeLight, UsageMode: UsageUsed, RefreshSeconds: 300, WarningsEnabled: true, WarningPercent: 80, DangerPercent: 90, WarningColor: "amber", DangerColor: "red", ProviderColors: map[string]string{"claude": "orange", "codex": "gray", "antigravity": "slate", "antigravity-gemini": "violet", "grok": "sky"}, ShowClaude: true, ShowCodex: true, ShowAGGemini: true, ShowAGClaude: true, ShowGrok: false, ShowClaudeCredits: true, ShowCodexCredits: true, ShowInTaskbar: true, PromoteTrayIcon: true, DisplayMode: ModeNormal}
 }
 
 func (c Config) Validated() Config {

@@ -789,7 +789,7 @@ func (v *View) refreshLastRefreshText() {
 func (v *View) visibleLanes() []LaneState {
 	out := []LaneState{}
 	for _, lane := range v.state.Lanes {
-		show := lane.Provider == model.ProviderClaude && v.config.ShowClaude || lane.Provider == model.ProviderCodex && v.config.ShowCodex || lane.Provider == model.ProviderAntigravity && (v.config.ShowAGGemini || v.config.ShowAGClaude)
+		show := lane.Provider == model.ProviderClaude && v.config.ShowClaude || lane.Provider == model.ProviderCodex && v.config.ShowCodex || lane.Provider == model.ProviderAntigravity && (v.config.ShowAGGemini || v.config.ShowAGClaude) || lane.Provider == model.ProviderGrok && v.config.ShowGrok
 		if show {
 			if lane.Provider == model.ProviderAntigravity {
 				filtered := lane
@@ -872,6 +872,9 @@ func providerColorKey(id model.ProviderID, row UsageRowState) string {
 	}
 	if id == model.ProviderCodex {
 		return "codex"
+	}
+	if id == model.ProviderGrok {
+		return "grok"
 	}
 	if antigravityRowIsGemini(row) {
 		return "antigravity-gemini"
@@ -972,6 +975,8 @@ func providerIconKind(lane LaneState, row UsageRowState) ProviderIconKind {
 			return ProviderIconGemini
 		}
 		return ProviderIconAGClaude
+	case model.ProviderGrok:
+		return ProviderIconGrok
 	}
 	return ProviderIconClaude
 }
@@ -1470,7 +1475,7 @@ const (
 // line for any translation, instead of the per-row hardcoded widths that kept
 // leaving single rows (e.g. "Start with Windows") out of alignment.
 var settingLabelKeys = []string{
-	i18n.KeyShowClaude, i18n.KeyShowCodex, i18n.KeyShowAGGemini, i18n.KeyShowAGClaude,
+	i18n.KeyShowClaude, i18n.KeyShowCodex, i18n.KeyShowAGGemini, i18n.KeyShowAGClaude, i18n.KeyShowGrok,
 	i18n.KeyUsageMode, i18n.KeyWarnings,
 	i18n.KeyAutoStart, i18n.KeyAlwaysOnTop, i18n.KeyPromoteTray, i18n.KeyRefreshInterval,
 	i18n.KeyLanguage, i18n.KeyDateTime,
@@ -1536,6 +1541,10 @@ func (v *View) usageSettings() fyne.CanvasObject {
 		settingsPair(
 			v.halfToggleRow(i18n.KeyShowAGGemini, v.config.ShowAGGemini, v.settingLabelWidth(), func(c *settings.Config, b bool) { c.ShowAGGemini = b }),
 			v.halfToggleRow(i18n.KeyShowAGClaude, v.config.ShowAGClaude, v.settingLabelWidth(), func(c *settings.Config, b bool) { c.ShowAGClaude = b }),
+		),
+		settingsPair(
+			v.halfToggleRow(i18n.KeyShowGrok, v.config.ShowGrok, v.settingLabelWidth(), func(c *settings.Config, b bool) { c.ShowGrok = b }),
+			layout.NewSpacer(),
 		),
 		settingsPair(
 			v.settingRowSized(v.text(i18n.KeyUsageMode), mode, v.settingLabelWidth(), halfSettingGap, 0),

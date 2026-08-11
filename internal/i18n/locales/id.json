@@ -37,6 +37,7 @@
   "settings.show_codex": "Tampilkan Codex",
   "settings.show_ag_gemini": "Tampilkan AG Gemini",
   "settings.show_ag_claude": "Tampilkan AG Claude",
+  "settings.show_grok": "Tampilkan Grok",
   "settings.usage_mode": "Tampilan",
   "settings.usage_used": "Pemakaian",
   "settings.usage_remaining": "Tersisa",

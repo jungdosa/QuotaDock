@@ -16,9 +16,13 @@ import (
 )
 
 type UsageRowState struct {
-	Label                   string
-	DisplayLabel            string
-	Percent                 float64
+	Label        string
+	DisplayLabel string
+	Percent      float64
+	// UsageUnknown marks a row whose consumption the provider cannot report
+	// yet (Grok: the usage field is unconfirmed). The row then shows only its
+	// reset window — an empty meter with a number would claim "0% used".
+	UsageUnknown            bool
 	ResetsAt                time.Time
 	WindowMinutes           int
 	DisplayOverride         bool
@@ -60,7 +64,7 @@ func NewController(coordinator provider.Coordinator, config settings.Config) *Co
 	return c
 }
 func defaultViewState() ViewState {
-	return ViewState{Lanes: []LaneState{{Provider: model.ProviderClaude, Name: "Claude", Status: model.StatusUnavailable}, {Provider: model.ProviderCodex, Name: "Codex", Status: model.StatusUnavailable}, {Provider: model.ProviderAntigravity, Name: "Antigravity", Status: model.StatusUnavailable}}}
+	return ViewState{Lanes: []LaneState{{Provider: model.ProviderClaude, Name: "Claude", Status: model.StatusUnavailable}, {Provider: model.ProviderCodex, Name: "Codex", Status: model.StatusUnavailable}, {Provider: model.ProviderAntigravity, Name: "Antigravity", Status: model.StatusUnavailable}, {Provider: model.ProviderGrok, Name: "Grok", Status: model.StatusUnavailable}}}
 }
 func (c *Controller) Config() settings.Config { c.mu.RLock(); defer c.mu.RUnlock(); return c.config }
 func (c *Controller) SetConfig(cfg settings.Config) {
@@ -122,7 +126,9 @@ func (c *Controller) Refresh(ctx context.Context) ViewState {
 		lane.Status = model.StatusConnected
 		lane.Credits = outcome.Snapshot.Credits
 		for _, limit := range outcome.Snapshot.Limits {
-			lane.Rows = append(lane.Rows, UsageRowState{Label: limit.Label, Percent: limit.UsedPercent, ResetsAt: limit.ResetsAt, WindowMinutes: limit.WindowMinutes})
+			// Grok's usage field is unconfirmed (stage 5C-2), so its rows
+			// carry only the reset window until a consumption sample fixes it.
+			lane.Rows = append(lane.Rows, UsageRowState{Label: limit.Label, Percent: limit.UsedPercent, UsageUnknown: lane.Provider == model.ProviderGrok, ResetsAt: limit.ResetsAt, WindowMinutes: limit.WindowMinutes})
 		}
 		sortLaneRows(lane.Provider, lane.Rows)
 		assignUniqueDisplayLabels(lane.Rows)

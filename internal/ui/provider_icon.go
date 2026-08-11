@@ -28,6 +28,7 @@ const (
 	ProviderIconCodex    ProviderIconKind = "codex"
 	ProviderIconGemini   ProviderIconKind = "antigravity-gemini"
 	ProviderIconAGClaude ProviderIconKind = "antigravity-claude"
+	ProviderIconGrok     ProviderIconKind = "grok"
 )
 
 const providerIconSize float32 = 16
@@ -82,6 +83,8 @@ func providerIconAsset(kind ProviderIconKind) string {
 		return "gemini.svg"
 	case ProviderIconAGClaude:
 		return "claude.svg"
+	case ProviderIconGrok:
+		return "grok.svg"
 	default:
 		return "claude-color.svg"
 	}
@@ -97,13 +100,17 @@ func providerIconTint(kind ProviderIconKind) string {
 		return "#8E75FF"
 	case ProviderIconAGClaude:
 		return "#6B7280"
+	case ProviderIconGrok:
+		return "#1F2328"
 	default:
 		return ""
 	}
 }
 
+// providerIconTintForTheme swaps the monochrome brand marks (OpenAI, Grok)
+// between near-black and near-white so they stay visible on both themes.
 func providerIconTintForTheme(kind ProviderIconKind, mode settings.Theme, variant fyne.ThemeVariant) string {
-	if kind != ProviderIconCodex {
+	if kind != ProviderIconCodex && kind != ProviderIconGrok {
 		return providerIconTint(kind)
 	}
 	if mode == settings.ThemeDark || mode == settings.ThemeSystem && variant == theme.VariantDark {
@@ -123,6 +130,7 @@ func providerIconResource(kind ProviderIconKind) fyne.Resource {
 			ProviderIconCodex,
 			ProviderIconGemini,
 			ProviderIconAGClaude,
+			ProviderIconGrok,
 		} {
 			name := providerIconAsset(candidate)
 			data, err := providerassets.Read(name)
@@ -173,7 +181,7 @@ func providerIconImage(kind ProviderIconKind) image.Image {
 
 func providerIconImageForTheme(kind ProviderIconKind, mode settings.Theme) image.Image {
 	source := providerIconImage(kind)
-	if kind != ProviderIconCodex {
+	if kind != ProviderIconCodex && kind != ProviderIconGrok {
 		return source
 	}
 	variant := theme.VariantLight
@@ -391,6 +399,8 @@ func rasterizeProviderMark(kind ProviderIconKind) image.Image {
 	switch kind {
 	case ProviderIconCodex:
 		return rasterizeCodexMark()
+	case ProviderIconGrok:
+		return rasterizeGrokMark()
 	case ProviderIconGemini:
 		return rasterizeGeminiMark()
 	case ProviderIconAGClaude:
@@ -405,6 +415,35 @@ func rasterizeClaudeMark(fill color.NRGBA) image.Image {
 	raster := vector.NewRasterizer(providerIconRenderSize, providerIconRenderSize)
 	drawRadialPolygon(raster, 12, 10.5, 5, -math.Pi/2)
 	raster.Draw(destination, destination.Bounds(), image.NewUniform(fill), image.Point{})
+	return destination
+}
+
+// rasterizeGrokMark is the last-resort stand-in when the official Grok SVG
+// fails the raster gates: a neutral ring in the same mono ink, deliberately
+// generic rather than an imitation of the brand mark.
+func rasterizeGrokMark() image.Image {
+	bounds := image.Rect(0, 0, providerIconRenderSize, providerIconRenderSize)
+	outer := image.NewAlpha(bounds)
+	raster := vector.NewRasterizer(providerIconRenderSize, providerIconRenderSize)
+	drawRegularPolygon(raster, 24, 10.2, 0)
+	raster.Draw(outer, bounds, image.NewUniform(color.Alpha{A: 0xFF}), image.Point{})
+
+	hole := image.NewAlpha(bounds)
+	raster.Reset(providerIconRenderSize, providerIconRenderSize)
+	drawRegularPolygon(raster, 24, 6.4, 0)
+	raster.Draw(hole, bounds, image.NewUniform(color.Alpha{A: 0xFF}), image.Point{})
+
+	destination := image.NewRGBA(bounds)
+	for y := 0; y < providerIconRenderSize; y++ {
+		for x := 0; x < providerIconRenderSize; x++ {
+			alpha := outer.AlphaAt(x, y).A
+			cutout := hole.AlphaAt(x, y).A
+			if cutout >= alpha {
+				continue
+			}
+			destination.Set(x, y, color.NRGBA{R: 0x1F, G: 0x23, B: 0x28, A: alpha - cutout})
+		}
+	}
 	return destination
 }
 

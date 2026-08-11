@@ -9,6 +9,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/theme"
 	"github.com/jungdosa/QuotaDock/internal/i18n"
 	"github.com/jungdosa/QuotaDock/internal/settings"
 )
@@ -26,28 +27,38 @@ func TestSettingsLayoutMetrics(t *testing.T) {
 	v.Show(SettingsScreen)
 
 	usage := v.usageSettings().(*fyne.Container)
-	if len(usage.Objects) != 4 {
-		t.Fatalf("usage rows=%d, want 4 compact rows", len(usage.Objects))
+	if len(usage.Objects) != 5 {
+		t.Fatalf("usage rows=%d, want 5 compact rows", len(usage.Objects))
 	}
-	controlStarts := make([][2]float32, 0, 3)
-	for rowIndex := 0; rowIndex < 3; rowIndex++ {
+	controlStarts := make([][2]float32, 0, 4)
+	for rowIndex := 0; rowIndex < 4; rowIndex++ {
 		pair := usage.Objects[rowIndex].(*fyne.Container)
 		pair.Resize(fyne.NewSize(560, 28))
 		pair.Layout.Layout(pair.Objects, pair.Size())
 		starts := [2]float32{}
 		for columnIndex, object := range pair.Objects {
-			row := object.(*fyne.Container)
+			// The Grok row pairs a toggle with a spacer: only real setting
+			// rows join the alignment check.
+			row, ok := object.(*fyne.Container)
+			if !ok {
+				continue
+			}
 			row.Layout.Layout(row.Objects, row.Size())
 			starts[columnIndex] = row.Objects[1].Position().X
 		}
 		controlStarts = append(controlStarts, starts)
 	}
 	for rowIndex, starts := range controlStarts {
-		if starts != [2]float32{120, 120} {
-			t.Fatalf("usage row %d control starts=%v, want [120 120]", rowIndex, starts)
+		want := [2]float32{120, 120}
+		if rowIndex == 2 {
+			// The Grok row keeps a spacer in its right cell.
+			want = [2]float32{120, 0}
+		}
+		if starts != want {
+			t.Fatalf("usage row %d control starts=%v, want %v", rowIndex, starts, want)
 		}
 	}
-	rightColumnStart := usage.Objects[2].(*fyne.Container).Objects[1].Position().X + controlStarts[2][1]
+	rightColumnStart := usage.Objects[3].(*fyne.Container).Objects[1].Position().X + controlStarts[3][1]
 	t.Logf("control start x: left=%.1f right=%.1f (560px pair), local starts=%v", controlStarts[0][0], rightColumnStart, controlStarts)
 
 	cfg := v.config
@@ -79,8 +90,11 @@ func TestSettingsLayoutMetrics(t *testing.T) {
 	v.SetConfig(cfg)
 	warningOff := v.MinimumSize(SettingsScreen).Height
 	legacyDelta := phase3SLegacyWarningOnHeight - phase3SLegacyWarningOffHeight
-	if warningOn > phase3SLegacyWarningOffHeight+legacyDelta/2 {
-		t.Fatalf("warning-on height %.1f exceeds half-expansion target %.1f", warningOn, phase3SLegacyWarningOffHeight+legacyDelta/2)
+	// The Grok visibility row postdates the frozen 3S heights: allow exactly
+	// that one measured row (plus the group gap) on top of the legacy cap.
+	grokAllowance := usage.Objects[2].MinSize().Height + theme.Padding() + 0.5
+	if warningOn > phase3SLegacyWarningOffHeight+legacyDelta/2+grokAllowance {
+		t.Fatalf("warning-on height %.1f exceeds half-expansion target %.1f", warningOn, phase3SLegacyWarningOffHeight+legacyDelta/2+grokAllowance)
 	}
 	t.Logf("warning height on %.1f->%.1f, off %.1f->%.1f, expansion %.1f->%.1f", phase3SLegacyWarningOnHeight, warningOn, phase3SLegacyWarningOffHeight, warningOff, legacyDelta, warningOn-warningOff)
 

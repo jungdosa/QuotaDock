@@ -49,6 +49,7 @@ func TestOfficialProviderPathsGeometryInkAndDistinctMasks(t *testing.T) {
 		{ProviderIconCodex, "Codex", "openai.svg", color.NRGBA{R: 0x1F, G: 0x23, B: 0x28, A: 0xFF}},
 		{ProviderIconGemini, "Gemini", "gemini.svg", color.NRGBA{R: 0x8E, G: 0x75, B: 0xFF, A: 0xFF}},
 		{ProviderIconAGClaude, "AG Claude", "claude.svg", color.NRGBA{R: 0x6B, G: 0x72, B: 0x80, A: 0xFF}},
+		{ProviderIconGrok, "Grok", "grok.svg", color.NRGBA{R: 0x1F, G: 0x23, B: 0x28, A: 0xFF}},
 	}
 	renders := make(map[ProviderIconKind]image.Image, len(tests))
 	for _, test := range tests {

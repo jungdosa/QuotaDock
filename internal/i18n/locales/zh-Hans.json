@@ -37,6 +37,7 @@
   "settings.show_codex": "显示 Codex",
   "settings.show_ag_gemini": "显示 AG Gemini",
   "settings.show_ag_claude": "显示 AG Claude",
+  "settings.show_grok": "显示 Grok",
   "settings.usage_mode": "显示方式",
   "settings.usage_used": "使用率",
   "settings.usage_remaining": "剩余",

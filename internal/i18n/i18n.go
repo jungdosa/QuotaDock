@@ -64,6 +64,7 @@ const (
 	KeyShowCodex                 = "settings.show_codex"
 	KeyShowAGGemini              = "settings.show_ag_gemini"
 	KeyShowAGClaude              = "settings.show_ag_claude"
+	KeyShowGrok                  = "settings.show_grok"
 	KeyUsageMode                 = "settings.usage_mode"
 	KeyUsageUsed                 = "settings.usage_used"
 	KeyUsageRemaining            = "settings.usage_remaining"
@@ -310,6 +311,7 @@ var RequiredKeys = []string{
 	KeyShowCodex,
 	KeyShowAGGemini,
 	KeyShowAGClaude,
+	KeyShowGrok,
 	KeyUsageMode,
 	KeyUsageUsed,
 	KeyUsageRemaining,

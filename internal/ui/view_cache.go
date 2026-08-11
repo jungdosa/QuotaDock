@@ -382,8 +382,11 @@ func (v *View) makeNormalStatusRow(lane LaneState) (fyne.CanvasObject, *canvas.T
 // Mode-specific differences are limited to layout tokens: sizes, and which of
 // these tokens a mode chooses to show.
 type rowVisual struct {
-	label         string
-	percent       float64
+	label   string
+	percent float64
+	// usageUnknown blanks the usage surfaces (meter empty, number "–"):
+	// the provider reports the window but cannot report consumption yet.
+	usageUnknown  bool
 	resetPercent  float64
 	danger        bool
 	meterColor    color.Color
@@ -407,10 +410,19 @@ func (v *View) rowVisual(lane LaneState, row UsageRowState, now time.Time) rowVi
 		meterColor = severityColor
 		percentColor = severityColor
 	}
+	percent := v.displayPercent(row)
+	if row.UsageUnknown {
+		// No consumption data: keep the meter empty and quiet instead of
+		// letting the remaining-mode flip claim a full 100%.
+		percent = 0
+		meterColor = providerColor
+		percentColor = v.colors.Secondary
+	}
 	until, resetAt := resetStrings(row, now, v.config, v.SystemLanguage)
 	return rowVisual{
 		label:         v.usageRowLabel(lane, row),
-		percent:       v.displayPercent(row),
+		percent:       percent,
+		usageUnknown:  row.UsageUnknown,
 		resetPercent:  v.resetRemainingPercent(row, now),
 		danger:        level == model.AlertDanger,
 		meterColor:    meterColor,
@@ -424,15 +436,26 @@ func (v *View) rowVisual(lane LaneState, row UsageRowState, now time.Time) rowVi
 	}
 }
 
+// usagePercentTexts renders the usage number, or an en dash with no unit when
+// the provider cannot report consumption — "–" reads as "no data" where "0%"
+// would read as an empty quota.
+func usagePercentTexts(visual rowVisual) (number, symbol string) {
+	if visual.usageUnknown {
+		return "–", ""
+	}
+	return formatUsagePercent(visual.percent), "%"
+}
+
 func (v *View) makeNormalUsageRow(lane LaneState, row UsageRowState, now time.Time) (fyne.CanvasObject, normalUsageView) {
 	visual := v.rowVisual(lane, row, now)
 	label := textLabel(visual.label, NormalLabelTextSize, v.colors.Label, true, false)
 	meter := NewSegmentedMeter(20, visual.percent, visual.meterColor, v.colors.Track)
 	meter.Height = NormalMeterHeight
 	meter.OnTapped = func() { v.showProviderPalette(meter, visual.colorKey) }
-	percentText := textLabel(formatUsagePercent(visual.percent), NormalPercentTextSize, visual.percentColor, visual.danger, false)
+	percentNumber, percentUnit := usagePercentTexts(visual)
+	percentText := textLabel(percentNumber, NormalPercentTextSize, visual.percentColor, visual.danger, false)
 	percentText.Alignment = fyne.TextAlignTrailing
-	percentSymbol := textLabel("%", NormalPercentTextSize-1, visual.percentColor, visual.danger, false)
+	percentSymbol := textLabel(percentUnit, NormalPercentTextSize-1, visual.percentColor, visual.danger, false)
 	percentBox := container.New(
 		&CompactPercentLayout{RightInset: NormalPercentInset},
 		percentText,
@@ -485,8 +508,9 @@ func (v *View) updateNormalUsage(handles normalUsageView, lane LaneState, row Us
 	handles.meter.SetValue(visual.percent, visual.meterColor)
 	handles.resetBar.SetValue(visual.resetPercent, visual.resetBarColor, v.colors.Track)
 	setPercentWeight(handles.percent, handles.percentSymbol, visual.danger)
-	setCanvasText(handles.percent, formatUsagePercent(visual.percent), visual.percentColor)
-	setCanvasText(handles.percentSymbol, "%", visual.percentColor)
+	number, unit := usagePercentTexts(visual)
+	setCanvasText(handles.percent, number, visual.percentColor)
+	setCanvasText(handles.percentSymbol, unit, visual.percentColor)
 	setCanvasText(handles.until, visual.until, v.colors.Text)
 	for index, line := range wrapMonospace(visual.resetAt, normalRowColumns[2], NormalMetaTextSize) {
 		setCanvasText(handles.resetAt[index], line, v.colors.Secondary)
@@ -677,7 +701,7 @@ func (v *View) makeCompactUsageRow(lane LaneState, row UsageRowState, showIcon b
 		numberText,
 		symbolText,
 	)
-	setCompactPercent(percentColumn, numberText, symbolText, visual.percent, visual.percentColor)
+	setCompactPercent(percentColumn, numberText, symbolText, visual)
 	// The reset column shows the countdown; hovering it reveals the full reset
 	// moment, already rendered through the shared date/time format.
 	untilText := textLabel(visual.until, CompactResetTextSize, v.colors.Text, false, true)
@@ -826,7 +850,7 @@ func (v *View) nanoResetPercent(state nanoUsageState, now time.Time) float64 {
 }
 
 func (v *View) nanoUsageValue(state nanoUsageState, providerColor color.Color) (float64, color.Color) {
-	if !state.available {
+	if !state.available || state.row.UsageUnknown {
 		return 0, providerColor
 	}
 	active := providerColor
@@ -857,6 +881,10 @@ func (v *View) nanoCellStates() []nanoCellState {
 	if v.config.ShowAGClaude {
 		lane := lanes[model.ProviderAntigravity]
 		cells = append(cells, nanoCellState{key: "antigravity", name: "AG Claude", kind: ProviderIconAGClaude, connected: lane.Status == model.StatusConnected, rows: selectNanoRows(filterNanoRows(lane.Rows, false), false)})
+	}
+	if v.config.ShowGrok {
+		lane := lanes[model.ProviderGrok]
+		cells = append(cells, nanoCellState{key: "grok", name: "Grok", kind: ProviderIconGrok, connected: lane.Status == model.StatusConnected, rows: selectNanoRows(lane.Rows, true)})
 	}
 	return cells
 }
@@ -919,21 +947,21 @@ func (v *View) updateCompactUsage(handles compactUsageView, lane LaneState, row 
 	handles.meter.SetValue(visual.percent, visual.meterColor)
 	handles.reset.SetValue(visual.resetPercent, visual.resetBarColor, v.colors.Track)
 	setPercentWeight(handles.number, handles.symbol, visual.danger)
-	setCompactPercent(handles.percent, handles.number, handles.symbol, visual.percent, visual.percentColor)
+	setCompactPercent(handles.percent, handles.number, handles.symbol, visual)
 	setCanvasText(handles.resetUntil, visual.until, v.colors.Text)
 	handles.resetRegion.SetValue(visual.resetAt)
 }
 
-func setCompactPercent(column *fyne.Container, number, symbol *canvas.Text, percent float64, textColor color.Color) {
-	numberValue := formatUsagePercent(percent)
+func setCompactPercent(column *fyne.Container, number, symbol *canvas.Text, visual rowVisual) {
+	numberValue, symbolValue := usagePercentTexts(visual)
 	numberSize := CompactPercentTextSize
 	if numberValue == "100" {
 		numberSize = CompactHundredTextSize
 	}
 	number.TextSize = numberSize
-	setCanvasText(number, numberValue, textColor)
+	setCanvasText(number, numberValue, visual.percentColor)
 	symbol.TextSize = CompactSymbolTextSize
-	setCanvasText(symbol, "%", textColor)
+	setCanvasText(symbol, symbolValue, visual.percentColor)
 	column.Refresh()
 }
 

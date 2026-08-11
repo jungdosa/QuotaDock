@@ -69,7 +69,7 @@ func TestThresholdDisplayAndConnectionGeometry(t *testing.T) {
 	window.Resize(v.MinimumSize(SettingsScreen))
 
 	usage := v.usageSettings().(*fyne.Container)
-	thresholdPair := usage.Objects[3].(*fyne.Container)
+	thresholdPair := usage.Objects[4].(*fyne.Container)
 	thresholdStack := thresholdPair.Objects[1].(*fyne.Container)
 	stackLayout, ok := thresholdStack.Layout.(*CompactRowsLayout)
 	if !ok || stackLayout.Gap != 0 || len(thresholdStack.Objects) != 2 {

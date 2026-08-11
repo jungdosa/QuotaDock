@@ -37,6 +37,7 @@
   "settings.show_codex": "Mostra Codex",
   "settings.show_ag_gemini": "Mostra AG Gemini",
   "settings.show_ag_claude": "Mostra AG Claude",
+  "settings.show_grok": "Mostra Grok",
   "settings.usage_mode": "Vista",
   "settings.usage_used": "Utilizzo",
   "settings.usage_remaining": "Rimanente",

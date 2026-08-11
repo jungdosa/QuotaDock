@@ -37,6 +37,7 @@
   "settings.show_codex": "Codex を表示",
   "settings.show_ag_gemini": "AG Gemini を表示",
   "settings.show_ag_claude": "AG Claude を表示",
+  "settings.show_grok": "Grok を表示",
   "settings.usage_mode": "表示方法",
   "settings.usage_used": "使用率",
   "settings.usage_remaining": "残量",

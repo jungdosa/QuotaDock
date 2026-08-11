@@ -29,12 +29,12 @@ func (f fakeProvider) Reconnect(ctx context.Context) (model.UsageSnapshot, error
 }
 func (f fakeProvider) Close() error { return nil }
 func TestProviderSuccessFailureIsolation(t *testing.T) {
-	coordinator := Coordinator{Providers: map[model.ProviderID]model.Provider{model.ProviderClaude: fakeProvider{id: model.ProviderClaude, err: errors.New("safe failure")}, model.ProviderCodex: fakeProvider{id: model.ProviderCodex}, model.ProviderAntigravity: fakeProvider{id: model.ProviderAntigravity}}}
+	coordinator := Coordinator{Providers: map[model.ProviderID]model.Provider{model.ProviderClaude: fakeProvider{id: model.ProviderClaude, err: errors.New("safe failure")}, model.ProviderCodex: fakeProvider{id: model.ProviderCodex}, model.ProviderAntigravity: fakeProvider{id: model.ProviderAntigravity}, model.ProviderGrok: fakeProvider{id: model.ProviderGrok}}}
 	outcomes := coordinator.RefreshAll(context.Background())
 	if outcomes[model.ProviderClaude].Err == nil {
 		t.Fatal("failed provider did not fail")
 	}
-	for _, id := range []model.ProviderID{model.ProviderCodex, model.ProviderAntigravity} {
+	for _, id := range []model.ProviderID{model.ProviderCodex, model.ProviderAntigravity, model.ProviderGrok} {
 		if outcomes[id].Err != nil || outcomes[id].Snapshot.Provider != id {
 			t.Errorf("provider %s was affected: %+v", id, outcomes[id])
 		}

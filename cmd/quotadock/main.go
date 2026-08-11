@@ -18,6 +18,7 @@ import (
 	platform "github.com/jungdosa/QuotaDock/internal/platform/windows"
 	"github.com/jungdosa/QuotaDock/internal/provider"
 	agprovider "github.com/jungdosa/QuotaDock/internal/provider/antigravity"
+	grokprovider "github.com/jungdosa/QuotaDock/internal/provider/grok"
 	claudeprovider "github.com/jungdosa/QuotaDock/internal/provider/claude"
 	codexprovider "github.com/jungdosa/QuotaDock/internal/provider/codex"
 	"github.com/jungdosa/QuotaDock/internal/settings"
@@ -136,6 +137,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		model.ProviderClaude:      claudeprovider.New(claudeprovider.NewCLIClient(processLog), claudeprovider.MinimumCLIVersion),
 		model.ProviderCodex:       codexprovider.New(codexprovider.NewAppServerTransport(processLog), codexprovider.MinimumCLIVersion),
 		model.ProviderAntigravity: agprovider.New(agprovider.NewLocalClient()),
+		model.ProviderGrok:        grokprovider.New(nil, ""),
 	}}
 	controller := ui.NewController(coordinator, cfg)
 	native := platform.NewWindowController(w)

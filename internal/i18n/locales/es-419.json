@@ -37,6 +37,7 @@
   "settings.show_codex": "Mostrar Codex",
   "settings.show_ag_gemini": "Mostrar AG Gemini",
   "settings.show_ag_claude": "Mostrar AG Claude",
+  "settings.show_grok": "Mostrar Grok",
   "settings.usage_mode": "Visualización",
   "settings.usage_used": "Uso",
   "settings.usage_remaining": "Restante",
