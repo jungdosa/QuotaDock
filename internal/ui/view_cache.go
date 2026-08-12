@@ -1117,6 +1117,61 @@ func connectionMethodsFor(id model.ProviderID) []connectionMethod {
 	}
 }
 
+// defaultConnectionMethod is what a provider uses when the user has not chosen
+// anything — the first method it offers, which is the CLI everywhere a CLI
+// exists. Configs written before the selector shipped land here unchanged.
+func defaultConnectionMethod(id model.ProviderID) connectionMethod {
+	methods := connectionMethodsFor(id)
+	if len(methods) == 0 {
+		return connectionMethodCLI
+	}
+	return methods[0]
+}
+
+// selectedConnectionMethod resolves the stored choice against what the
+// provider actually offers. A stored method the provider no longer supports
+// falls back to the default rather than leaving the row with nothing active.
+func selectedConnectionMethod(config settings.Config, id model.ProviderID) connectionMethod {
+	stored, ok := config.ConnectionMethods[string(id)]
+	if !ok {
+		return defaultConnectionMethod(id)
+	}
+	candidate := connectionMethod(stored)
+	for _, method := range connectionMethodsFor(id) {
+		if method == candidate {
+			return candidate
+		}
+	}
+	return defaultConnectionMethod(id)
+}
+
+func (v *View) selectedConnectionMethod(id model.ProviderID) connectionMethod {
+	return selectedConnectionMethod(v.config, id)
+}
+
+// setConnectionMethod records the user's choice. Selecting a method the
+// provider does not offer is ignored so a stray call cannot corrupt settings.
+func (v *View) setConnectionMethod(id model.ProviderID, method connectionMethod) {
+	available := false
+	for _, candidate := range connectionMethodsFor(id) {
+		if candidate == method {
+			available = true
+			break
+		}
+	}
+	if !available {
+		return
+	}
+	config := v.config
+	methods := make(map[string]string, len(config.ConnectionMethods)+1)
+	for provider, value := range config.ConnectionMethods {
+		methods[provider] = value
+	}
+	methods[string(id)] = string(method)
+	config.ConnectionMethods = methods
+	v.SetConfig(config)
+}
+
 func connectionMethodLabelKey(method connectionMethod) string {
 	switch method {
 	case connectionMethodAuth:
@@ -1149,10 +1204,25 @@ func (v *View) connectionMethodTooltip(label string, state connectionMethodState
 
 func (v *View) connectionMethodState(lane LaneState, method connectionMethod) connectionMethodState {
 	_, envConfigured := os.LookupEnv(claudeOAuthTokenEnv)
-	return connectionMethodStateFor(lane, method, envConfigured)
+	return connectionMethodStateSelected(lane, method, envConfigured, v.selectedConnectionMethod(lane.Provider))
 }
 
 func connectionMethodStateFor(lane LaneState, method connectionMethod, envConfigured bool) connectionMethodState {
+	return connectionMethodStateSelected(lane, method, envConfigured, defaultConnectionMethod(lane.Provider))
+}
+
+// connectionMethodStateSelected reports how one method button should read.
+// A working method that the user did not pick shows as available rather than
+// active, so the row makes clear which route is actually in use.
+func connectionMethodStateSelected(lane LaneState, method connectionMethod, envConfigured bool, selected connectionMethod) connectionMethodState {
+	state := connectionMethodBaseState(lane, method, envConfigured)
+	if state == connectionMethodActive && method != selected {
+		return connectionMethodAvailable
+	}
+	return state
+}
+
+func connectionMethodBaseState(lane LaneState, method connectionMethod, envConfigured bool) connectionMethodState {
 	if lane.Provider == model.ProviderClaude && method == connectionMethodAuth {
 		return connectionMethodPlanned
 	}
@@ -1175,6 +1245,14 @@ func connectionMethodButtonWidth(label string) float32 {
 
 func (v *View) toggleConnectionPanel(id model.ProviderID, method connectionMethod) {
 	v.noteActivity()
+	// Tapping a method that is ready to use also picks it. A method that is
+	// missing or still planned only opens its panel, so the tap that asks
+	// "how do I install this?" never silently switches the active route.
+	_, envConfigured := os.LookupEnv(claudeOAuthTokenEnv)
+	switch connectionMethodBaseState(v.connectionLane(id), method, envConfigured) {
+	case connectionMethodActive, connectionMethodAvailable:
+		v.setConnectionMethod(id, method)
+	}
 	next := connectionPanelSelection{provider: id, method: method}
 	if v.openConnectionPanel == next {
 		v.openConnectionPanel = connectionPanelSelection{}

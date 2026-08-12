@@ -93,6 +93,12 @@ type Config struct {
 	// the toggle is wired so the surface lights up the moment data exists.
 	ShowClaudeCredits bool `json:"showClaudeCredits"`
 	ShowCodexCredits  bool `json:"showCodexCredits"`
+	// ConnectionMethods records which sign-in route the user picked per
+	// provider, keyed by provider id. An absent entry means "the provider's
+	// default", so configs written before this key keep behaving exactly as
+	// they did. Validation drops unknown providers and unknown methods rather
+	// than failing the load: a stale value must never lock someone out.
+	ConnectionMethods map[string]string `json:"connectionMethods"`
 	AutoStart bool `json:"autoStart"`
 	// StartMinimized controls whether a launch at Windows startup goes straight
 	// to the tray. It defaults to false: a widget the user asked to start with
@@ -114,6 +120,34 @@ type Config struct {
 // that reservation was withdrawn when defaults were matched to the logos.)
 func Default() Config {
 	return Config{SchemaVersion: CurrentSchemaVersion, Language: LanguageSystem, DateTimeFormat: Format12HourDate, Theme: ThemeLight, UsageMode: UsageUsed, RefreshSeconds: 300, WarningsEnabled: true, WarningPercent: 80, DangerPercent: 90, WarningColor: "amber", DangerColor: "red", ProviderColors: map[string]string{"claude": "orange", "codex": "gray", "antigravity": "slate", "antigravity-gemini": "violet", "grok": "sky"}, ShowClaude: true, ShowCodex: true, ShowAGGemini: true, ShowAGClaude: true, ShowGrok: false, ShowClaudeCredits: true, ShowCodexCredits: true, ShowInTaskbar: true, PromoteTrayIcon: true, DisplayMode: ModeNormal}
+}
+
+// Connection method identifiers as persisted in ConnectionMethods. The UI owns
+// which of these each provider actually offers; this package only keeps the
+// stored value structurally sane.
+const (
+	ConnectionMethodCLI   = "cli"
+	ConnectionMethodAuth  = "auth"
+	ConnectionMethodIDE   = "ide"
+	ConnectionMethodOther = "other"
+)
+
+var connectionMethodIDs = map[string]struct{}{
+	ConnectionMethodCLI:   {},
+	ConnectionMethodAuth:  {},
+	ConnectionMethodIDE:   {},
+	ConnectionMethodOther: {},
+}
+
+var connectionProviderIDs = map[string]struct{}{
+	"claude": {}, "codex": {}, "antigravity": {}, "grok": {},
+}
+
+// IsConnectionMethodID reports whether a stored method identifier is one this
+// build understands.
+func IsConnectionMethodID(value string) bool {
+	_, ok := connectionMethodIDs[value]
+	return ok
 }
 
 func (c Config) Validated() Config {
@@ -168,6 +202,27 @@ func (c Config) Validated() Config {
 		output[provider] = value
 	}
 	c.ProviderColors = output
+	// Drop entries this build cannot honor instead of rejecting the file: a
+	// method removed in a later version, or a provider that no longer exists,
+	// must degrade to the provider default rather than block startup.
+	if len(c.ConnectionMethods) > 0 {
+		methods := make(map[string]string, len(c.ConnectionMethods))
+		for provider, method := range c.ConnectionMethods {
+			if _, known := connectionProviderIDs[provider]; !known {
+				continue
+			}
+			if !IsConnectionMethodID(method) {
+				continue
+			}
+			methods[provider] = method
+		}
+		if len(methods) == 0 {
+			methods = nil
+		}
+		c.ConnectionMethods = methods
+	} else {
+		c.ConnectionMethods = nil
+	}
 	return c
 }
 
