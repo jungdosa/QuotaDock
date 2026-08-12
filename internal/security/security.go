@@ -74,6 +74,57 @@ var updateRequestHosts = map[string]struct{}{
 	"release-assets.githubusercontent.com": {},
 }
 
+// authWebNavigationDomains are the domains an embedded auth WebView may
+// navigate to while the user signs in. Suffix matching admits the login and
+// Cloudflare-challenge subdomains claude.ai bounces through; it never widens
+// to where credentials are sent, which stays the exact-host fetch allowlist.
+var authWebNavigationDomains = []string{"claude.ai", "anthropic.com", "grok.com", "x.ai"}
+
+// authWebFetchHosts are the exact hosts the hidden auth fetch may call. This
+// is the credentialed surface, so it is a closed set, not suffix-matched.
+var authWebFetchHosts = map[string]struct{}{
+	"claude.ai": {},
+	"grok.com":  {},
+}
+
+// IsAllowedAuthWebNavigationURL gates where the visible sign-in WebView may
+// navigate. It is deliberately separate from IsAllowedProviderRequestURL
+// (credential fetches) and IsAllowedUpdateURL (updates), both of which stay
+// unchanged: a login flow visits more hosts than it ever sends secrets to.
+func IsAllowedAuthWebNavigationURL(raw string) bool {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Scheme != "https" || parsed.User != nil {
+		return false
+	}
+	if port := parsed.Port(); port != "" && port != "443" {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if host == "" || net.ParseIP(host) != nil {
+		return false
+	}
+	for _, domain := range authWebNavigationDomains {
+		if host == domain || strings.HasSuffix(host, "."+domain) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsAllowedAuthWebFetchURL gates the hidden, in-session fetch that reads usage
+// from the account API. Exact-host only: this is the credentialed request.
+func IsAllowedAuthWebFetchURL(raw string) bool {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Scheme != "https" || parsed.User != nil {
+		return false
+	}
+	if port := parsed.Port(); port != "" && port != "443" {
+		return false
+	}
+	_, allowed := authWebFetchHosts[strings.ToLower(parsed.Hostname())]
+	return allowed
+}
+
 func IsAllowedExternalURL(raw string) bool {
 	parsed, err := url.Parse(raw)
 	if err != nil || parsed.Scheme != "https" || parsed.User != nil {

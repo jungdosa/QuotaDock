@@ -115,3 +115,56 @@ func TestEmailsAreStillMasked(t *testing.T) {
 		}
 	}
 }
+
+func TestAuthWebNavigationAllowlist(t *testing.T) {
+	for _, value := range []string{
+		"https://claude.ai/login",
+		"https://www.claude.ai/",
+		"https://auth.anthropic.com/oauth",
+		"https://challenges.cloudflare.com.claude.ai/",
+		"https://accounts.x.ai/sign-in",
+		"https://grok.com/?_s=usage",
+	} {
+		if !IsAllowedAuthWebNavigationURL(value) {
+			t.Errorf("expected auth navigation URL to be allowed: %s", value)
+		}
+	}
+	for _, value := range []string{
+		"http://claude.ai/login",
+		"https://claude.ai.evil.invalid/",
+		"https://evil.invalid/claude.ai",
+		"https://user@claude.ai/",
+		"https://claude.ai:8443/",
+		"https://192.168.0.1/",
+		"https://openai.com/",
+	} {
+		if IsAllowedAuthWebNavigationURL(value) {
+			t.Errorf("expected auth navigation URL to be rejected: %s", value)
+		}
+	}
+}
+
+func TestAuthWebFetchAllowlistIsExactHost(t *testing.T) {
+	for _, value := range []string{
+		"https://claude.ai/api/organizations",
+		"https://grok.com/api/usage",
+	} {
+		if !IsAllowedAuthWebFetchURL(value) {
+			t.Errorf("expected auth fetch URL to be allowed: %s", value)
+		}
+	}
+	// The fetch surface is credentialed, so subdomains that navigation admits
+	// must NOT be accepted here.
+	for _, value := range []string{
+		"https://auth.anthropic.com/oauth",
+		"https://www.claude.ai/api/organizations",
+		"https://accounts.x.ai/",
+		"http://claude.ai/api/organizations",
+		"https://claude.ai.evil.invalid/api/organizations",
+		"https://user@claude.ai/api/organizations",
+	} {
+		if IsAllowedAuthWebFetchURL(value) {
+			t.Errorf("expected auth fetch URL to be rejected: %s", value)
+		}
+	}
+}
