@@ -140,5 +140,8 @@
   "help.antigravity_title": "Antigravity",
   "help.antigravity": "Antigravity IDE harus berjalan dan sudah masuk. AI Usage Widget hanya terhubung ke LSP lokalnya untuk membaca pemakaian Gemini dan Claude.",
   "help.antigravity_retry": "Jika muncul \"Tidak ditemukan\", jalankan Antigravity IDE lalu sambung ulang.",
+  "help.grok_title": "Grok",
+  "help.grok": "Grok CLI resmi harus terpasang dan sudah masuk. Aplikasi hanya membaca kredensial yang sudah disimpan CLI dan tidak pernah meminta token; pembaruan token tetap ditangani CLI.",
+  "help.grok_retry": "Jalankan grok --version di terminal. Jika kredensial kedaluwarsa, masuk lagi lewat Grok CLI lalu hubungkan ulang.",
   "help.credentials": "Informasi autentikasi mentah tidak pernah ditampilkan di Setelan maupun widget."
 }

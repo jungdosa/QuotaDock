@@ -90,9 +90,15 @@ func TestSettingsLayoutMetrics(t *testing.T) {
 	v.SetConfig(cfg)
 	warningOff := v.MinimumSize(SettingsScreen).Height
 	legacyDelta := phase3SLegacyWarningOnHeight - phase3SLegacyWarningOffHeight
-	// The Grok visibility row postdates the frozen 3S heights: allow exactly
-	// that one measured row (plus the group gap) on top of the legacy cap.
+	// Grok postdates the frozen 3S heights and adds exactly two rows to this
+	// screen: its visibility toggle and its CONNECTIONS entry. Both are
+	// measured here rather than folded into the constant, so the guard still
+	// catches growth that is not one of them, and so a fifth provider has to
+	// extend this allowance deliberately instead of silently.
 	grokAllowance := usage.Objects[2].MinSize().Height + theme.Padding() + 0.5
+	if rows := v.connectionsBody.Objects; len(rows) > 0 {
+		grokAllowance += rows[len(rows)-1].MinSize().Height + theme.Padding()
+	}
 	if warningOn > phase3SLegacyWarningOffHeight+legacyDelta/2+grokAllowance {
 		t.Fatalf("warning-on height %.1f exceeds half-expansion target %.1f", warningOn, phase3SLegacyWarningOffHeight+legacyDelta/2+grokAllowance)
 	}

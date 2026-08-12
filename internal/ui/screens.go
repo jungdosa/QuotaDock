@@ -1437,6 +1437,8 @@ func connectionHelpKeys(id model.ProviderID) (string, string, string) {
 		return i18n.KeyHelpCodexTitle, i18n.KeyHelpCodex, i18n.KeyHelpCodexRetry
 	case model.ProviderAntigravity:
 		return i18n.KeyHelpAntigravityTitle, i18n.KeyHelpAntigravity, i18n.KeyHelpAntigravityRetry
+	case model.ProviderGrok:
+		return i18n.KeyHelpGrokTitle, i18n.KeyHelpGrok, i18n.KeyHelpGrokRetry
 	default:
 		return i18n.KeyHelpClaudeTitle, i18n.KeyHelpClaude, i18n.KeyHelpClaudeRetry
 	}

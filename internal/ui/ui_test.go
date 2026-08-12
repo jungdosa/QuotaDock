@@ -960,10 +960,10 @@ func TestConnectionActionButtonsMatchProviderCards(t *testing.T) {
 		})
 		return count
 	}
-	if got := countButtons(v.text(i18n.KeyReconnect)); got != 3 {
+	if got := countButtons(v.text(i18n.KeyReconnect)); got != 4 {
 		t.Fatalf("reconnect buttons=%d, want one per provider", got)
 	}
-	if got := countButtons(v.text(i18n.KeyTestConnection)); got != 3 {
+	if got := countButtons(v.text(i18n.KeyTestConnection)); got != 4 {
 		t.Fatalf("connection test buttons=%d, want one per provider", got)
 	}
 	if got := countButtons(v.text(i18n.KeyConnect)); got != 0 {
@@ -1734,8 +1734,8 @@ func TestSettingsExpandsWithoutScrollAndShowsConnections(t *testing.T) {
 	if scrolls != 0 {
 		t.Fatalf("settings contains %d scroll containers", scrolls)
 	}
-	if len(v.connectionCache) != 3 || len(v.connectionsBody.Objects) != 3 {
-		t.Fatalf("collapsed settings connection rows=%d/%d, want 3/3", len(v.connectionCache), len(v.connectionsBody.Objects))
+	if len(v.connectionCache) != 4 || len(v.connectionsBody.Objects) != 4 {
+		t.Fatalf("collapsed settings connection rows=%d/%d, want 4/4", len(v.connectionCache), len(v.connectionsBody.Objects))
 	}
 }
 func TestLightSeverityColorsMeetWCAGThreeToOneContrast(t *testing.T) {

@@ -140,5 +140,8 @@
   "help.antigravity_title": "Antigravity",
   "help.antigravity": "Antigravity IDE debe estar en ejecución y con la sesión iniciada. AI Usage Widget solo se conecta a su LSP local para leer el uso de Gemini y Claude.",
   "help.antigravity_retry": "Si aparece «No detectado», abre Antigravity IDE y vuelve a conectarte.",
+  "help.grok_title": "Grok",
+  "help.grok": "La CLI oficial de Grok debe estar instalada y con la sesión iniciada. La aplicación solo lee la credencial que la CLI ya guardó y nunca pide un token; la renovación sigue siendo de la CLI.",
+  "help.grok_retry": "Comprueba grok --version en la terminal. Si la credencial venció, vuelve a iniciar sesión con la CLI de Grok y reconecta.",
   "help.credentials": "Las credenciales sin procesar nunca se muestran en la configuración ni en el widget."
 }

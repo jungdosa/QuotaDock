@@ -4,8 +4,13 @@
 
 > **✅ 완료 (2026-07-31, 0.7.17)** — `creditsDisplayEnabled` 게이트를 열고
 > OAuth usage 응답의 `extra_usage`·`spend` 블록을 파싱해 활성화했다. 아래 조사 기록은
-> 구현 근거로 보존한다. 미수용으로 남은 것: Codex `rateLimitResetCredits.availableCount`
-> (리셋권 개수)는 아직 파싱하지 않는다.
+> 구현 근거로 보존한다. ~~미수용으로 남은 것: Codex `rateLimitResetCredits.availableCount`
+> (리셋권 개수)는 아직 파싱하지 않는다.~~
+>
+> **✅ 후속 완료 (2026-08-12)** — 리셋권 개수는 0.7.34(Phase 4Q)에서 파싱해 크레딧 표면에
+> 덧붙인다. 같은 날 크레딧 구매·추가 사용량 활성화로 양 공급자를 실측했다(Codex `크레딧 250`,
+> Claude `크레딧 $0 / $200`). 구매하지 않은 계정에 `크레딧 0` 을 띄우던 잡음은 제거했다.
+> 상세는 `docs/PHASE-4Q-CODEX-RESET-CREDITS.md` 6절.
 
 - 코드는 구현 완료 상태로 `internal/ui/view_cache.go`의 `creditsDisplayEnabled = false`로 게이트되어 있다.
   활성화하면: 일반 모드 레인 헤더의 `크레딧 <잔액>` 메타 텍스트, 설정 CONNECTIONS의 크레딧 항목,
@@ -59,6 +64,14 @@ spend:       used{amount_minor,currency,exponent} · limit{...} · percent · se
 - 관련 i18n 키: `action.update`, `action.update_pending`, `tooltip.update_pending`.
 
 ## Grok 공급자 추가 (네 번째 공급자)
+
+> **✅ 완료 (2026-08-12)** — 1단계 공급자 계층(`internal/provider/grok/`, CLI 자격 재사용 +
+> grok.com billing gRPC-web)과 2단계 UI(레인·컴팩트·나노 5열·표시 토글 기본 꺼짐·`sky`·
+> CONNECTIONS 행·트레이 툴팁·i18n 12로케일)를 모두 반영했다. 아래 조사 기록은 구현 근거로 보존한다.
+>
+> **미확정으로 남은 것**: 사용률(소비량) 필드. 표본 2회가 바이트 동일해 대조하지 못했다.
+> 그래서 사용률은 지어내지 않고 `–` 로 두고 리셋 창만 그린다(`UsageRowState.UsageUnknown`).
+> 소비가 발생한 뒤 3차 표본을 떠야 확정된다.
 
 ### 선행 조사 결과 (2026-07-31)
 

@@ -152,6 +152,11 @@ const (
 	codexInstallCommand    = "npm install -g @openai/codex"
 	claudeSearchPaths      = `PATH · %USERPROFILE%\.local\bin · %LOCALAPPDATA%\Programs\Claude`
 	codexSearchPaths       = `PATH · %LOCALAPPDATA%\Programs\OpenAI\Codex\bin`
+	grokInstallURL         = "https://docs.x.ai/docs/grok-build"
+	grokInstallCommand     = "winget install xAI.GrokBuild"
+	// Grok is read from the CLI credential file rather than a located
+	// executable, so the search hint names the file the app actually reads.
+	grokSearchPaths        = `%USERPROFILE%\.grok\auth.json`
 	connectionMethodDotGap = float32(10)
 )
 
@@ -310,7 +315,7 @@ const creditsDisplayEnabled = true
 // laneCreditsVisible combines "the provider reported credits" with the
 // per-provider visibility toggle from Settings.
 func (v *View) laneCreditsVisible(lane LaneState) bool {
-	if !creditsDisplayEnabled || lane.Credits == nil {
+	if !creditsDisplayEnabled || !creditsWorthShowing(lane.Credits) {
 		return false
 	}
 	switch lane.Provider {
@@ -320,6 +325,19 @@ func (v *View) laneCreditsVisible(lane LaneState) bool {
 		return v.config.ShowCodexCredits
 	}
 	return true
+}
+
+// creditsWorthShowing keeps the surface quiet for accounts that never bought
+// credits: they report a zero balance with the feature off, and "Credits 0"
+// is noise, not data. A server-side HasCredits flag still shows a spent-down
+// zero balance, and a positive balance shows even on older CLI responses that
+// omit the flag entirely.
+func creditsWorthShowing(credits *model.Credits) bool {
+	if credits == nil {
+		return false
+	}
+	return credits.Unlimited || credits.Spend != nil || credits.HasCredits ||
+		credits.Balance > 0 || credits.ResetCredits > 0
 }
 
 func (v *View) creditsText(credits *model.Credits) string {
@@ -1006,7 +1024,7 @@ func (v *View) buildConnectionRows() {
 	descriptors := []struct {
 		id   model.ProviderID
 		name string
-	}{{model.ProviderClaude, "Claude"}, {model.ProviderCodex, "Codex"}, {model.ProviderAntigravity, "Antigravity"}}
+	}{{model.ProviderClaude, "Claude"}, {model.ProviderCodex, "Codex"}, {model.ProviderAntigravity, "Antigravity"}, {model.ProviderGrok, "Grok"}}
 	objects := make([]fyne.CanvasObject, 0, len(descriptors))
 	v.connectionCache = make([]*connectionView, 0, len(descriptors))
 	for _, descriptor := range descriptors {
@@ -1092,6 +1110,8 @@ func connectionMethodsFor(id model.ProviderID) []connectionMethod {
 		return []connectionMethod{connectionMethodCLI}
 	case model.ProviderAntigravity:
 		return []connectionMethod{connectionMethodIDE}
+	case model.ProviderGrok:
+		return []connectionMethod{connectionMethodCLI}
 	default:
 		return nil
 	}
@@ -1249,7 +1269,7 @@ func (v *View) connectionDetailText(lane LaneState) string {
 		if lane.CLIVersion != "" {
 			details = append(details, fmt.Sprintf(v.text(i18n.KeyCLIVersion), lane.CLIVersion))
 		}
-		if creditsDisplayEnabled && lane.Credits != nil && v.config.ShowCodexCredits {
+		if v.laneCreditsVisible(lane) {
 			details = append(details, v.creditsText(lane.Credits))
 		}
 	}
@@ -1275,7 +1295,7 @@ func compactConnectionPath(path string) string {
 
 func connectionNeedsInstall(lane LaneState) bool {
 	switch lane.Provider {
-	case model.ProviderClaude, model.ProviderCodex, model.ProviderAntigravity:
+	case model.ProviderClaude, model.ProviderCodex, model.ProviderAntigravity, model.ProviderGrok:
 		return lane.Status != model.StatusConnected
 	default:
 		return false
@@ -1358,15 +1378,21 @@ func (v *View) connectionPanelCard(content, actions []fyne.CanvasObject) fyne.Ca
 }
 
 func connectionInstallDetails(id model.ProviderID) (name, installCommand, signIn, verify, searchPaths string) {
-	if id == model.ProviderClaude {
+	switch id {
+	case model.ProviderClaude:
 		return "Claude CLI", claudeInstallCommand, "claude → Claude", "claude --version", claudeSearchPaths
+	case model.ProviderGrok:
+		return "Grok CLI", grokInstallCommand, "grok → x.ai", "grok --version", grokSearchPaths
 	}
 	return "Codex CLI", codexInstallCommand, "codex → ChatGPT", "codex --version", codexSearchPaths
 }
 
 func connectionInstallURL(id model.ProviderID) string {
-	if id == model.ProviderClaude {
+	switch id {
+	case model.ProviderClaude:
 		return claudeInstallURL
+	case model.ProviderGrok:
+		return grokInstallURL
 	}
 	return codexInstallURL
 }

@@ -140,5 +140,8 @@
   "help.antigravity_title": "Antigravity",
   "help.antigravity": "Antigravity IDE が起動し、ログイン済みである必要があります。QuotaDock はローカル LSP のみに接続し、Gemini と Claude の使用量を読み取ります。",
   "help.antigravity_retry": "「未検出」と表示されたら、Antigravity IDE を起動して再接続してください。",
+  "help.grok_title": "Grok",
+  "help.grok": "公式 Grok CLI がインストールされ、サインイン済みである必要があります。アプリは CLI が保存済みの資格情報を読むだけで、トークンを要求しません。更新は CLI が担当します。",
+  "help.grok_retry": "ターミナルで grok --version を確認してください。資格情報が期限切れの場合は Grok CLI で再度サインインしてから再接続してください。",
   "help.credentials": "認証情報そのものが設定画面や使用量ウィジェットに表示されることはありません。"
 }

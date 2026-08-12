@@ -140,5 +140,8 @@
   "help.antigravity_title": "Antigravity",
   "help.antigravity": "Antigravity IDE 必須正在執行並已登入。QuotaDock 只連接本機 LSP，以讀取 Gemini 與 Claude 用量。",
   "help.antigravity_retry": "若顯示「找不到」，請啟動 Antigravity IDE 並重新連線。",
+  "help.grok_title": "Grok",
+  "help.grok": "需要安裝官方 Grok CLI 並完成登入。應用程式只讀取 CLI 已儲存的憑證，不會索取權杖；權杖更新由 CLI 負責。",
+  "help.grok_retry": "在終端機執行 grok --version 檢查。若憑證已過期，請透過 Grok CLI 重新登入後再連線。",
   "help.credentials": "原始認證資訊不會顯示在設定或用量小工具中。"
 }

@@ -32,7 +32,14 @@ func BuildTrayTooltip(state ViewState, config settings.Config, systemLanguage i1
 			continue
 		}
 		until, _ := resetStrings(row, now, config, systemLanguage)
-		lines = append(lines, fmt.Sprintf("%s %s%% · %s", lane.Name, formatUsagePercent(row.Percent), strings.ReplaceAll(until, " ", "")))
+		countdown := strings.ReplaceAll(until, " ", "")
+		if row.UsageUnknown {
+			// No consumption figure to quote, so the line carries the reset
+			// countdown alone rather than an invented percentage.
+			lines = append(lines, fmt.Sprintf("%s · %s", lane.Name, countdown))
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("%s %s%% · %s", lane.Name, formatUsagePercent(row.Percent), countdown))
 	}
 	return combineTrayTooltip(trayTooltipAppName, lines)
 }
@@ -49,6 +56,10 @@ func highestVisibleUsageRow(lane LaneState, config settings.Config) (UsageRowSta
 		}
 	case model.ProviderAntigravity:
 		if !config.ShowAGGemini && !config.ShowAGClaude {
+			return UsageRowState{}, false
+		}
+	case model.ProviderGrok:
+		if !config.ShowGrok {
 			return UsageRowState{}, false
 		}
 	default:

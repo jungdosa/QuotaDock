@@ -140,5 +140,8 @@
   "help.antigravity_title": "Antigravity",
   "help.antigravity": "Antigravity IDE must be running and signed in. QuotaDock connects only to the local LSP to read Gemini and Claude usage.",
   "help.antigravity_retry": "If 'Not found' appears, start Antigravity IDE and reconnect.",
+  "help.grok_title": "Grok",
+  "help.grok": "The official Grok CLI must be installed and signed in. The app reads only the credential the CLI already stored and never asks for a token; it does not refresh the token, since the CLI owns that.",
+  "help.grok_retry": "Run grok --version in a terminal. If the credential has expired, sign in again with the Grok CLI and reconnect.",
   "help.credentials": "Raw authentication information is never shown in Settings or the usage widget."
 }

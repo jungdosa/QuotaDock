@@ -20,6 +20,7 @@ func TestConnectionMethodCountsByProvider(t *testing.T) {
 		model.ProviderClaude:      3,
 		model.ProviderCodex:       1,
 		model.ProviderAntigravity: 1,
+		model.ProviderGrok:        1,
 	}
 	for _, row := range v.connectionCache {
 		if len(row.methods) != want[row.id] {

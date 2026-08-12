@@ -145,6 +145,9 @@ const (
 	KeyHelpAntigravityTitle      = "help.antigravity_title"
 	KeyHelpAntigravity           = "help.antigravity"
 	KeyHelpAntigravityRetry      = "help.antigravity_retry"
+	KeyHelpGrokTitle             = "help.grok_title"
+	KeyHelpGrok                  = "help.grok"
+	KeyHelpGrokRetry             = "help.grok_retry"
 	KeyHelpCredentials           = "help.credentials"
 )
 
@@ -412,6 +415,9 @@ var RequiredKeys = []string{
 	KeyHelpAntigravityTitle,
 	KeyHelpAntigravity,
 	KeyHelpAntigravityRetry,
+	KeyHelpGrokTitle,
+	KeyHelpGrok,
+	KeyHelpGrokRetry,
 	KeyHelpCredentials,
 }
 

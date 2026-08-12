@@ -140,5 +140,8 @@
   "help.antigravity_title": "Antigravity",
   "help.antigravity": "Antigravity IDE muss laufen und angemeldet sein. AI Usage Widget verbindet sich nur mit dem lokalen LSP, um die Nutzung von Gemini und Claude zu lesen.",
   "help.antigravity_retry": "Erscheint „Nicht gefunden“, starten Sie Antigravity IDE und verbinden Sie sich erneut.",
+  "help.grok_title": "Grok",
+  "help.grok": "Die offizielle Grok-CLI muss installiert und angemeldet sein. Die App liest nur die von der CLI gespeicherten Zugangsdaten und fragt nie nach einem Token; die Aktualisierung übernimmt die CLI.",
+  "help.grok_retry": "Prüfen Sie grok --version im Terminal. Sind die Zugangsdaten abgelaufen, melden Sie sich erneut über die Grok-CLI an und verbinden Sie neu.",
   "help.credentials": "Anmeldedaten im Klartext werden weder in den Einstellungen noch im Widget angezeigt."
 }
