@@ -78,3 +78,36 @@ func TestChatOrganizationPicksTheAppOrgAndRejectsJunk(t *testing.T) {
 		}
 	}
 }
+
+// Refresh succeeding while Inspect still reported an error left the row
+// showing a failure the user had already worked around by signing in.
+func TestInspectReportsTheWebSourceWhenTheCLICannotServe(t *testing.T) {
+	client := &fakeClient{versionErr: shared.ErrNotInstalled}
+	provider := newProvider(client, nil, "2.0.0")
+	provider.SetWebAuth(fakeOAuthFetcher{available: true, result: oauthResult{raw: json.RawMessage(webUsageJSON)}})
+	state := provider.Inspect(context.Background())
+	if state.Status != model.StatusConnected || state.Source != model.SourceWebSignIn {
+		t.Fatalf("inspect = %+v, want connected via the web sign-in", state)
+	}
+}
+
+// A working CLI keeps owning the row, so the source stays empty.
+func TestInspectPrefersTheCLIOverTheWebSession(t *testing.T) {
+	client := &fakeClient{version: "2.1.0", auth: json.RawMessage(`{"loggedIn":true,"subscriptionType":"pro"}`)}
+	provider := newProvider(client, nil, "2.0.0")
+	provider.SetWebAuth(fakeOAuthFetcher{available: true, result: oauthResult{raw: json.RawMessage(webUsageJSON)}})
+	state := provider.Inspect(context.Background())
+	if state.Status != model.StatusConnected || state.Source == model.SourceWebSignIn {
+		t.Fatalf("inspect = %+v, want the CLI to own the row", state)
+	}
+}
+
+// Without a usable browser session the CLI error must survive untouched.
+func TestInspectKeepsTheCLIErrorWithoutASession(t *testing.T) {
+	client := &fakeClient{versionErr: shared.ErrNotInstalled}
+	provider := newProvider(client, nil, "2.0.0")
+	provider.SetWebAuth(fakeOAuthFetcher{available: false})
+	if state := provider.Inspect(context.Background()); state.Status == model.StatusConnected {
+		t.Fatalf("inspect = %+v, want the CLI error preserved", state)
+	}
+}

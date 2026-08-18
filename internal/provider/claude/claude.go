@@ -69,7 +69,16 @@ func (p *Provider) Inspect(ctx context.Context) model.ConnectionState {
 		}
 		return p.setState(state)
 	}
-	return p.inspectCLI(ctx)
+	state := p.inspectCLI(ctx)
+	if state.Status == model.StatusConnected {
+		return state
+	}
+	// The CLI cannot serve the lane. A signed-in browser session still can, so
+	// the row must not report a failure the user has already worked around.
+	if p.webAuth != nil && p.webAuth.Available() {
+		return p.setState(model.ConnectionState{Status: model.StatusConnected, Source: model.SourceWebSignIn})
+	}
+	return state
 }
 
 func (p *Provider) inspectCLI(ctx context.Context) model.ConnectionState {
