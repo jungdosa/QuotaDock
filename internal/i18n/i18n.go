@@ -160,6 +160,8 @@ const (
 	KeyConnectionStateAvailable    = "connection.state_available"
 	KeyConnectionStateMissing      = "connection.state_missing"
 	KeyConnectionStatePlanned      = "connection.state_planned"
+	KeyConnectionSignIn            = "connection.sign_in"
+	KeyConnectionAuthWebHint       = "connection.auth_web_hint"
 	KeyConnectionPanelInstallTitle = "connection.panel_install_title"
 	KeyConnectionInstallStep1      = "connection.install_step_1"
 	KeyConnectionInstallStep2      = "connection.install_step_2"
@@ -355,6 +357,8 @@ var RequiredKeys = []string{
 	KeyConnectionStateAvailable,
 	KeyConnectionStateMissing,
 	KeyConnectionStatePlanned,
+	KeyConnectionSignIn,
+	KeyConnectionAuthWebHint,
 	KeyConnectionPanelInstallTitle,
 	KeyConnectionInstallStep1,
 	KeyConnectionInstallStep2,

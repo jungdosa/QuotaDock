@@ -39,6 +39,7 @@ var appEvents = []string{
 	"provider.state",
 	"session.invalidate",
 	"session.reconnect",
+	"web.signin",
 	"display.change",
 	"window.fit",
 	"window.yield",

@@ -1203,8 +1203,24 @@ func (v *View) connectionMethodTooltip(label string, state connectionMethodState
 }
 
 func (v *View) connectionMethodState(lane LaneState, method connectionMethod) connectionMethodState {
+	if lane.Provider == model.ProviderClaude && method == connectionMethodAuth {
+		return v.claudeAuthState(lane)
+	}
 	_, envConfigured := os.LookupEnv(claudeOAuthTokenEnv)
 	return connectionMethodStateSelected(lane, method, envConfigured, v.selectedConnectionMethod(lane.Provider))
+}
+
+// claudeAuthState reflects the embedded sign-in: active while it is the source
+// actually serving the lane, available once the runtime can run it, and
+// planned only where the browser cannot run at all.
+func (v *View) claudeAuthState(lane LaneState) connectionMethodState {
+	if lane.Source == model.SourceWebSignIn && lane.Status == model.StatusConnected {
+		return connectionMethodActive
+	}
+	if v.Actions.WebAuthAvailable {
+		return connectionMethodAvailable
+	}
+	return connectionMethodPlanned
 }
 
 func connectionMethodStateFor(lane LaneState, method connectionMethod, envConfigured bool) connectionMethodState {
@@ -1388,7 +1404,18 @@ func (v *View) connectionPanel(lane LaneState, method connectionMethod) connecti
 
 	switch {
 	case lane.Provider == model.ProviderClaude && method == connectionMethodAuth:
-		content = []fyne.CanvasObject{textLabel(v.text(i18n.KeyConnectionAuthPlanned), 9.5, v.colors.Secondary, false, false)}
+		if !v.Actions.WebAuthAvailable {
+			content = []fyne.CanvasObject{textLabel(v.text(i18n.KeyConnectionAuthPlanned), 9.5, v.colors.Secondary, false, false)}
+			break
+		}
+		content = []fyne.CanvasObject{helpRichText(v.text(i18n.KeyConnectionAuthWebHint), theme.ColorNameDisabled, false, 510, 40)}
+		signIn := NewOutlinedSmallButton(v.text(i18n.KeyConnectionSignIn), v.text(i18n.KeyConnectionSignIn), func() {
+			v.closeConnectionPanel()
+			if v.Actions.SignIn != nil {
+				v.Actions.SignIn(lane.Provider)
+			}
+		}, v.colors)
+		actions = append(actions, connectionButton(signIn, 80))
 	case lane.Provider == model.ProviderClaude && method == connectionMethodOther:
 		_, configured := os.LookupEnv(claudeOAuthTokenEnv)
 		message := v.text(i18n.KeyConnectionEnvConfigured)

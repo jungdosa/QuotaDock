@@ -78,6 +78,11 @@ type ConnectionState struct {
 	Source     string
 }
 
+// SourceWebSignIn labels a connection served by the embedded browser sign-in
+// rather than a CLI. Both the provider that sets it and the UI that reads it
+// share this constant so the two never drift apart.
+const SourceWebSignIn = "Web sign-in"
+
 type Plan string
 
 const PlanUnknown Plan = "UNKNOWN"

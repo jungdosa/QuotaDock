@@ -80,6 +80,8 @@
   "connection.state_available": "Disponible",
   "connection.state_missing": "Non installé",
   "connection.state_planned": "Bientôt disponible",
+  "connection.sign_in": "Se connecter",
+  "connection.auth_web_hint": "Ouvre la page de connexion officielle d'Anthropic dans une fenêtre de l'application. Votre mot de passe est envoyé directement à Anthropic ; QuotaDock ne peut pas le lire. La session reste propre à cette application.",
   "connection.panel_install_title": "Connexion %s — installation requise",
   "connection.install_step_1": "Installez %s",
   "connection.install_step_2": "Connectez-vous à %s",

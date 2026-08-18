@@ -80,6 +80,8 @@
   "connection.state_available": "可用",
   "connection.state_missing": "未安裝",
   "connection.state_planned": "即將推出",
+  "connection.sign_in": "登入",
+  "connection.auth_web_hint": "在應用程式內的視窗開啟 Anthropic 官方登入頁面。密碼直接傳送給 Anthropic，QuotaDock 無法讀取。工作階段僅保存在本應用程式中。",
   "connection.panel_install_title": "%s 連線 — 需要安裝",
   "connection.install_step_1": "安裝 %s",
   "connection.install_step_2": "登入 %s",

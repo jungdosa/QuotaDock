@@ -25,6 +25,7 @@ type executableSource interface {
 type Provider struct {
 	client         Client
 	oauth          oauthUsageFetcher
+	webAuth        oauthUsageFetcher
 	minimumVersion string
 	state          *model.StateMachine
 	group          process.Group[model.UsageSnapshot]
@@ -37,6 +38,13 @@ func New(client Client, minimumVersion string) *Provider {
 
 func newProvider(client Client, oauth oauthUsageFetcher, minimumVersion string) *Provider {
 	return &Provider{client: client, oauth: oauth, minimumVersion: minimumVersion, state: model.NewStateMachine(), now: time.Now}
+}
+
+// SetWebAuth attaches the embedded-browser fetcher as a fallback used only
+// when the CLI path is unavailable. It never displaces a working CLI: the
+// refresh order stays CLI credential, then CLI auth-status, then web.
+func (p *Provider) SetWebAuth(webAuth oauthUsageFetcher) {
+	p.webAuth = webAuth
 }
 
 type authStatus struct {
@@ -139,8 +147,35 @@ func (p *Provider) Refresh(ctx context.Context) (model.UsageSnapshot, error) {
 				// Endpoint and refresh failures safely fall back to the CLI auth-status path.
 			}
 		}
-		return p.refreshCLI(ctx)
+		cliSnapshot, cliErr := p.refreshCLI(ctx)
+		if cliErr == nil {
+			return cliSnapshot, nil
+		}
+		// The CLI is unavailable. If the user signed in through the embedded
+		// browser, read usage from that session instead. It only produces a
+		// snapshot on success; any failure leaves the CLI error standing so
+		// the lane keeps guiding the user to install or sign in.
+		if snapshot, ok := p.refreshWebAuth(ctx); ok {
+			return snapshot, nil
+		}
+		return cliSnapshot, cliErr
 	})
+}
+
+func (p *Provider) refreshWebAuth(ctx context.Context) (model.UsageSnapshot, bool) {
+	if p.webAuth == nil || !p.webAuth.Available() {
+		return model.UsageSnapshot{}, false
+	}
+	result, err := p.webAuth.Fetch(ctx)
+	if err != nil {
+		return model.UsageSnapshot{}, false
+	}
+	snapshot, normalizeErr := NormalizeOAuthUsage(result.raw, result.rateLimitTier, result.subscriptionType, p.now())
+	if normalizeErr != nil {
+		return model.UsageSnapshot{}, false
+	}
+	p.setState(model.ConnectionState{Status: model.StatusConnected, Source: model.SourceWebSignIn})
+	return snapshot, true
 }
 
 func (p *Provider) refreshCLI(ctx context.Context) (model.UsageSnapshot, error) {

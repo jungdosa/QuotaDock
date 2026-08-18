@@ -80,6 +80,8 @@
   "connection.state_available": "利用可能",
   "connection.state_missing": "未インストール",
   "connection.state_planned": "近日対応",
+  "connection.sign_in": "サインイン",
+  "connection.auth_web_hint": "アプリ内のウィンドウで Anthropic 公式サインインページを開きます。パスワードは Anthropic に直接送信され、QuotaDock は読み取れません。セッションはこのアプリ内にのみ保存されます。",
   "connection.panel_install_title": "%s 接続 — インストールが必要です",
   "connection.install_step_1": "%s をインストール",
   "connection.install_step_2": "%s にログイン",

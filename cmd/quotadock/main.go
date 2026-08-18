@@ -23,6 +23,7 @@ import (
 	codexprovider "github.com/jungdosa/QuotaDock/internal/provider/codex"
 	"github.com/jungdosa/QuotaDock/internal/settings"
 	"github.com/jungdosa/QuotaDock/internal/ui"
+	"github.com/jungdosa/QuotaDock/internal/webview"
 	updater "github.com/jungdosa/QuotaDock/internal/update"
 	"log/slog"
 	"os"
@@ -133,8 +134,17 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	// Provider stdout/stderr can contain response bodies, account data, and
 	// absolute CLI paths. Structured provider events below are the safe record.
 	processLog := func(string) {}
+	claudeProvider := claudeprovider.New(claudeprovider.NewCLIClient(processLog), claudeprovider.MinimumCLIVersion)
+	// The embedded-browser sign-in stores its session under the local data
+	// folder, beside the diagnostics logs. It is a fallback: the Claude
+	// provider only consults it when the CLI path is unavailable.
+	var claudeWebAuth *claudeprovider.WebAuthFetcher
+	if dataDir, dirErr := diagnostics.LocalDataDirectory(); dirErr == nil {
+		claudeWebAuth = claudeprovider.NewWebAuthFetcher(filepath.Join(dataDir, webview.DefaultUserDataDir))
+		claudeProvider.SetWebAuth(claudeWebAuth)
+	}
 	coordinator := provider.Coordinator{Providers: map[model.ProviderID]model.Provider{
-		model.ProviderClaude:      claudeprovider.New(claudeprovider.NewCLIClient(processLog), claudeprovider.MinimumCLIVersion),
+		model.ProviderClaude:      claudeProvider,
 		model.ProviderCodex:       codexprovider.New(codexprovider.NewAppServerTransport(processLog), codexprovider.MinimumCLIVersion),
 		model.ProviderAntigravity: agprovider.New(agprovider.NewLocalClient()),
 		model.ProviderGrok:        grokprovider.New(nil, ""),
@@ -391,6 +401,22 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		applyConfig(cfg)
 		applyScreen(ui.ScreenForDisplayMode(mode))
 	}
+	runSignIn := func(id model.ProviderID) {
+		if demo || id != model.ProviderClaude || claudeWebAuth == nil {
+			return
+		}
+		diagnostics.Go("web_signin", func() {
+			// A sign-in can wait on the user typing credentials, so it gets a
+			// generous ceiling well beyond a normal request.
+			signInCtx, stop := context.WithTimeout(ctx, 5*time.Minute)
+			defer stop()
+			err := claudeWebAuth.SignIn(signInCtx)
+			slog.Info("web.signin", "provider", string(id), "ok", err == nil)
+			if err == nil {
+				refresh()
+			}
+		})
+	}
 	runConnectionAction := func(id model.ProviderID, reconnect bool) {
 		implementation := coordinator.Providers[id]
 		if implementation == nil {
@@ -464,10 +490,13 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	}, ConfigChanged: applyConfig, Activity: markActivity,
 		Inspect:     func(id model.ProviderID) { runConnectionAction(id, false) },
 		Reconnect:   func(id model.ProviderID) { runConnectionAction(id, true) },
+		SignIn:      runSignIn,
 		CheckUpdate: func() { updates.Check(true) },
 		OpenURL:     func(raw string) error { return platform.OpenAllowedURL(a, raw) },
 	}
 	actions.DemoMode = demo
+	// The Auth method only offers itself where the embedded browser can run.
+	actions.WebAuthAvailable = !demo && claudeWebAuth != nil && webview.DetectRuntime().Present
 	view = ui.NewView(w.Canvas(), catalog, systemLanguage, cfg, actions)
 	updates.preparePrompt = func() {
 		showWindow()

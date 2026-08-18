@@ -80,6 +80,8 @@
   "connection.state_available": "Tersedia",
   "connection.state_missing": "Belum terpasang",
   "connection.state_planned": "Segera hadir",
+  "connection.sign_in": "Masuk",
+  "connection.auth_web_hint": "Membuka halaman masuk resmi Anthropic di jendela dalam aplikasi. Kata sandi Anda langsung dikirim ke Anthropic; QuotaDock tidak dapat membacanya. Sesi hanya disimpan untuk aplikasi ini.",
   "connection.panel_install_title": "Koneksi %s — perlu dipasang",
   "connection.install_step_1": "Pasang %s",
   "connection.install_step_2": "Masuk ke %s",

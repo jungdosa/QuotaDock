@@ -170,12 +170,18 @@ type Actions struct {
 	ConfigChanged   func(settings.Config)
 	Inspect         func(model.ProviderID)
 	Reconnect       func(model.ProviderID)
+	// SignIn opens the embedded browser so the user can sign in to a provider
+	// that supports the Auth method. Nil when no provider offers it.
+	SignIn          func(model.ProviderID)
 	CheckUpdate     func()
 	OpenURL         func(string) error
 	Activity        func()
 	AppVersion               string
 	DemoMode                 bool
 	TrayPromotionSupported   bool
+	// WebAuthAvailable reports whether the embedded browser sign-in can run,
+	// so the Claude Auth method reads as available instead of planned.
+	WebAuthAvailable bool
 }
 type View struct {
 	Canvas                  fyne.Canvas

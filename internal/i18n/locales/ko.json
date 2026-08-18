@@ -80,6 +80,8 @@
   "connection.state_available": "사용 가능",
   "connection.state_missing": "미설치",
   "connection.state_planned": "준비 중",
+  "connection.sign_in": "로그인",
+  "connection.auth_web_hint": "앱 안의 창에서 Anthropic 공식 로그인 페이지를 엽니다. 비밀번호는 Anthropic으로 바로 전송되며 QuotaDock은 읽을 수 없습니다. 세션은 이 앱에만 보관됩니다.",
   "connection.panel_install_title": "%s 연결 — 설치가 필요합니다",
   "connection.install_step_1": "설치 %s",
   "connection.install_step_2": "로그인 %s",
