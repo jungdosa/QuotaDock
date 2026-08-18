@@ -134,13 +134,40 @@ func NormalizeBilling(payload []byte, fetchedAt time.Time) (model.UsageSnapshot,
 		return snapshot, nil
 	}
 	windowMinutes := int(end.Sub(start) / time.Minute)
-	snapshot.Limits = []model.UsageLimit{{
+	limit := model.UsageLimit{
 		ID:            "weekly",
 		Label:         model.UsageWindowLabel(windowMinutes),
 		WindowMinutes: windowMinutes,
 		ResetsAt:      end.UTC(),
-	}}
+	}
+	// Field 1.1 is the weekly used-percent as a float32 (confirmed live: it
+	// tracks the web dashboard's "주간 한도 N%", and equals the sum of the
+	// per-feature breakdown in the repeated field 1.7). Out-of-range or absent
+	// leaves the row marked unknown rather than inventing a zero.
+	if percent, ok := usagePercentAt(fields, []int{1, 1}); ok {
+		limit.UsedPercent = percent
+	} else {
+		limit.UsageUnknown = true
+	}
+	snapshot.Limits = []model.UsageLimit{limit}
 	return snapshot, nil
+}
+
+// usagePercentAt reads a float32 (wire type i32) at the given path and accepts
+// it only as a percentage in [0, 100]. Anything else is treated as absent so a
+// changed response degrades to "unknown" instead of a wrong number.
+func usagePercentAt(fields []Field, path []int) (float64, bool) {
+	for _, field := range fields {
+		if !samePath(field.Path, path) || field.Type != 5 {
+			continue
+		}
+		value := float64(math.Float32frombits(uint32(field.Value)))
+		if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 || value > 100 {
+			return 0, false
+		}
+		return value, true
+	}
+	return 0, false
 }
 
 func extractBillingWindow(fields []Field) (time.Time, time.Time, error) {

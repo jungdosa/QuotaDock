@@ -126,9 +126,10 @@ func (c *Controller) Refresh(ctx context.Context) ViewState {
 		lane.Status = model.StatusConnected
 		lane.Credits = outcome.Snapshot.Credits
 		for _, limit := range outcome.Snapshot.Limits {
-			// Grok's usage field is unconfirmed (stage 5C-2), so its rows
-			// carry only the reset window until a consumption sample fixes it.
-			lane.Rows = append(lane.Rows, UsageRowState{Label: limit.Label, Percent: limit.UsedPercent, UsageUnknown: lane.Provider == model.ProviderGrok, ResetsAt: limit.ResetsAt, WindowMinutes: limit.WindowMinutes})
+			// A limit only reads as "unknown" when the provider says so; Grok
+			// now reports a real weekly percent, and any provider that cannot
+			// report consumption sets the flag on the limit itself.
+			lane.Rows = append(lane.Rows, UsageRowState{Label: limit.Label, Percent: limit.UsedPercent, UsageUnknown: limit.UsageUnknown, ResetsAt: limit.ResetsAt, WindowMinutes: limit.WindowMinutes})
 		}
 		sortLaneRows(lane.Provider, lane.Rows)
 		assignUniqueDisplayLabels(lane.Rows)

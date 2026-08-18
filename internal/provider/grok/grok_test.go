@@ -49,8 +49,10 @@ func TestProviderReturnsResetOnlySnapshotAndRequiredRequest(t *testing.T) {
 	if err != nil || snapshot.Provider != model.ProviderGrok || snapshot.Plan != model.PlanUnknown || len(snapshot.Limits) != 1 {
 		t.Fatalf("snapshot = %+v, err = %v", snapshot, err)
 	}
-	if snapshot.Limits[0].UsedPercent != 0 || snapshot.Limits[0].RemainingPercent != 0 {
-		t.Fatalf("unconfirmed usage was invented: %+v", snapshot.Limits[0])
+	// This fixture carries no usage field, so the lane reports the reset
+	// window and marks usage unknown rather than inventing a zero.
+	if snapshot.Limits[0].UsedPercent != 0 || !snapshot.Limits[0].UsageUnknown {
+		t.Fatalf("a usage-less response should read unknown: %+v", snapshot.Limits[0])
 	}
 }
 

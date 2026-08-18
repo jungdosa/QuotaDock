@@ -1,6 +1,7 @@
 package grok
 
 import (
+	"math"
 	"testing"
 	"time"
 )
@@ -74,6 +75,45 @@ func TestNormalizeBillingExtractsWeeklyWindow(t *testing.T) {
 	}
 }
 
+func TestNormalizeBillingReadsWeeklyUsagePercent(t *testing.T) {
+	now := time.Date(2030, 1, 2, 0, 0, 0, 0, time.UTC)
+	start, end := now.Add(-24*time.Hour), now.Add(6*24*time.Hour)
+	snapshot, err := NormalizeBilling(protoBillingPayloadWithUsage(start, end, 6), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	limit := snapshot.Limits[0]
+	if limit.UsageUnknown {
+		t.Fatal("usage was marked unknown even though field 1.1 was present")
+	}
+	if limit.UsedPercent != 6 {
+		t.Fatalf("used percent = %v, want 6", limit.UsedPercent)
+	}
+}
+
+func TestNormalizeBillingMarksUsageUnknownWhenPercentAbsentOrOutOfRange(t *testing.T) {
+	now := time.Date(2030, 1, 2, 0, 0, 0, 0, time.UTC)
+	start, end := now.Add(-24*time.Hour), now.Add(6*24*time.Hour)
+	// No field 1.1 at all.
+	absent, err := NormalizeBilling(protoBillingPayload(start, end), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !absent.Limits[0].UsageUnknown || absent.Limits[0].UsedPercent != 0 {
+		t.Fatalf("absent usage should read unknown, got %+v", absent.Limits[0])
+	}
+	// A value outside 0..100 is treated as absent, not shown as a wrong number.
+	for _, bad := range []float32{-1, 250, float32(math.Inf(1))} {
+		snapshot, err := NormalizeBilling(protoBillingPayloadWithUsage(start, end, bad), now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !snapshot.Limits[0].UsageUnknown {
+			t.Fatalf("out-of-range %v was not rejected", bad)
+		}
+	}
+}
+
 func TestNormalizeBillingRejectsInvalidWindowRangesWithoutCreatingLane(t *testing.T) {
 	now := time.Date(2030, 1, 2, 0, 0, 0, 0, time.UTC)
 	tests := map[string][]byte{
@@ -107,6 +147,20 @@ func protoBillingPayload(start, end time.Time) []byte {
 	inner = append(inner, protoBytesField(12, protoVarintField(1, 4000))...)
 	inner = append(inner, protoVarintField(13, 1)...)
 	return protoBytesField(1, inner)
+}
+
+// protoBillingPayloadWithUsage mirrors the live response, which carries the
+// weekly used-percent as a float32 in field 1.1.
+func protoBillingPayloadWithUsage(start, end time.Time, usedPercent float32) []byte {
+	inner := protoI32Field(1, math.Float32bits(usedPercent))
+	inner = append(inner, protoBytesField(4, protoTimestamp(start))...)
+	inner = append(inner, protoBytesField(5, protoTimestamp(end))...)
+	return protoBytesField(1, inner)
+}
+
+func protoI32Field(number int, bits uint32) []byte {
+	encoded := appendVarint(nil, uint64(number<<3|5))
+	return append(encoded, byte(bits), byte(bits>>8), byte(bits>>16), byte(bits>>24))
 }
 
 func protoTimestamp(value time.Time) []byte {

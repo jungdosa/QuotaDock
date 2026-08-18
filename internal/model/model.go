@@ -89,6 +89,11 @@ type UsageLimit struct {
 	RemainingPercent float64
 	WindowMinutes    int
 	ResetsAt         time.Time
+	// UsageUnknown marks a limit whose consumption the provider cannot report,
+	// leaving only the reset window. It defaults to false, so every existing
+	// provider keeps reporting a known figure; only a provider that explicitly
+	// sets it (Grok, when the usage field is absent) shows a dash instead of 0%.
+	UsageUnknown bool
 }
 
 type Credits struct {
