@@ -488,7 +488,13 @@ func NormalizeOAuthUsage(raw json.RawMessage, rateLimitTier, subscriptionType st
 			ResetsAt:         parseISOTime(window.ResetsAt),
 		})
 	}
-	appendWindow("five_hour", "Session", 300, payload.FiveHour)
+	// The legacy five_hour and seven_day fields can report stale values right
+	// after their window resets; the limits[] entries carry the fresh ones.
+	session := payload.FiveHour
+	if scoped := sessionLimit(payload.Limits); scoped != nil {
+		session = scoped
+	}
+	appendWindow("five_hour", "Session", 300, session)
 
 	weekly := payload.SevenDay
 	if scoped := weeklyAllLimit(payload.Limits); scoped != nil {
@@ -544,6 +550,17 @@ func amountFromMinor(amountMinor int64, exponent int) (float64, bool) {
 	}
 	amount := float64(amountMinor) / divisor
 	return amount, finite(amount)
+}
+
+func sessionLimit(limits []oauthScopedLimit) *oauthUsageWindow {
+	for i := range limits {
+		limit := &limits[i]
+		if limit.Kind != "session" || (limit.Group != "" && limit.Group != "session") || limit.Percent == nil || !finite(*limit.Percent) {
+			continue
+		}
+		return &oauthUsageWindow{Utilization: limit.Percent, ResetsAt: limit.ResetsAt}
+	}
+	return nil
 }
 
 func weeklyAllLimit(limits []oauthScopedLimit) *oauthUsageWindow {

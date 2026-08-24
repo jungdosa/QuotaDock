@@ -262,6 +262,31 @@ func TestNormalizeOAuthUsageWeeklyAllOverridesLegacySevenDay(t *testing.T) {
 	}
 }
 
+func TestNormalizeOAuthUsageSessionLimitOverridesLegacyFiveHour(t *testing.T) {
+	raw := json.RawMessage(`{"five_hour":{"utilization":100},"limits":[{"kind":"session","group":"session","percent":5,"resets_at":"2030-01-01T05:00:00Z"}]}`)
+	snapshot, err := NormalizeOAuthUsage(raw, "", "max", time.Now())
+	if err != nil || len(snapshot.Limits) != 1 {
+		t.Fatalf("session limit normalization failed: count=%d err=%v", len(snapshot.Limits), err)
+	}
+	if snapshot.Limits[0].UsedPercent != 5 {
+		t.Fatal("limits session did not override stale five_hour")
+	}
+	if snapshot.Limits[0].ResetsAt.IsZero() {
+		t.Fatal("session reset time from limits entry was dropped")
+	}
+}
+
+func TestNormalizeOAuthUsageSessionFallsBackToLegacyFiveHour(t *testing.T) {
+	raw := json.RawMessage(`{"five_hour":{"utilization":10,"resets_at":"2030-01-01T05:00:00Z"}}`)
+	snapshot, err := NormalizeOAuthUsage(raw, "", "max", time.Now())
+	if err != nil || len(snapshot.Limits) != 1 {
+		t.Fatalf("legacy-only normalization failed: count=%d err=%v", len(snapshot.Limits), err)
+	}
+	if snapshot.Limits[0].UsedPercent != 10 {
+		t.Fatal("legacy five_hour was not used without a limits session entry")
+	}
+}
+
 func TestOAuthCredentialsExpireWithinFiveMinuteBuffer(t *testing.T) {
 	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
 	if !(oauthCredentials{expiresAt: now.Add(5 * time.Minute)}).expiresWithin(now, oauthExpiryBuffer) {
