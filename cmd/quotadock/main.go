@@ -70,6 +70,9 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	if err := diagnosticRuntime.BeginSession(); err != nil {
 		return err
 	}
+	if err := diagnosticRuntime.CaptureRuntimeFatal(); err != nil {
+		return err
+	}
 	hidden, portable, demo := false, false, false
 	for _, arg := range args {
 		switch arg {

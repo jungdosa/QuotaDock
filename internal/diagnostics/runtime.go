@@ -1,6 +1,7 @@
 package diagnostics
 
 import (
+	"bytes"
 	"fmt"
 	"log/slog"
 	"os"
@@ -134,6 +135,40 @@ func (r *Runtime) BeginSession() error {
 
 func (r *Runtime) LogStart(attrs ...any) {
 	r.Logger().Info("app.start", attrs...)
+}
+
+// CaptureRuntimeFatal routes the Go runtime's crash output to a local file and
+// ingests whatever a previous process left there. Unrecovered panics on
+// goroutines without Recover - Fyne's internal threads included - and runtime
+// throws only ever reach stderr, which a GUI-subsystem process discards, so
+// without this file they terminate the process with no evidence at all.
+func (r *Runtime) CaptureRuntimeFatal() error {
+	path := filepath.Join(r.directory, FatalLogName)
+	if content, err := os.ReadFile(path); err == nil {
+		if dump := bytes.TrimSpace(content); len(dump) > 0 {
+			if int64(len(dump)) > FatalIngestMaxBytes {
+				dump = dump[:FatalIngestMaxBytes]
+			}
+			value := string(dump)
+			if index := bytes.IndexByte(dump, '\n'); index > 0 {
+				value = string(bytes.TrimSpace(dump[:index]))
+			}
+			if recordErr := r.recordCrash("runtime_fatal", "runtime", value, dump); recordErr != nil {
+				return recordErr
+			}
+		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("inspect runtime fatal log: %w", err)
+	}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if err != nil {
+		return fmt.Errorf("create runtime fatal log: %w", err)
+	}
+	defer file.Close()
+	if err := debug.SetCrashOutput(file, debug.CrashOptions{}); err != nil {
+		return fmt.Errorf("route runtime crash output: %w", err)
+	}
+	return nil
 }
 
 // EndSession is idempotent so update and tray shutdown paths can safely share

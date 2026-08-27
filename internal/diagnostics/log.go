@@ -23,11 +23,16 @@ const (
 	NormalLogName   = "quotadock.log"
 	CrashLogName    = "crash.log"
 	WatchLogName    = "watch.log"
+	FatalLogName    = "fatal.log"
 	SessionFileName = "session.marker"
 
 	NormalMaxBytes int64 = 1 << 20
 	CrashMaxBytes  int64 = 256 << 10
 	WatchMaxBytes  int64 = 1 << 20
+
+	// A runtime crash dump lists every goroutine; only this much of it is
+	// carried into the bounded crash log on the next launch.
+	FatalIngestMaxBytes int64 = 64 << 10
 )
 
 const timestampLayout = "2006-01-02T15:04:05.000Z07:00"

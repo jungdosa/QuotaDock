@@ -5,12 +5,25 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime/debug"
 	"strings"
 	"testing"
 	"time"
 )
+
+// The Go runtime holds a duplicated handle on the crash-output file for the
+// life of the process - the point of the capture - which on Windows blocks
+// TempDir cleanup. Tests release it so the directory can be removed.
+func releaseCrashOutput(t *testing.T) {
+	t.Cleanup(func() {
+		if err := debug.SetCrashOutput(nil, debug.CrashOptions{}); err != nil {
+			t.Fatalf("release crash output: %v", err)
+		}
+	})
+}
 
 var millisecondTimestamp = regexp.MustCompile("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}(Z|[+-]\\d{2}:\\d{2})$")
 
@@ -185,6 +198,101 @@ func TestRecoveredPanicWritesMaskedCrashJSON(t *testing.T) {
 	if strings.Contains(string(encoded), "fake-secret") || strings.Contains(string(encoded), "user@example.invalid") {
 		t.Fatalf("crash retained secret: %s", encoded)
 	}
+}
+
+func TestCaptureRuntimeFatalIngestsPriorDumpAndTruncates(t *testing.T) {
+	directory := t.TempDir()
+	// Registered after TempDir so the LIFO cleanup releases the handle first.
+	releaseCrashOutput(t)
+	dump := "panic: boom on a foreign goroutine\n\ngoroutine 17 [running]:\nmain.worker()\n"
+	if err := os.WriteFile(filepath.Join(directory, FatalLogName), []byte(dump), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := NewRuntime(RuntimeOptions{Directory: directory, Version: "9.9.9-test", RunID: "fatal-run", Level: slog.LevelInfo})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.CaptureRuntimeFatal(); err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.Close(); err != nil {
+		t.Fatal(err)
+	}
+	records := readJSONLines(t, filepath.Join(directory, CrashLogName))
+	if len(records) != 1 {
+		t.Fatalf("crash records=%d", len(records))
+	}
+	record := records[0]
+	if record["kind"] != "runtime_fatal" || record["component"] != "runtime" {
+		t.Fatalf("fatal record=%#v", record)
+	}
+	if record["panic"] != "panic: boom on a foreign goroutine" {
+		t.Fatalf("first dump line was not promoted: %#v", record["panic"])
+	}
+	if stack, _ := record["stack"].(string); !strings.Contains(stack, "goroutine 17") {
+		t.Fatalf("dump body missing: %#v", record["stack"])
+	}
+	if info, err := os.Stat(filepath.Join(directory, FatalLogName)); err != nil || info.Size() != 0 {
+		t.Fatalf("fatal log was not reset: info=%v err=%v", info, err)
+	}
+}
+
+func TestCaptureRuntimeFatalWithoutPriorDumpWritesNoCrashRecord(t *testing.T) {
+	directory := t.TempDir()
+	// Registered after TempDir so the LIFO cleanup releases the handle first.
+	releaseCrashOutput(t)
+	runtime, err := NewRuntime(RuntimeOptions{Directory: directory, Version: "9.9.9-test", RunID: "quiet-run", Level: slog.LevelInfo})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.CaptureRuntimeFatal(); err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(directory, CrashLogName)); !os.IsNotExist(err) {
+		t.Fatalf("crash log should not exist without a prior dump: %v", err)
+	}
+	if info, err := os.Stat(filepath.Join(directory, FatalLogName)); err != nil || info.Size() != 0 {
+		t.Fatalf("fatal log was not armed empty: info=%v err=%v", info, err)
+	}
+}
+
+// The scenario the capture exists for: a panic on a goroutine no Recover
+// wraps. The dump must land in fatal.log even though stderr is discarded in
+// the real GUI process. Runs the test binary itself as the crashing child.
+func TestUnrecoveredGoroutinePanicLandsInFatalLog(t *testing.T) {
+	directory := t.TempDir()
+	child := exec.Command(os.Args[0], "-test.run", "TestRuntimeFatalChildProcess$", "-test.v")
+	child.Env = append(os.Environ(), "QUOTADOCK_FATAL_CHILD_DIR="+directory)
+	output, err := child.CombinedOutput()
+	if err == nil {
+		t.Fatalf("child survived an unrecovered panic:\n%s", output)
+	}
+	dump, err := os.ReadFile(filepath.Join(directory, FatalLogName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(dump), "boom-foreign-goroutine") {
+		t.Fatalf("fatal log missing the panic: %s", dump)
+	}
+}
+
+func TestRuntimeFatalChildProcess(t *testing.T) {
+	directory := os.Getenv("QUOTADOCK_FATAL_CHILD_DIR")
+	if directory == "" {
+		t.Skip("entry point for TestUnrecoveredGoroutinePanicLandsInFatalLog's child")
+	}
+	runtime, err := NewRuntime(RuntimeOptions{Directory: directory, Version: "9.9.9-test", RunID: "fatal-child", Level: slog.LevelInfo})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.CaptureRuntimeFatal(); err != nil {
+		t.Fatal(err)
+	}
+	go func() { panic("boom-foreign-goroutine") }()
+	time.Sleep(10 * time.Second)
 }
 
 func TestCrashLogStaysSingleAndBounded(t *testing.T) {
