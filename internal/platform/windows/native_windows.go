@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"fyne.io/fyne/v2"
 	fynedriver "fyne.io/fyne/v2/driver"
-	"runtime"
+	"sync"
 	"syscall"
 	"unsafe"
 )
@@ -466,23 +466,38 @@ func (c *WindowController) Restore(saved Rect) error {
 	}
 	return nil
 }
+// syscall.NewCallback registrations are permanent and capped per process
+// (runtime.throw "too many callback functions" at around 2000), so the enum
+// callback is created exactly once and the collected areas flow through a
+// package variable serialized by monitorAreasMu. Creating the callback per
+// call killed the process silently after ~2000 invocations.
+var (
+	monitorAreasMu      sync.Mutex
+	monitorAreas        []Rect
+	monitorEnumOnce     sync.Once
+	monitorEnumCallback uintptr
+)
+
 func MonitorWorkAreas() []Rect {
-	areas := []Rect{}
-	callback := syscall.NewCallback(func(monitor, hdc, raw, data uintptr) uintptr {
-		info := monitorInfo{Size: uint32(unsafe.Sizeof(monitorInfo{}))}
-		ok, _, _ := getMonitorInfo.Call(monitor, uintptr(unsafe.Pointer(&info)))
-		if ok != 0 {
-			r := info.Work
-			area := Rect{X: int(r.Left), Y: int(r.Top), Width: int(r.Right - r.Left), Height: int(r.Bottom - r.Top)}
-			if info.Flags&1 != 0 {
-				areas = append([]Rect{area}, areas...)
-			} else {
-				areas = append(areas, area)
+	monitorAreasMu.Lock()
+	defer monitorAreasMu.Unlock()
+	monitorEnumOnce.Do(func() {
+		monitorEnumCallback = syscall.NewCallback(func(monitor, hdc, raw, data uintptr) uintptr {
+			info := monitorInfo{Size: uint32(unsafe.Sizeof(monitorInfo{}))}
+			ok, _, _ := getMonitorInfo.Call(monitor, uintptr(unsafe.Pointer(&info)))
+			if ok != 0 {
+				r := info.Work
+				area := Rect{X: int(r.Left), Y: int(r.Top), Width: int(r.Right - r.Left), Height: int(r.Bottom - r.Top)}
+				if info.Flags&1 != 0 {
+					monitorAreas = append([]Rect{area}, monitorAreas...)
+				} else {
+					monitorAreas = append(monitorAreas, area)
+				}
 			}
-		}
-		return 1
+			return 1
+		})
 	})
-	enumDisplayMonitors.Call(0, 0, callback, 0)
-	runtime.KeepAlive(callback)
-	return areas
+	monitorAreas = monitorAreas[:0]
+	enumDisplayMonitors.Call(0, 0, monitorEnumCallback, 0)
+	return append([]Rect{}, monitorAreas...)
 }
