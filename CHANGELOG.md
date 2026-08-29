@@ -7,7 +7,67 @@ plus checksums for its binaries.
 Versions follow [Semantic Versioning](https://semver.org/). The project reaches 1.0.0 once
 Windows feature verification is finished.
 
-## Unreleased
+## [0.7.38] — 2026-08-29
+
+### Fixed
+
+- The widget no longer disappears without trace after a long run. Reading the desktop work
+  area registered a fresh system callback on every call, and those registrations are
+  permanent and capped per process. With the refresh cycle calling it once a minute, the cap
+  was reached after roughly 33 hours of awake time and the process died on the spot — no
+  dialog, no crash log, nothing. Sleep pauses that clock, which is why it looked like a
+  wake-up crash rather than an uptime one. The callback is now registered once for the life
+  of the process.
+
+## [0.7.37] — 2026-08-28
+
+### Added
+
+- Silent shutdowns now leave evidence behind. A windowed program discards its standard error
+  output, so a crash on a thread outside the app's own recovery took the process down with
+  nothing written anywhere. Those stacks now land in `fatal.log` in the local app data
+  folder and are folded into `crash.log` on the next launch. Nothing is uploaded — the files
+  stay on your machine. This is what identified the fault fixed in 0.7.38.
+
+## [0.7.36] — 2026-08-24
+
+### Fixed
+
+- The Claude session meter could show a stale figure just after its five-hour window reset.
+  The older field in the usage response sometimes keeps reporting the previous window for a
+  moment, so claude.ai showed the fresh, lower number while the widget still showed the old
+  one. The session lane now reads the same per-limit entry the weekly lane has always
+  preferred, and falls back to the older field only when that entry is absent.
+
+## [0.7.35] — 2026-08-19
+
+### Added
+
+- Grok joins as the fourth provider, with the same meter-and-reset grammar as the others.
+  The weekly percentage comes from the account's own billing endpoint, using the credential
+  the Grok CLI already stored. Off by default: turn on **Show Grok** in Settings › Provider
+  display.
+- Claude can now be connected without the CLI. The **Auth** method opens Anthropic's own
+  sign-in page in a window inside the app; the password goes straight to Anthropic and the
+  app has no hook into the form. The session is stored only in QuotaDock's own browser
+  profile — your browser's cookies are never read. An installed CLI always keeps priority;
+  the in-app session serves the lane only when the CLI cannot.
+- Each provider now remembers which sign-in route you picked. Existing settings are
+  unaffected: without a stored choice, everything behaves exactly as before.
+
+### Changed
+
+- The credits line now appears only when it carries information. An account that never
+  bought credits reports a zero balance, and the old surface still wrote "Credits 0".
+
+## [0.7.34] — 2026-08-11
+
+### Added
+
+- QuotaDock steps aside for full-screen windows. When another program covers the whole
+  monitor QuotaDock sits on, the widget drops below it and returns when the cover goes away.
+  It does not wait for that window to have focus, so a paused video keeps its cover.
+- The Codex lane counts reset credits alongside the balance.
 
 ### Fixed
 
@@ -91,6 +151,11 @@ Ten internal builds since 0.7.15, released together.
 The first release after the repository went public. Earlier versions are listed under
 [releases](https://github.com/jungdosa/QuotaDock/releases).
 
+[0.7.38]: https://github.com/jungdosa/QuotaDock/releases/tag/v0.7.38
+[0.7.37]: https://github.com/jungdosa/QuotaDock/releases/tag/v0.7.37
+[0.7.36]: https://github.com/jungdosa/QuotaDock/releases/tag/v0.7.36
+[0.7.35]: https://github.com/jungdosa/QuotaDock/releases/tag/v0.7.35
+[0.7.34]: https://github.com/jungdosa/QuotaDock/releases/tag/v0.7.34
 [0.7.32]: https://github.com/jungdosa/QuotaDock/releases/tag/v0.7.32
 [0.7.31]: https://github.com/jungdosa/QuotaDock/releases/tag/v0.7.31
 [0.7.30]: https://github.com/jungdosa/QuotaDock/releases/tag/v0.7.30
