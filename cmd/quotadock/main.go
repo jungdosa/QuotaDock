@@ -240,16 +240,6 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		apply()
 		diagnostics.AfterFunc(100*time.Millisecond, "rounded_corners", func() { fyne.Do(apply) })
 	}
-	rectValue := func(rect platform.Rect) []int {
-		return []int{rect.X, rect.Y, rect.Width, rect.Height}
-	}
-	areasValue := func(areas []platform.Rect) [][]int {
-		value := make([][]int, 0, len(areas))
-		for _, area := range areas {
-			value = append(value, rectValue(area))
-		}
-		return value
-	}
 	fitWindowToAreas := func(areas []platform.Rect, reason string) {
 		position, positionErr := native.Position()
 		if positionErr != nil {
