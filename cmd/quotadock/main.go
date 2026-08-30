@@ -159,6 +159,15 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	defer cancel()
 	idleTrimmer := platform.NewIdleTrimmer(time.Now(), platform.DefaultIdleTrimDelay, platform.DefaultBackgroundTrimDelay)
 	markActivity := func() { idleTrimmer.Activity(time.Now()) }
+	shell := &windowShell{
+		window:       w,
+		native:       native,
+		idleTrimmer:  idleTrimmer,
+		cfg:          &cfg,
+		settingsPath: settingsPath,
+		demo:         demo,
+		workAreas:    workAreas,
+	}
 	var refreshing atomic.Bool
 	var rendering atomic.Bool
 	var alwaysOnTop atomic.Bool
@@ -208,61 +217,13 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 			}
 		},
 	}
-	showWindow := func() {
-		w.Show()
-	}
-	hideWindow := func() {
-		w.Hide()
-		if trimErr := native.TrimWorkingSet(); trimErr != nil {
-			slog.Debug("working set was not trimmed", "error", trimErr)
-		} else {
-			idleTrimmer.MarkTrimmed()
-		}
-	}
-	savePosition := func() {
-		if demo {
-			return
-		}
-		position, posErr := native.Position()
-		if posErr == nil {
-			cfg.WindowX = position.X
-			cfg.WindowY = position.Y
-			cfg.WindowPositioned = true
-			_ = saveSettings(settingsPath, cfg, true)
-		}
-	}
-	refreshWindowCorners := func() {
-		apply := func() {
-			if cornerErr := native.ApplyRoundedCorners(int(ui.WindowCornerRadius)); cornerErr != nil {
-				slog.Debug("rounded window region was not applied", "error", cornerErr)
-			}
-		}
-		apply()
-		diagnostics.AfterFunc(100*time.Millisecond, "rounded_corners", func() { fyne.Do(apply) })
-	}
-	fitWindowToAreas := func(areas []platform.Rect, reason string) {
-		position, positionErr := native.Position()
-		if positionErr != nil {
-			return
-		}
-		fitted := platform.FitToWorkArea(position, areas)
-		if fitted == position {
-			return
-		}
-		if moveErr := native.MoveTo(fitted.X, fitted.Y); moveErr == nil {
-			slog.Debug("window.fit", "reason", reason, "from", rectValue(position), "to", rectValue(fitted))
-		}
-	}
-	fitWindowToScreen := func() {
-		fitWindowToAreas(platform.MonitorWorkAreas(), "resize")
-	}
 	var rememberedWidgetPosition platform.Rect
 	var widgetPositionRemembered bool
 	var restoreWidgetPosition platform.Rect
 	var restoreWidgetPositionOnResize bool
 	resizeWindow := func(size fyne.Size) {
 		w.Resize(size)
-		refreshWindowCorners()
+		shell.refreshCorners()
 		positionToRestore := restoreWidgetPosition
 		shouldRestorePosition := restoreWidgetPositionOnResize
 		restoreWidgetPositionOnResize = false
@@ -272,7 +233,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 					slog.Debug("widget position could not be restored", "error", moveErr)
 				}
 			}
-			fitWindowToScreen()
+			shell.fitToScreen()
 		}
 		applyPosition()
 		diagnostics.AfterFunc(100*time.Millisecond, "window_position", func() { fyne.Do(applyPosition) })
@@ -326,28 +287,8 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 			debug.FreeOSMemory()
 		})
 	}
-	checkDisplayChange := func() {
-		current := platform.MonitorWorkAreas()
-		previous := workAreas
-		if platform.WorkAreasEqual(previous, current) {
-			return
-		}
-		workAreas = append([]platform.Rect(nil), current...)
-		slog.Info("display.change", "before", len(previous), "after", len(current), "areas", areasValue(current))
-		position, positionErr := native.Position()
-		if positionErr != nil {
-			return
-		}
-		_, fitted, shouldFit := platform.DisplayChange(previous, current, position)
-		if !shouldFit {
-			return
-		}
-		if moveErr := native.MoveTo(fitted.X, fitted.Y); moveErr == nil {
-			slog.Debug("window.fit", "reason", "display_change", "from", rectValue(position), "to", rectValue(fitted))
-		}
-	}
 	scheduledRefresh := func(context.Context) {
-		checkDisplayChange()
+		shell.checkDisplayChange()
 		refresh()
 	}
 	applyConfig := func(next settings.Config) {
@@ -366,7 +307,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 				slog.Warn("tray icon promotion was not updated", "error", promotionErr)
 			}
 		}
-		refreshWindowCorners()
+		shell.refreshCorners()
 		// The minimized choice is part of the registered command, so a change to
 		// either setting has to rewrite the Run entry.
 		if !demo && (cfg.AutoStart != previous.AutoStart || cfg.StartMinimized != previous.StartMinimized) {
@@ -478,7 +419,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	}, Refresh: refresh, ResizeWindow: resizeWindow, OpenSettings: func() { applyScreen(ui.SettingsScreen) }, Minimize: func() {
 		native.Minimize()
 		idleTrimmer.MarkTrimmed()
-	}, Close: hideWindow, CloseSettings: func() {
+	}, Close: shell.hide, CloseSettings: func() {
 		applyScreen(ui.ScreenForDisplayMode(cfg.DisplayMode))
 	}, ConfigChanged: applyConfig, Activity: markActivity,
 		Inspect:     func(id model.ProviderID) { runConnectionAction(id, false) },
@@ -492,7 +433,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	actions.WebAuthAvailable = !demo && claudeWebAuth != nil && webview.DetectRuntime().Present
 	view = ui.NewView(w.Canvas(), catalog, systemLanguage, cfg, actions)
 	updates.preparePrompt = func() {
-		showWindow()
+		shell.show()
 		applyScreen(ui.SettingsScreen)
 	}
 	a.Settings().AddListener(func(fyne.Settings) {
@@ -507,8 +448,8 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	}
 	w.SetContent(view.Root)
 	applyScreen(ui.ScreenForDisplayMode(cfg.DisplayMode))
-	lifecycle = &platform.Lifecycle{Hide: func() { savePosition(); hideWindow() }, Quit: func() {
-		savePosition()
+	lifecycle = &platform.Lifecycle{Hide: func() { shell.savePosition(); shell.hide() }, Quit: func() {
+		shell.savePosition()
 		cancel()
 		stopTrayPromotionRetries()
 		scheduler.Stop()
@@ -520,12 +461,12 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	tray, err = platform.NewTray(a, w, catalog, i18n.Language(cfg.Language), systemLanguage,
 		func() {
 			markActivity()
-			fyne.Do(showWindow)
+			fyne.Do(shell.show)
 		},
 		func() {
 			markActivity()
 			fyne.Do(func() {
-				showWindow()
+				shell.show()
 				applyScreen(ui.SettingsScreen)
 			})
 		},
@@ -575,11 +516,11 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	// QuotaDock's lifecycle intercept so close still saves position and trims.
 	w.SetCloseIntercept(lifecycle.CloseRequested)
 	tray.Update(i18n.Language(cfg.Language), systemLanguage, cfg.DisplayMode)
-	showWindow()
+	shell.show()
 	if err := native.Bind(); err != nil {
 		return err
 	}
-	workAreas = platform.MonitorWorkAreas()
+	shell.workAreas = platform.MonitorWorkAreas()
 	effectiveLanguage := i18n.Language(cfg.Language)
 	if cfg.Language == settings.LanguageSystem {
 		effectiveLanguage = systemLanguage
@@ -587,7 +528,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	windowsBuild, _ := platform.CurrentWindowsBuild()
 	diagnosticRuntime.LogStart(
 		"windows_build", windowsBuild,
-		"monitors", len(workAreas),
+		"monitors", len(shell.workAreas),
 		"dpi_scale", native.DPIScale(),
 		"mode", string(cfg.DisplayMode),
 		"language", string(effectiveLanguage),
@@ -664,9 +605,9 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		size := view.MinimumSize(view.Screen())
 		_ = native.Restore(platform.Rect{X: cfg.WindowX, Y: cfg.WindowY, Width: int(size.Width), Height: int(size.Height)})
 	}
-	refreshWindowCorners()
+	shell.refreshCorners()
 	if hidden {
-		hideWindow()
+		shell.hide()
 	}
 	if !demo {
 		scheduler.Start(ctx, time.Duration(cfg.RefreshSeconds)*time.Second, scheduledRefresh)
