@@ -34,10 +34,10 @@ func TestBuildTrayTooltipThreeProviders(t *testing.T) {
 
 func TestBuildTrayTooltipDropsTrailingLinesOverUTF16Limit(t *testing.T) {
 	state := ViewState{Lanes: []LaneState{
-		trayTooltipTestLane(model.ProviderClaude, strings.Repeat("長", 110),
+		trayTooltipTestLane(model.ProviderClaude, "Claude",
 			trayTooltipTestRow(42, "2h 40m"),
 		),
-		trayTooltipTestLane(model.ProviderCodex, "Codex",
+		trayTooltipTestLane(model.ProviderCodex, strings.Repeat("長", 110),
 			trayTooltipTestRow(31, "1h 08m"),
 		),
 		trayTooltipTestLane(model.ProviderAntigravity, "Antigravity",
@@ -49,8 +49,29 @@ func TestBuildTrayTooltipDropsTrailingLinesOverUTF16Limit(t *testing.T) {
 	if units := utf16CodeUnits(got); units > trayTooltipMaxUTF16Units {
 		t.Fatalf("tooltip UTF-16 units=%d, want <=%d", units, trayTooltipMaxUTF16Units)
 	}
-	if strings.Contains(got, "Codex") || strings.Contains(got, "Antigravity") || strings.Count(got, "\n") != 0 {
+	if strings.Contains(got, "Antigravity") || strings.Count(got, "\n") != 0 {
 		t.Fatalf("overflow retained a trailing provider line: %q", got)
+	}
+}
+
+func TestDualClaudeTooltipUsesLabelsAndStaysWithinWindowsLimit(t *testing.T) {
+	config := settings.Default()
+	config.ShowClaudeAuth = true
+	config.ShowGrok = true
+	config.AccountLabels = map[string]string{"claude": "Work", "claude-auth": "Personal"}
+	state := ViewState{Lanes: []LaneState{
+		trayTooltipTestLane(model.ProviderClaude, "Claude", trayTooltipTestRow(42, "2h 40m")),
+		trayTooltipTestLane(model.ProviderClaudeAuth, "Claude Auth", trayTooltipTestRow(31, "1h 08m")),
+		trayTooltipTestLane(model.ProviderCodex, "Codex", trayTooltipTestRow(24, "5d 2h")),
+		trayTooltipTestLane(model.ProviderAntigravity, "Antigravity", trayTooltipTestRow(18, "4h 2m")),
+		trayTooltipTestLane(model.ProviderGrok, "Grok", trayTooltipTestRow(9, "6d 1h")),
+	}}
+	got := BuildTrayTooltip(state, config, i18n.English, time.Time{})
+	if !strings.Contains(got, "Work 42%") || !strings.Contains(got, "Personal 31%") {
+		t.Fatalf("dual Claude labels missing from tooltip: %q", got)
+	}
+	if units := utf16CodeUnits(got); units > trayTooltipMaxUTF16Units {
+		t.Fatalf("dual-account tooltip UTF-16 units=%d, want <=%d", units, trayTooltipMaxUTF16Units)
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -91,6 +92,102 @@ func testOAuthClient(t *testing.T, path string, handler http.HandlerFunc) (*OAut
 	client.allowURL = func(raw string) bool { return strings.HasPrefix(raw, server.URL+"/") }
 	client.reportRefreshFailure = func() {}
 	return client, server
+}
+
+func TestOAuthClientHonorsClaudeConfigDirectory(t *testing.T) {
+	configDir := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
+	client := NewOAuthClient()
+	if want := filepath.Join(configDir, ".credentials.json"); client.credentialsPath != want {
+		t.Fatalf("credentials path = %q, want %q", client.credentialsPath, want)
+	}
+}
+
+func TestOAuthClientSelectsEnvironmentAndFileCredentialsIndependently(t *testing.T) {
+	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	path := filepath.Join(t.TempDir(), ".credentials.json")
+	writeCredentials(t, path, "file-access", "file-refresh", now.Add(time.Hour))
+	var authorizations []string
+	client, _ := testOAuthClient(t, path, func(w http.ResponseWriter, r *http.Request) {
+		authorizations = append(authorizations, r.Header.Get("Authorization"))
+		_, _ = w.Write([]byte(syntheticUsage))
+	})
+	client.now = func() time.Time { return now }
+	client.getenv = func(name string) string {
+		if name == "CLAUDE_CODE_OAUTH_TOKEN" {
+			return "environment-access"
+		}
+		return ""
+	}
+
+	if _, err := client.FetchFrom(context.Background(), OAuthCredentialFile); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.FetchFrom(context.Background(), OAuthCredentialEnvironment); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"Bearer file-access", "Bearer environment-access"}; !slices.Equal(authorizations, want) {
+		t.Fatalf("authorization sources = %v, want %v", authorizations, want)
+	}
+}
+
+func TestOAuthClientEnvironmentOnlyNeverFallsBackToCredentialsFile(t *testing.T) {
+	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	path := filepath.Join(t.TempDir(), ".credentials.json")
+	writeCredentials(t, path, "file-access", "file-refresh", now.Add(time.Hour))
+	client, _ := testOAuthClient(t, path, func(http.ResponseWriter, *http.Request) {
+		t.Fatal("credential availability must not make a usage request")
+	})
+	if client.AvailableFrom(OAuthCredentialEnvironment) {
+		t.Fatal("environment-only lookup used the credentials file")
+	}
+	if !client.AvailableFrom(OAuthCredentialFile) {
+		t.Fatal("file-only lookup did not use the credentials file")
+	}
+}
+
+func TestOAuthClientDoesNotShareCachedUsageAcrossCredentialSources(t *testing.T) {
+	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	path := filepath.Join(t.TempDir(), ".credentials.json")
+	writeCredentials(t, path, "file-access", "file-refresh", now.Add(time.Hour))
+	fileRequests := 0
+	client, _ := testOAuthClient(t, path, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Header.Get("Authorization") {
+		case "Bearer file-access":
+			fileRequests++
+			if fileRequests == 1 {
+				_, _ = w.Write([]byte(`{"five_hour":{"utilization":11}}`))
+				return
+			}
+			w.Header().Set("Retry-After", "120")
+			w.WriteHeader(http.StatusTooManyRequests)
+		case "Bearer environment-access":
+			_, _ = w.Write([]byte(`{"five_hour":{"utilization":22}}`))
+		default:
+			t.Fatalf("unexpected authorization source %q", r.Header.Get("Authorization"))
+		}
+	})
+	client.now = func() time.Time { return now }
+	client.getenv = func(name string) string {
+		if name == "CLAUDE_CODE_OAUTH_TOKEN" {
+			return "environment-access"
+		}
+		return ""
+	}
+
+	if _, err := client.FetchFrom(context.Background(), OAuthCredentialFile); err != nil {
+		t.Fatal(err)
+	}
+	if cached, err := client.FetchFrom(context.Background(), OAuthCredentialFile); err != nil || !cached.cached {
+		t.Fatalf("file rate-limit cache = %+v, %v", cached, err)
+	}
+	environment, err := client.FetchFrom(context.Background(), OAuthCredentialEnvironment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if environment.cached || !strings.Contains(string(environment.raw), `"utilization":22`) {
+		t.Fatalf("environment lookup reused file cache: %+v", environment)
+	}
 }
 
 func TestParseOAuthCredentialsMapsFields(t *testing.T) {
@@ -505,7 +602,7 @@ func TestOAuthSecretsNeverReachSnapshotLogOrError(t *testing.T) {
 		}
 	}
 
-	client.lastSuccess = oauthResult{}
+	client.sourceCache = [OAuthCredentialDefault + 1]oauthSourceCache{}
 	client.usageURL = strings.TrimSuffix(client.usageURL, "/usage") + "/failure"
 	_, failure := client.Fetch(context.Background())
 	if failure == nil || strings.Contains(failure.Error(), "private") {

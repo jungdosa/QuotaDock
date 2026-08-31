@@ -218,8 +218,8 @@ func TestSeverityAndProviderUseSharedSixteenColorPopup(t *testing.T) {
 	warning.ShowPalette()
 	thresholdSize := v.palettePopup.Size()
 	thresholdSwatches := palettePopupSwatches(v.palettePopup)
-	if len(thresholdSwatches) != 16 {
-		t.Fatalf("threshold palette swatches=%d, want 16", len(thresholdSwatches))
+	if len(thresholdSwatches) != 17 {
+		t.Fatalf("threshold palette swatches=%d, want 17", len(thresholdSwatches))
 	}
 	for _, swatch := range thresholdSwatches {
 		if swatch.Reset {
@@ -244,7 +244,8 @@ func TestSeverityAndProviderUseSharedSixteenColorPopup(t *testing.T) {
 	window.Resize(v.MinimumSize(NormalScreen))
 	v.normalCache.rows[0].meter.Tapped(nil)
 	providerSwatches := palettePopupSwatches(v.palettePopup)
-	if len(providerSwatches) != 17 || v.palettePopup.Size() != thresholdSize {
+	// Provider palettes include a reset control plus the 17 shared colors.
+	if len(providerSwatches) != 18 || v.palettePopup.Size() != thresholdSize {
 		t.Fatalf("provider palette swatches/size=%d/%v, threshold size=%v", len(providerSwatches), v.palettePopup.Size(), thresholdSize)
 	}
 }

@@ -49,6 +49,7 @@ const (
 	// one extra column gap is added on top, so meters keep their old width.
 	CompactWidth           float32 = 312
 	NanoWidth              float32 = 360
+	NanoCellMinimumWidth   float32 = 90
 	SettingsWidth          float32 = 620
 	SettingsHeight         float32 = 680
 	WindowCornerRadius     float32 = 8
@@ -293,6 +294,7 @@ func (v *View) SetConfig(config settings.Config) {
 	oldLanguage := v.config.Language
 	oldTheme := v.config.Theme
 	oldWarningsEnabled := v.config.WarningsEnabled
+	oldShowClaudeAuth := v.config.ShowClaudeAuth
 	current := v.screen
 
 	v.config = config.Validated()
@@ -302,7 +304,7 @@ func (v *View) SetConfig(config settings.Config) {
 	if v.Actions.ConfigChanged != nil {
 		v.Actions.ConfigChanged(v.config)
 	}
-	if (oldLanguage != v.config.Language || oldTheme != v.config.Theme || oldWarningsEnabled != v.config.WarningsEnabled) && v.Root != nil {
+	if (oldLanguage != v.config.Language || oldTheme != v.config.Theme || oldWarningsEnabled != v.config.WarningsEnabled || oldShowClaudeAuth != v.config.ShowClaudeAuth) && v.Root != nil {
 		v.rebuildScreens(current)
 		v.resizeCurrentWidget()
 		return
@@ -794,8 +796,42 @@ func (v *View) refreshLastRefreshText() {
 }
 func (v *View) visibleLanes() []LaneState {
 	out := []LaneState{}
+	var authLane LaneState
+	hasAuthLane := false
+	var rootLane LaneState
+	hasRootLane := false
 	for _, lane := range v.state.Lanes {
-		show := lane.Provider == model.ProviderClaude && v.config.ShowClaude || lane.Provider == model.ProviderCodex && v.config.ShowCodex || lane.Provider == model.ProviderAntigravity && (v.config.ShowAGGemini || v.config.ShowAGClaude) || lane.Provider == model.ProviderGrok && v.config.ShowGrok
+		if lane.Provider == model.ProviderClaudeAuth {
+			authLane, hasAuthLane = lane, true
+		}
+		if lane.Provider == model.ProviderClaude {
+			rootLane, hasRootLane = lane, true
+		}
+	}
+	rootVisible := hasRootLane && v.config.ShowClaude && !(v.config.ShowClaudeAuth && rootLane.Source == model.SourceWebSignIn)
+	authVisible := hasAuthLane && v.config.ShowClaudeAuth
+	dualClaude := rootVisible && authVisible
+	authAdded := false
+	for _, lane := range v.state.Lanes {
+		if lane.Provider == model.ProviderClaudeAuth {
+			continue
+		}
+		if lane.Provider == model.ProviderClaude {
+			// When the CLI is absent, the legacy Claude lane falls back to this
+			// same browser account. Hide that duplicate if the explicit Auth lane
+			// is enabled; with a working CLI, label both sources clearly.
+			if rootVisible {
+				lane.Name = claudeAccountDisplayName(v.config, model.ProviderClaude, dualClaude)
+				out = append(out, lane)
+			}
+			if authVisible {
+				authLane.Name = claudeAccountDisplayName(v.config, model.ProviderClaudeAuth, dualClaude)
+				out = append(out, authLane)
+				authAdded = true
+			}
+			continue
+		}
+		show := lane.Provider == model.ProviderCodex && v.config.ShowCodex || lane.Provider == model.ProviderAntigravity && (v.config.ShowAGGemini || v.config.ShowAGClaude) || lane.Provider == model.ProviderGrok && v.config.ShowGrok
 		if show {
 			if lane.Provider == model.ProviderAntigravity {
 				filtered := lane
@@ -811,7 +847,24 @@ func (v *View) visibleLanes() []LaneState {
 			out = append(out, lane)
 		}
 	}
+	if authVisible && !authAdded {
+		authLane.Name = claudeAccountDisplayName(v.config, model.ProviderClaudeAuth, false)
+		out = append(out, authLane)
+	}
 	return out
+}
+
+func claudeAccountDisplayName(config settings.Config, id model.ProviderID, dual bool) string {
+	if !dual {
+		return "Claude"
+	}
+	if label := config.AccountLabels[string(id)]; label != "" {
+		return label
+	}
+	if id == model.ProviderClaudeAuth {
+		return "Claude Auth"
+	}
+	return "Claude CLI"
 }
 func antigravityRowIsGemini(row UsageRowState) bool {
 	return strings.Contains(strings.ToLower(row.Label), "gemini")
@@ -875,6 +928,9 @@ func providerColorID(id model.ProviderID, row UsageRowState, c settings.Config) 
 func providerColorKey(id model.ProviderID, row UsageRowState) string {
 	if id == model.ProviderClaude {
 		return "claude"
+	}
+	if id == model.ProviderClaudeAuth {
+		return "claude-auth"
 	}
 	if id == model.ProviderCodex {
 		return "codex"
@@ -972,7 +1028,7 @@ func (v *View) compactUsageRow(lane LaneState, row UsageRowState, showIcon bool)
 }
 func providerIconKind(lane LaneState, row UsageRowState) ProviderIconKind {
 	switch lane.Provider {
-	case model.ProviderClaude:
+	case model.ProviderClaude, model.ProviderClaudeAuth:
 		return ProviderIconClaude
 	case model.ProviderCodex:
 		return ProviderIconCodex
@@ -1071,7 +1127,7 @@ func compactRowColumns(labelWidth float32) []float32 {
 	return []float32{budget.Icon, budget.Label, 0, budget.Percent, budget.Reset}
 }
 func koreanUsageLabel(lane LaneState, row UsageRowState) string {
-	if lane.Provider == model.ProviderClaude && strings.Contains(strings.ToLower(row.Label), "fable") {
+	if (lane.Provider == model.ProviderClaude || lane.Provider == model.ProviderClaudeAuth) && strings.Contains(strings.ToLower(row.Label), "fable") {
 		return "Fable 주간"
 	}
 	if lane.Provider == model.ProviderAntigravity {
@@ -1122,7 +1178,7 @@ func koreanUsagePeriodLabel(minutes int) string {
 	}
 }
 func englishUsageLabel(lane LaneState, row UsageRowState) string {
-	if lane.Provider == model.ProviderClaude && strings.Contains(strings.ToLower(row.Label), "fable") {
+	if (lane.Provider == model.ProviderClaude || lane.Provider == model.ProviderClaudeAuth) && strings.Contains(strings.ToLower(row.Label), "fable") {
 		return "Fable Weekly"
 	}
 	if lane.Provider == model.ProviderAntigravity {
@@ -1483,7 +1539,7 @@ const (
 // line for any translation, instead of the per-row hardcoded widths that kept
 // leaving single rows (e.g. "Start with Windows") out of alignment.
 var settingLabelKeys = []string{
-	i18n.KeyShowClaude, i18n.KeyShowCodex, i18n.KeyShowAGGemini, i18n.KeyShowAGClaude, i18n.KeyShowGrok,
+	i18n.KeyShowClaude, i18n.KeyShowClaudeAuth, i18n.KeyShowCodex, i18n.KeyShowAGGemini, i18n.KeyShowAGClaude, i18n.KeyShowGrok,
 	i18n.KeyUsageMode, i18n.KeyWarnings,
 	i18n.KeyAutoStart, i18n.KeyAlwaysOnTop, i18n.KeyPromoteTray, i18n.KeyRefreshInterval,
 	i18n.KeyLanguage, i18n.KeyDateTime,
@@ -1552,7 +1608,7 @@ func (v *View) usageSettings() fyne.CanvasObject {
 		),
 		settingsPair(
 			v.halfToggleRow(i18n.KeyShowGrok, v.config.ShowGrok, v.settingLabelWidth(), func(c *settings.Config, b bool) { c.ShowGrok = b }),
-			layout.NewSpacer(),
+			v.halfToggleRow(i18n.KeyShowClaudeAuth, v.config.ShowClaudeAuth, v.settingLabelWidth(), func(c *settings.Config, b bool) { c.ShowClaudeAuth = b }),
 		),
 		settingsPair(
 			v.settingRowSized(v.text(i18n.KeyUsageMode), mode, v.settingLabelWidth(), halfSettingGap, 0),
@@ -1805,10 +1861,14 @@ func (v *View) MinimumSize(screen Screen) fyne.Size {
 		}
 		return fyne.NewSize(CompactWidth, 1)
 	case NanoScreen:
-		if v.Nano != nil {
-			return fyne.NewSize(NanoWidth, max(v.Nano.MinSize().Height, TitleBarHeight+NanoBodyHeight))
+		width := NanoWidth
+		if cells := len(v.nanoCellStates()); cells > 0 {
+			width = max(width, float32(cells)*NanoCellMinimumWidth)
 		}
-		return fyne.NewSize(NanoWidth, TitleBarHeight+NanoBodyHeight)
+		if v.Nano != nil {
+			return fyne.NewSize(width, max(v.Nano.MinSize().Height, TitleBarHeight+NanoBodyHeight))
+		}
+		return fyne.NewSize(width, TitleBarHeight+NanoBodyHeight)
 	case SettingsScreen:
 		height := SettingsHeight
 		if v.Settings != nil && v.Settings.MinSize().Height > height {

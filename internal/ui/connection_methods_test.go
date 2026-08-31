@@ -116,8 +116,8 @@ func TestClaudeAuthAndEnvironmentPanelsExposeNoLoginFlowOrToken(t *testing.T) {
 	}
 
 	claude.methods[2].button.Tapped(nil)
-	if claude.methods[2].button.State != connectionMethodAvailable {
-		t.Fatalf("configured Claude ENV state=%v, want available", claude.methods[2].button.State)
+	if claude.methods[2].button.State != connectionMethodActive {
+		t.Fatalf("configured Claude ENV state=%v, want active", claude.methods[2].button.State)
 	}
 	if text := connectionPanelText(claude); strings.Contains(text, secret) {
 		t.Fatal("Claude ENV token value reached the inline panel")

@@ -358,6 +358,7 @@ const (
 	connectionMethodAvailable
 	connectionMethodMissing
 	connectionMethodPlanned
+	connectionMethodOccupied
 )
 
 func (s connectionMethodState) dashed() bool {
@@ -399,7 +400,7 @@ func (b *ConnectionMethodButton) Tapped(*fyne.PointEvent) {
 	if b.OnHoverEnd != nil {
 		b.OnHoverEnd(b)
 	}
-	if b.OnTapped != nil {
+	if b.State != connectionMethodOccupied && b.OnTapped != nil {
 		b.OnTapped()
 	}
 }
@@ -522,8 +523,11 @@ func (r *connectionMethodButtonRenderer) Refresh() {
 	case connectionMethodPlanned:
 		accent = buttonAlpha(r.button.Colors.Secondary, 0x68)
 		labelColor = buttonAlpha(r.button.Colors.Secondary, 0x88)
+	case connectionMethodOccupied:
+		accent = buttonAlpha(r.button.Colors.Secondary, 0x54)
+		labelColor = buttonAlpha(r.button.Colors.Secondary, 0x70)
 	}
-	if r.button.Hovered {
+	if r.button.Hovered && r.button.State != connectionMethodOccupied {
 		fill = buttonAlpha(accent, 0x30)
 	}
 	r.background.FillColor = fill

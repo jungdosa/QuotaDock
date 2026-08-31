@@ -12,6 +12,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 	"github.com/jungdosa/QuotaDock/internal/i18n"
 	"github.com/jungdosa/QuotaDock/internal/model"
 	"github.com/jungdosa/QuotaDock/internal/settings"
@@ -104,6 +105,7 @@ type nanoUsageState struct {
 
 type connectionView struct {
 	id         model.ProviderID
+	name       *canvas.Text
 	status     *canvas.Text
 	dot        *canvas.Circle
 	detail     *canvas.Text
@@ -115,6 +117,8 @@ type connectionView struct {
 	testButton *SmallButton
 	reconnect  *SmallButton
 	helpButton *SmallButton
+	addButton  *SmallButton
+	labelEntry *widget.Entry
 	actionRow  *fyne.Container
 }
 
@@ -319,7 +323,7 @@ func (v *View) laneCreditsVisible(lane LaneState) bool {
 		return false
 	}
 	switch lane.Provider {
-	case model.ProviderClaude:
+	case model.ProviderClaude, model.ProviderClaudeAuth:
 		return v.config.ShowClaudeCredits
 	case model.ProviderCodex:
 		return v.config.ShowCodexCredits
@@ -883,10 +887,21 @@ func (v *View) nanoCellStates() []nanoCellState {
 	for _, lane := range v.state.Lanes {
 		lanes[lane.Provider] = lane
 	}
-	cells := make([]nanoCellState, 0, 4)
+	cells := make([]nanoCellState, 0, 6)
+	rootLane := lanes[model.ProviderClaude]
+	rootVisible := v.config.ShowClaude && !(v.config.ShowClaudeAuth && rootLane.Source == model.SourceWebSignIn)
+	authVisible := v.config.ShowClaudeAuth
+	dualClaude := rootVisible && authVisible
 	if v.config.ShowClaude {
-		lane := lanes[model.ProviderClaude]
-		cells = append(cells, nanoCellState{key: "claude", name: "Claude", kind: ProviderIconClaude, connected: lane.Status == model.StatusConnected, rows: selectNanoRows(lane.Rows, false)})
+		lane := rootLane
+		if !(v.config.ShowClaudeAuth && lane.Source == model.SourceWebSignIn) {
+			name := claudeAccountDisplayName(v.config, model.ProviderClaude, dualClaude)
+			cells = append(cells, nanoCellState{key: "claude", name: name, kind: ProviderIconClaude, connected: lane.Status == model.StatusConnected, rows: selectNanoRows(lane.Rows, false)})
+		}
+	}
+	if v.config.ShowClaudeAuth {
+		lane := lanes[model.ProviderClaudeAuth]
+		cells = append(cells, nanoCellState{key: "claude-auth", name: claudeAccountDisplayName(v.config, model.ProviderClaudeAuth, dualClaude), kind: ProviderIconClaude, connected: lane.Status == model.StatusConnected, rows: selectNanoRows(lane.Rows, false)})
 	}
 	if v.config.ShowCodex {
 		lane := lanes[model.ProviderCodex]
@@ -1003,6 +1018,9 @@ func (v *View) syncConnections() {
 	}
 	for _, handles := range v.connectionCache {
 		lane := v.connectionLane(handles.id)
+		if handles.name != nil {
+			setCanvasText(handles.name, v.connectionAccountName(handles.id), v.colors.Label)
+		}
 		statusColor := v.colors.Secondary
 		dotColor := v.colors.Disconnected
 		if lane.Status == model.StatusConnected {
@@ -1024,7 +1042,27 @@ func (v *View) buildConnectionRows() {
 	descriptors := []struct {
 		id   model.ProviderID
 		name string
-	}{{model.ProviderClaude, "Claude"}, {model.ProviderCodex, "Codex"}, {model.ProviderAntigravity, "Antigravity"}, {model.ProviderGrok, "Grok"}}
+	}{{model.ProviderClaude, "Claude"}}
+	if v.config.ShowClaudeAuth {
+		descriptors = append(descriptors, struct {
+			id   model.ProviderID
+			name string
+		}{model.ProviderClaudeAuth, "Claude Auth"})
+	}
+	descriptors = append(descriptors,
+		struct {
+			id   model.ProviderID
+			name string
+		}{model.ProviderCodex, "Codex"},
+		struct {
+			id   model.ProviderID
+			name string
+		}{model.ProviderAntigravity, "Antigravity"},
+		struct {
+			id   model.ProviderID
+			name string
+		}{model.ProviderGrok, "Grok"},
+	)
 	objects := make([]fyne.CanvasObject, 0, len(descriptors))
 	v.connectionCache = make([]*connectionView, 0, len(descriptors))
 	for _, descriptor := range descriptors {
@@ -1032,19 +1070,43 @@ func (v *View) buildConnectionRows() {
 		lane := v.connectionLane(id)
 		helpButton := NewOutlinedSmallIconButton(theme.HelpIcon(), v.text(i18n.KeyHelp), func() { v.showConnectionHelp(id) }, v.colors)
 		testButton := NewOutlinedSmallButton(v.text(i18n.KeyTestConnection), v.text(i18n.KeyTestConnection), func() {
+			if id == model.ProviderClaudeAuth && v.Actions.Refresh != nil {
+				v.Actions.Refresh()
+				return
+			}
 			if v.Actions.Inspect != nil {
 				v.Actions.Inspect(id)
 			}
 		}, v.colors)
 		reconnect := NewOutlinedSmallButton(v.text(i18n.KeyReconnect), v.text(i18n.KeyReconnect), func() {
+			if id == model.ProviderClaudeAuth && v.Actions.Refresh != nil {
+				v.Actions.Refresh()
+				return
+			}
 			if v.Actions.Reconnect != nil {
 				v.Actions.Reconnect(id)
 			}
 		}, v.colors)
 
-		actionWidths := []float32{buttonWidthFor(testButton, 92), buttonWidthFor(reconnect, 74), 24}
-		actions := []fyne.CanvasObject{connectionButton(testButton, 92), connectionButton(reconnect, 74), connectionButton(helpButton, 24)}
-		actionRow := container.New(NewGapColumnLayout(actionWidths, []float32{6, 6}, SmallButtonHeight), actions...)
+		var addButton *SmallButton
+		actionWidths := []float32{buttonWidthFor(testButton, 92), buttonWidthFor(reconnect, 74)}
+		actions := []fyne.CanvasObject{connectionButton(testButton, 92), connectionButton(reconnect, 74)}
+		if id == model.ProviderClaude && !v.config.ShowClaudeAuth {
+			addButton = v.bindTitleButton(NewOutlinedSmallButton("+", v.text(i18n.KeyConnectionAddAccount), func() {
+				cfg := v.config
+				cfg.ShowClaudeAuth = true
+				v.SetConfig(cfg)
+			}, v.colors))
+			actionWidths = append(actionWidths, 24)
+			actions = append(actions, connectionButton(addButton, 24))
+		}
+		actionWidths = append(actionWidths, 24)
+		actions = append(actions, connectionButton(helpButton, 24))
+		gaps := make([]float32, max(0, len(actions)-1))
+		for index := range gaps {
+			gaps[index] = 6
+		}
+		actionRow := container.New(NewGapColumnLayout(actionWidths, gaps, SmallButtonHeight), actions...)
 
 		statusColor := v.colors.Secondary
 		dotColor := v.colors.Disconnected
@@ -1055,8 +1117,9 @@ func (v *View) buildConnectionRows() {
 		status := textLabel(v.connectionStatusText(lane), SettingsTextSize, statusColor, false, false)
 		dot := canvas.NewCircle(dotColor)
 		dot.Resize(fyne.NewSize(7, 7))
+		name := textLabel(v.connectionAccountName(id), SettingsTextSize, v.colors.Label, true, false)
 		identity := container.NewHBox(
-			textLabel(descriptor.name, SettingsTextSize, v.colors.Label, true, false),
+			name,
 			container.NewCenter(container.NewGridWrap(fyne.NewSize(7, 7), dot)),
 			status,
 		)
@@ -1092,10 +1155,22 @@ func (v *View) buildConnectionRows() {
 		background.CornerRadius = 6
 		background.StrokeColor = v.colors.CardBorder
 		background.StrokeWidth = 1
-		content := container.NewVBox(header, detail, panel)
+		contentObjects := []fyne.CanvasObject{header}
+		var detailObject fyne.CanvasObject = detail
+		var labelEntry *widget.Entry
+		if id == model.ProviderClaude || id == model.ProviderClaudeAuth {
+			labelEntry = widget.NewEntry()
+			labelEntry.SetPlaceHolder(v.text(i18n.KeyConnectionAccountLabel) + " · " + v.text(i18n.KeyConnectionAccountLabelHint))
+			labelEntry.SetText(v.config.AccountLabels[string(id)])
+			labelEntry.OnChanged = func(value string) { v.setAccountLabel(id, value) }
+			labelControl := container.NewGridWrap(fyne.NewSize(170, 28), labelEntry)
+			detailObject = container.NewBorder(nil, nil, detail, nil, labelControl)
+		}
+		contentObjects = append(contentObjects, detailObject, panel)
+		content := container.NewVBox(contentObjects...)
 		card := container.NewStack(background, container.NewBorder(nil, nil, accent, nil, container.New(layout.NewCustomPaddedLayout(4, 4, 7, 7), content)))
 		objects = append(objects, card)
-		v.connectionCache = append(v.connectionCache, &connectionView{id: id, status: status, dot: dot, detail: detail, methods: methodViews, methodRow: methodRow, panel: panel, testButton: testButton, reconnect: reconnect, helpButton: helpButton, actionRow: actionRow})
+		v.connectionCache = append(v.connectionCache, &connectionView{id: id, name: name, status: status, dot: dot, detail: detail, methods: methodViews, methodRow: methodRow, panel: panel, testButton: testButton, reconnect: reconnect, helpButton: helpButton, addButton: addButton, labelEntry: labelEntry, actionRow: actionRow})
 	}
 	v.connectionsBody.Objects = objects
 	v.connectionsBody.Refresh()
@@ -1105,6 +1180,8 @@ func (v *View) buildConnectionRows() {
 func connectionMethodsFor(id model.ProviderID) []connectionMethod {
 	switch id {
 	case model.ProviderClaude:
+		return []connectionMethod{connectionMethodCLI, connectionMethodAuth, connectionMethodOther}
+	case model.ProviderClaudeAuth:
 		return []connectionMethod{connectionMethodCLI, connectionMethodAuth, connectionMethodOther}
 	case model.ProviderCodex:
 		return []connectionMethod{connectionMethodCLI}
@@ -1121,6 +1198,9 @@ func connectionMethodsFor(id model.ProviderID) []connectionMethod {
 // anything — the first method it offers, which is the CLI everywhere a CLI
 // exists. Configs written before the selector shipped land here unchanged.
 func defaultConnectionMethod(id model.ProviderID) connectionMethod {
+	if id == model.ProviderClaudeAuth {
+		return connectionMethodAuth
+	}
 	methods := connectionMethodsFor(id)
 	if len(methods) == 0 {
 		return connectionMethodCLI
@@ -1152,6 +1232,9 @@ func (v *View) selectedConnectionMethod(id model.ProviderID) connectionMethod {
 // setConnectionMethod records the user's choice. Selecting a method the
 // provider does not offer is ignored so a stray call cannot corrupt settings.
 func (v *View) setConnectionMethod(id model.ProviderID, method connectionMethod) {
+	if method == connectionMethodCLI && v.claudeCLIOccupiedByOther(id) {
+		return
+	}
 	available := false
 	for _, candidate := range connectionMethodsFor(id) {
 		if candidate == method {
@@ -1170,6 +1253,50 @@ func (v *View) setConnectionMethod(id model.ProviderID, method connectionMethod)
 	methods[string(id)] = string(method)
 	config.ConnectionMethods = methods
 	v.SetConfig(config)
+	if id == model.ProviderClaudeAuth && v.Actions.Refresh != nil {
+		v.Actions.Refresh()
+	}
+}
+
+func (v *View) setAccountLabel(id model.ProviderID, value string) {
+	config := v.config
+	labels := make(map[string]string, len(config.AccountLabels)+1)
+	for provider, label := range config.AccountLabels {
+		labels[provider] = label
+	}
+	if label := settings.NormalizeAccountLabel(value); label != "" {
+		labels[string(id)] = label
+	} else {
+		delete(labels, string(id))
+	}
+	config.AccountLabels = labels
+	v.SetConfig(config)
+}
+
+func (v *View) connectionAccountName(id model.ProviderID) string {
+	if id == model.ProviderClaude || id == model.ProviderClaudeAuth {
+		return claudeAccountDisplayName(v.config, id, v.config.ShowClaudeAuth)
+	}
+	switch id {
+	case model.ProviderCodex:
+		return "Codex"
+	case model.ProviderAntigravity:
+		return "Antigravity"
+	case model.ProviderGrok:
+		return "Grok"
+	default:
+		return string(id)
+	}
+}
+
+func (v *View) claudeCLIOccupiedByOther(id model.ProviderID) bool {
+	if id == model.ProviderClaudeAuth {
+		return selectedConnectionMethod(v.config, model.ProviderClaude) == connectionMethodCLI
+	}
+	if id == model.ProviderClaude && v.config.ShowClaudeAuth {
+		return selectedConnectionMethod(v.config, model.ProviderClaudeAuth) == connectionMethodCLI
+	}
+	return false
 }
 
 func connectionMethodLabelKey(method connectionMethod) string {
@@ -1193,6 +1320,8 @@ func connectionMethodStateKey(state connectionMethodState) string {
 		return i18n.KeyConnectionStateAvailable
 	case connectionMethodPlanned:
 		return i18n.KeyConnectionStatePlanned
+	case connectionMethodOccupied:
+		return i18n.KeyConnectionCLIInUse
 	default:
 		return i18n.KeyConnectionStateMissing
 	}
@@ -1203,8 +1332,38 @@ func (v *View) connectionMethodTooltip(label string, state connectionMethodState
 }
 
 func (v *View) connectionMethodState(lane LaneState, method connectionMethod) connectionMethodState {
-	if lane.Provider == model.ProviderClaude && method == connectionMethodAuth {
-		return v.claudeAuthState(lane)
+	if lane.Provider == model.ProviderClaude || lane.Provider == model.ProviderClaudeAuth {
+		if method == connectionMethodCLI && v.claudeCLIOccupiedByOther(lane.Provider) {
+			return connectionMethodOccupied
+		}
+		selected := v.selectedConnectionMethod(lane.Provider)
+		switch method {
+		case connectionMethodAuth:
+			if !v.Actions.WebAuthAvailable {
+				return connectionMethodPlanned
+			}
+			if selected == method && lane.Status == model.StatusConnected && lane.Source == model.SourceWebSignIn {
+				return connectionMethodActive
+			}
+			return connectionMethodAvailable
+		case connectionMethodOther:
+			_, configured := os.LookupEnv(claudeOAuthTokenEnv)
+			if !configured {
+				return connectionMethodMissing
+			}
+			if selected == method && lane.Status == model.StatusConnected {
+				return connectionMethodActive
+			}
+			return connectionMethodAvailable
+		case connectionMethodCLI:
+			if selected == method && lane.Status == model.StatusConnected {
+				return connectionMethodActive
+			}
+			if selected == method {
+				return connectionMethodMissing
+			}
+			return connectionMethodAvailable
+		}
 	}
 	_, envConfigured := os.LookupEnv(claudeOAuthTokenEnv)
 	return connectionMethodStateSelected(lane, method, envConfigured, v.selectedConnectionMethod(lane.Provider))
@@ -1264,8 +1423,7 @@ func (v *View) toggleConnectionPanel(id model.ProviderID, method connectionMetho
 	// Tapping a method that is ready to use also picks it. A method that is
 	// missing or still planned only opens its panel, so the tap that asks
 	// "how do I install this?" never silently switches the active route.
-	_, envConfigured := os.LookupEnv(claudeOAuthTokenEnv)
-	switch connectionMethodBaseState(v.connectionLane(id), method, envConfigured) {
+	switch v.connectionMethodState(v.connectionLane(id), method) {
 	case connectionMethodActive, connectionMethodAvailable:
 		v.setConnectionMethod(id, method)
 	}
@@ -1389,7 +1547,7 @@ func compactConnectionPath(path string) string {
 
 func connectionNeedsInstall(lane LaneState) bool {
 	switch lane.Provider {
-	case model.ProviderClaude, model.ProviderCodex, model.ProviderAntigravity, model.ProviderGrok:
+	case model.ProviderClaude, model.ProviderClaudeAuth, model.ProviderCodex, model.ProviderAntigravity, model.ProviderGrok:
 		return lane.Status != model.StatusConnected
 	default:
 		return false
@@ -1403,7 +1561,7 @@ func (v *View) connectionPanel(lane LaneState, method connectionMethod) connecti
 	var actions []fyne.CanvasObject
 
 	switch {
-	case lane.Provider == model.ProviderClaude && method == connectionMethodAuth:
+	case (lane.Provider == model.ProviderClaude || lane.Provider == model.ProviderClaudeAuth) && method == connectionMethodAuth:
 		if !v.Actions.WebAuthAvailable {
 			content = []fyne.CanvasObject{textLabel(v.text(i18n.KeyConnectionAuthPlanned), 9.5, v.colors.Secondary, false, false)}
 			break
@@ -1412,11 +1570,11 @@ func (v *View) connectionPanel(lane LaneState, method connectionMethod) connecti
 		signIn := NewOutlinedSmallButton(v.text(i18n.KeyConnectionSignIn), v.text(i18n.KeyConnectionSignIn), func() {
 			v.closeConnectionPanel()
 			if v.Actions.SignIn != nil {
-				v.Actions.SignIn(lane.Provider)
+				v.Actions.SignIn(model.ProviderClaude)
 			}
 		}, v.colors)
 		actions = append(actions, connectionButton(signIn, 80))
-	case lane.Provider == model.ProviderClaude && method == connectionMethodOther:
+	case (lane.Provider == model.ProviderClaude || lane.Provider == model.ProviderClaudeAuth) && method == connectionMethodOther:
 		_, configured := os.LookupEnv(claudeOAuthTokenEnv)
 		message := v.text(i18n.KeyConnectionEnvConfigured)
 		if !configured {
@@ -1484,7 +1642,7 @@ func (v *View) connectionPanelCard(content, actions []fyne.CanvasObject) fyne.Ca
 
 func connectionInstallDetails(id model.ProviderID) (name, installCommand, signIn, verify, searchPaths string) {
 	switch id {
-	case model.ProviderClaude:
+	case model.ProviderClaude, model.ProviderClaudeAuth:
 		return "Claude CLI", claudeInstallCommand, "claude → Claude", "claude --version", claudeSearchPaths
 	case model.ProviderGrok:
 		return "Grok CLI", grokInstallCommand, "grok → x.ai", "grok --version", grokSearchPaths
@@ -1494,7 +1652,7 @@ func connectionInstallDetails(id model.ProviderID) (name, installCommand, signIn
 
 func connectionInstallURL(id model.ProviderID) string {
 	switch id {
-	case model.ProviderClaude:
+	case model.ProviderClaude, model.ProviderClaudeAuth:
 		return claudeInstallURL
 	case model.ProviderGrok:
 		return grokInstallURL

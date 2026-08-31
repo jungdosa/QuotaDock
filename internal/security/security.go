@@ -173,11 +173,11 @@ func IsAllowedUpdateURL(raw string) bool {
 	return allowed
 }
 
-var palette = map[string]struct{}{"slate": {}, "gray": {}, "red": {}, "orange": {}, "amber": {}, "yellow": {}, "lime": {}, "green": {}, "emerald": {}, "teal": {}, "cyan": {}, "sky": {}, "blue": {}, "indigo": {}, "violet": {}, "purple": {}}
+var palette = map[string]struct{}{"white": {}, "slate": {}, "gray": {}, "red": {}, "orange": {}, "amber": {}, "yellow": {}, "lime": {}, "green": {}, "emerald": {}, "teal": {}, "cyan": {}, "sky": {}, "blue": {}, "indigo": {}, "violet": {}, "purple": {}}
 
 func IsPaletteID(id string) bool { _, ok := palette[id]; return ok }
 func PaletteIDs() []string {
-	return []string{"slate", "gray", "red", "orange", "amber", "yellow", "lime", "green", "emerald", "teal", "cyan", "sky", "blue", "indigo", "violet", "purple"}
+	return []string{"white", "slate", "gray", "red", "orange", "amber", "yellow", "lime", "green", "emerald", "teal", "cyan", "sky", "blue", "indigo", "violet", "purple"}
 }
 
 func DecodeJSONLimited(reader io.Reader, maxBytes int64, destination any) error {

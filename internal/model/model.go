@@ -15,10 +15,19 @@ type Provider interface {
 	Close() error
 }
 
+// ProviderCollection exposes additional independently rendered accounts that
+// share a root provider's process or browser infrastructure. The coordinator
+// expands these accounts for refreshes but closes only the root provider, so a
+// shared resource is never torn down twice.
+type ProviderCollection interface {
+	AdditionalProviders() map[ProviderID]Provider
+}
+
 type ProviderID string
 
 const (
 	ProviderClaude      ProviderID = "claude"
+	ProviderClaudeAuth  ProviderID = "claude-auth"
 	ProviderCodex       ProviderID = "codex"
 	ProviderAntigravity ProviderID = "antigravity"
 	ProviderGrok        ProviderID = "grok"
@@ -177,6 +186,7 @@ func ClassifyUsage(usedPercent, warningThreshold, dangerThreshold float64) Alert
 
 var planAllowlists = map[ProviderID]map[string]Plan{
 	ProviderClaude:      {"PRO": "PRO", "MAX": "MAX", "MAX 5X": "MAX 5X", "MAX 20X": "MAX 20X", "TEAM": "TEAM", "ENTERPRISE": "ENTERPRISE", "FREE": "FREE"},
+	ProviderClaudeAuth:  {"PRO": "PRO", "MAX": "MAX", "MAX 5X": "MAX 5X", "MAX 20X": "MAX 20X", "TEAM": "TEAM", "ENTERPRISE": "ENTERPRISE", "FREE": "FREE"},
 	ProviderAntigravity: {"AI PRO": "AI PRO", "AI ULTRA": "AI ULTRA", "AI ULTRA 5X": "AI ULTRA 5X", "AI ULTRA 20X": "AI ULTRA 20X", "ENTERPRISE": "ENTERPRISE", "STANDARD": "STANDARD", "FREE": "FREE"},
 	ProviderCodex: {
 		"FREE":                            "FREE",

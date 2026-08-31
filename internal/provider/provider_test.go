@@ -28,6 +28,16 @@ func (f fakeProvider) Reconnect(ctx context.Context) (model.UsageSnapshot, error
 	return f.Refresh(ctx)
 }
 func (f fakeProvider) Close() error { return nil }
+
+type fakeProviderCollection struct {
+	fakeProvider
+	additional map[model.ProviderID]model.Provider
+}
+
+func (f fakeProviderCollection) AdditionalProviders() map[model.ProviderID]model.Provider {
+	return f.additional
+}
+
 func TestProviderSuccessFailureIsolation(t *testing.T) {
 	coordinator := Coordinator{Providers: map[model.ProviderID]model.Provider{model.ProviderClaude: fakeProvider{id: model.ProviderClaude, err: errors.New("safe failure")}, model.ProviderCodex: fakeProvider{id: model.ProviderCodex}, model.ProviderAntigravity: fakeProvider{id: model.ProviderAntigravity}, model.ProviderGrok: fakeProvider{id: model.ProviderGrok}}}
 	outcomes := coordinator.RefreshAll(context.Background())
@@ -38,6 +48,27 @@ func TestProviderSuccessFailureIsolation(t *testing.T) {
 		if outcomes[id].Err != nil || outcomes[id].Snapshot.Provider != id {
 			t.Errorf("provider %s was affected: %+v", id, outcomes[id])
 		}
+	}
+}
+
+func TestCoordinatorRefreshesAdditionalAccountsWithoutReplacingRoots(t *testing.T) {
+	root := fakeProviderCollection{
+		fakeProvider: fakeProvider{id: model.ProviderClaude},
+		additional: map[model.ProviderID]model.Provider{
+			model.ProviderClaude:     fakeProvider{id: model.ProviderGrok},
+			model.ProviderClaudeAuth: fakeProvider{id: model.ProviderClaudeAuth},
+		},
+	}
+	coordinator := Coordinator{Providers: map[model.ProviderID]model.Provider{model.ProviderClaude: root}}
+	outcomes := coordinator.RefreshAll(context.Background())
+	if got := outcomes[model.ProviderClaude].Snapshot.Provider; got != model.ProviderClaude {
+		t.Fatalf("root provider was replaced by additional account: %q", got)
+	}
+	if got := outcomes[model.ProviderClaudeAuth].Snapshot.Provider; got != model.ProviderClaudeAuth {
+		t.Fatalf("additional account was not refreshed: %q", got)
+	}
+	if coordinator.Provider(model.ProviderClaudeAuth) == nil {
+		t.Fatal("additional account was not discoverable")
 	}
 }
 func TestVersionComparison(t *testing.T) {

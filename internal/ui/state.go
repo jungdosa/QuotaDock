@@ -60,21 +60,44 @@ type Controller struct {
 
 func NewController(coordinator provider.Coordinator, config settings.Config) *Controller {
 	c := &Controller{coordinator: coordinator, config: config.Validated()}
+	c.applyProviderSourceModes(c.config)
 	c.state = defaultViewState()
 	return c
 }
 func defaultViewState() ViewState {
-	return ViewState{Lanes: []LaneState{{Provider: model.ProviderClaude, Name: "Claude", Status: model.StatusUnavailable}, {Provider: model.ProviderCodex, Name: "Codex", Status: model.StatusUnavailable}, {Provider: model.ProviderAntigravity, Name: "Antigravity", Status: model.StatusUnavailable}, {Provider: model.ProviderGrok, Name: "Grok", Status: model.StatusUnavailable}}}
+	// Keep the established four provider indexes stable for callers and tests;
+	// visibleLanes places the optional Auth account beside Claude when enabled.
+	return ViewState{Lanes: []LaneState{{Provider: model.ProviderClaude, Name: "Claude", Status: model.StatusUnavailable}, {Provider: model.ProviderCodex, Name: "Codex", Status: model.StatusUnavailable}, {Provider: model.ProviderAntigravity, Name: "Antigravity", Status: model.StatusUnavailable}, {Provider: model.ProviderGrok, Name: "Grok", Status: model.StatusUnavailable}, {Provider: model.ProviderClaudeAuth, Name: "Claude Auth", Status: model.StatusUnavailable}}}
 }
 func (c *Controller) Config() settings.Config { c.mu.RLock(); defer c.mu.RUnlock(); return c.config }
 func (c *Controller) SetConfig(cfg settings.Config) {
 	c.mu.Lock()
 	c.config = cfg.Validated()
+	c.applyProviderSourceModes(c.config)
 	state := cloneState(c.state)
 	listeners := append([]func(ViewState){}, c.listeners...)
 	c.mu.Unlock()
 	for _, fn := range listeners {
 		fn(state)
+	}
+}
+
+type sourceModeSetter interface {
+	SetSourceMode(string)
+}
+
+func (c *Controller) applyProviderSourceModes(config settings.Config) {
+	for _, id := range []model.ProviderID{model.ProviderClaude, model.ProviderClaudeAuth} {
+		implementation := c.coordinator.Provider(id)
+		setter, ok := implementation.(sourceModeSetter)
+		if !ok {
+			continue
+		}
+		value := config.ConnectionMethods[string(id)]
+		if id == model.ProviderClaudeAuth && value == "" {
+			value = settings.ConnectionMethodAuth
+		}
+		setter.SetSourceMode(value)
 	}
 }
 func (c *Controller) State() ViewState {
@@ -98,7 +121,7 @@ func (c *Controller) Refresh(ctx context.Context) ViewState {
 	next.LastRefresh = time.Now().UTC()
 	for i := range next.Lanes {
 		lane := &next.Lanes[i]
-		implementation := c.coordinator.Providers[lane.Provider]
+		implementation := c.coordinator.Provider(lane.Provider)
 		if implementation == nil {
 			continue
 		}
@@ -220,7 +243,7 @@ func rowGroupRank(providerID model.ProviderID, row UsageRowState) int {
 }
 
 func modelScopeRank(providerID model.ProviderID, row UsageRowState) int {
-	if providerID == model.ProviderClaude && strings.Contains(strings.ToLower(row.Label), "fable") {
+	if (providerID == model.ProviderClaude || providerID == model.ProviderClaudeAuth) && strings.Contains(strings.ToLower(row.Label), "fable") {
 		return 1
 	}
 	return 0

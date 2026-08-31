@@ -30,6 +30,41 @@ func TestWebAuthDoesNotDisplaceAWorkingCLI(t *testing.T) {
 	}
 }
 
+func TestWebAuthAlsoExposesAnIndependentAccount(t *testing.T) {
+	client := &fakeClient{version: "2.1.0", auth: json.RawMessage(`{"loggedIn":true,"subscriptionType":"pro"}`),
+		limits: json.RawMessage(`{"rate_limits":{"five_hour":{"used_percentage":5,"resets_at":"2030-01-02T00:00:00Z"}}}`)}
+	provider := newProvider(client, nil, "2.0.0")
+	provider.SetWebAuth(fakeOAuthFetcher{available: true, result: oauthResult{raw: json.RawMessage(webUsageJSON)}})
+	additional := provider.AdditionalProviders()
+	web := additional[model.ProviderClaudeAuth]
+	if web == nil {
+		t.Fatal("embedded sign-in account was not exposed")
+	}
+	snapshot, err := web.Refresh(context.Background())
+	if err != nil {
+		t.Fatalf("web account refresh: %v", err)
+	}
+	if snapshot.Provider != model.ProviderClaudeAuth || len(snapshot.Limits) != 2 || snapshot.Limits[0].UsedPercent != 12 {
+		t.Fatalf("web account snapshot = %+v", snapshot)
+	}
+	state := web.Inspect(context.Background())
+	if state.Status != model.StatusConnected || state.Source != model.SourceWebSignIn {
+		t.Fatalf("web account state = %+v", state)
+	}
+}
+
+func TestWebAuthAccountKeepsLoggedOutStateAfterRejectedSession(t *testing.T) {
+	provider := newProvider(&fakeClient{versionErr: shared.ErrNotInstalled}, nil, "2.0.0")
+	provider.SetWebAuth(fakeOAuthFetcher{available: true, err: errOAuthReauthentication})
+	web := provider.AdditionalProviders()[model.ProviderClaudeAuth]
+	if _, err := web.Refresh(context.Background()); err == nil {
+		t.Fatal("rejected browser session did not fail")
+	}
+	if state := web.Inspect(context.Background()); state.Status != model.StatusLoggedOut || state.Error != model.ErrNotLoggedIn {
+		t.Fatalf("rejected browser state = %+v", state)
+	}
+}
+
 // With no CLI at all, a signed-in browser session serves the lane.
 func TestWebAuthServesTheLaneWhenTheCLIIsMissing(t *testing.T) {
 	client := &fakeClient{versionErr: shared.ErrNotInstalled}

@@ -98,6 +98,27 @@ type oauthUsageFetcher interface {
 	Fetch(context.Context) (oauthResult, error)
 }
 
+// OAuthCredentialSources is a bit set of local credential inputs that an
+// OAuthClient call may inspect.
+type OAuthCredentialSources uint8
+
+const (
+	OAuthCredentialEnvironment OAuthCredentialSources = 1 << iota
+	OAuthCredentialFile
+	OAuthCredentialDefault = OAuthCredentialEnvironment | OAuthCredentialFile
+)
+
+type sourceSelectableOAuthUsageFetcher interface {
+	oauthUsageFetcher
+	AvailableFrom(OAuthCredentialSources) bool
+	FetchFrom(context.Context, OAuthCredentialSources) (oauthResult, error)
+}
+
+type oauthSourceCache struct {
+	backoffUntil time.Time
+	lastSuccess  oauthResult
+}
+
 // OAuthClient reads only Claude Code's credentials file (or the optional
 // environment override). It never queries an OS keyring.
 type OAuthClient struct {
@@ -109,14 +130,15 @@ type OAuthClient struct {
 	now                  func() time.Time
 	getenv               func(string) string
 	allowURL             func(string) bool
-	backoffUntil         time.Time
-	lastSuccess          oauthResult
+	sourceCache          [OAuthCredentialDefault + 1]oauthSourceCache
 	reportRefreshFailure func()
 }
 
 func NewOAuthClient() *OAuthClient {
 	path := ""
-	if home, err := os.UserHomeDir(); err == nil {
+	if configDir := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR")); configDir != "" {
+		path = filepath.Join(configDir, ".credentials.json")
+	} else if home, err := os.UserHomeDir(); err == nil {
 		path = filepath.Join(home, ".claude", ".credentials.json")
 	}
 	client := &http.Client{
@@ -140,24 +162,41 @@ func NewOAuthClient() *OAuthClient {
 }
 
 func (c *OAuthClient) Available() bool {
+	return c.AvailableFrom(OAuthCredentialDefault)
+}
+
+// AvailableFrom checks only the explicitly allowed credential sources. The
+// default Available method keeps the historical environment-first, file-second
+// lookup order.
+func (c *OAuthClient) AvailableFrom(sources OAuthCredentialSources) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	_, _, err := c.loadCredentials()
+	_, _, err := c.loadCredentials(sources)
 	return err == nil
 }
 
 func (c *OAuthClient) Fetch(ctx context.Context) (oauthResult, error) {
+	return c.FetchFrom(ctx, OAuthCredentialDefault)
+}
+
+// FetchFrom fetches usage with only the explicitly allowed credential
+// sources. Passing OAuthCredentialDefault preserves the historical lookup.
+func (c *OAuthClient) FetchFrom(ctx context.Context, sources OAuthCredentialSources) (oauthResult, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	credentials, fromFile, err := c.loadCredentials()
+	credentials, fromFile, err := c.loadCredentials(sources)
 	if err != nil {
 		return oauthResult{}, err
 	}
+	// Cache by requested source set, not the credential that happened to win.
+	// The combined default retains its historical shared cache while explicit
+	// file-only and environment-only modes can never serve each other's data.
+	cache := &c.sourceCache[sources&OAuthCredentialDefault]
 	now := c.now()
-	if now.Before(c.backoffUntil) {
-		if len(c.lastSuccess.raw) != 0 {
-			result := c.lastSuccess
+	if now.Before(cache.backoffUntil) {
+		if len(cache.lastSuccess.raw) != 0 {
+			result := cache.lastSuccess
 			result.cached = true
 			return result, nil
 		}
@@ -170,9 +209,9 @@ func (c *OAuthClient) Fetch(ctx context.Context) (oauthResult, error) {
 	}
 	raw, retryAfter, err := c.fetchUsage(ctx, credentials)
 	if errors.Is(err, errOAuthRateLimited) {
-		c.backoffUntil = now.Add(retryAfter)
-		if len(c.lastSuccess.raw) != 0 {
-			result := c.lastSuccess
+		cache.backoffUntil = now.Add(retryAfter)
+		if len(cache.lastSuccess.raw) != 0 {
+			result := cache.lastSuccess
 			result.cached = true
 			return result, nil
 		}
@@ -187,16 +226,18 @@ func (c *OAuthClient) Fetch(ctx context.Context) (oauthResult, error) {
 		rateLimitTier:    credentials.rateLimitTier,
 		subscriptionType: credentials.subscriptionType,
 	}
-	c.backoffUntil = time.Time{}
-	c.lastSuccess = result
+	cache.backoffUntil = time.Time{}
+	cache.lastSuccess = result
 	return result, nil
 }
 
-func (c *OAuthClient) loadCredentials() (oauthCredentials, bool, error) {
-	if token := strings.TrimSpace(c.getenv("CLAUDE_CODE_OAUTH_TOKEN")); token != "" {
-		return oauthCredentials{accessToken: token}, false, nil
+func (c *OAuthClient) loadCredentials(sources OAuthCredentialSources) (oauthCredentials, bool, error) {
+	if sources&OAuthCredentialEnvironment != 0 {
+		if token := strings.TrimSpace(c.getenv("CLAUDE_CODE_OAUTH_TOKEN")); token != "" {
+			return oauthCredentials{accessToken: token}, false, nil
+		}
 	}
-	if c.credentialsPath == "" {
+	if sources&OAuthCredentialFile == 0 || c.credentialsPath == "" {
 		return oauthCredentials{}, false, errOAuthCredentialsUnavailable
 	}
 	raw, err := os.ReadFile(c.credentialsPath)

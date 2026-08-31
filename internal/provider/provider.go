@@ -50,11 +50,40 @@ type Coordinator struct {
 	Providers map[model.ProviderID]model.Provider
 }
 
+// Provider returns either a root provider or one of the independent account
+// providers it exposes. Root entries win on an ID collision.
+func (c Coordinator) Provider(id model.ProviderID) model.Provider {
+	return c.expandedProviders()[id]
+}
+
+func (c Coordinator) expandedProviders() map[model.ProviderID]model.Provider {
+	providers := make(map[model.ProviderID]model.Provider, len(c.Providers)+1)
+	for id, implementation := range c.Providers {
+		providers[id] = implementation
+	}
+	for _, implementation := range c.Providers {
+		collection, ok := implementation.(model.ProviderCollection)
+		if !ok {
+			continue
+		}
+		for id, additional := range collection.AdditionalProviders() {
+			if additional == nil {
+				continue
+			}
+			if _, exists := providers[id]; !exists {
+				providers[id] = additional
+			}
+		}
+	}
+	return providers
+}
+
 func (c Coordinator) RefreshAll(ctx context.Context) map[model.ProviderID]Outcome {
-	output := make(map[model.ProviderID]Outcome, len(c.Providers))
+	providers := c.expandedProviders()
+	output := make(map[model.ProviderID]Outcome, len(providers))
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	for id, implementation := range c.Providers {
+	for id, implementation := range providers {
 		id, implementation := id, implementation
 		wg.Add(1)
 		diagnostics.Go("provider_refresh_worker", func() {

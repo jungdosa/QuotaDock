@@ -5,10 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync/atomic"
+	"time"
+
 	"github.com/jungdosa/QuotaDock/internal/model"
 	"github.com/jungdosa/QuotaDock/internal/process"
 	shared "github.com/jungdosa/QuotaDock/internal/provider"
-	"time"
 )
 
 type Client interface {
@@ -22,13 +24,38 @@ type executableSource interface {
 	ExecutablePath() (string, error)
 }
 
+// SourceMode selects the source that serves the root Claude lane. The empty
+// value is deliberately Auto so configurations written before this selector
+// retain the historical credential -> CLI auth-status -> web fallback.
+type SourceMode string
+
+const (
+	SourceModeAuto  SourceMode = ""
+	SourceModeCLI   SourceMode = "cli"
+	SourceModeAuth  SourceMode = "auth"
+	SourceModeOther SourceMode = "other"
+)
+
+type sourceSelection uint32
+
+const (
+	selectAuto sourceSelection = iota
+	selectCLI
+	selectAuth
+	selectOther
+	sourceSelectionCount
+)
+
 type Provider struct {
 	client         Client
 	oauth          oauthUsageFetcher
 	webAuth        oauthUsageFetcher
 	minimumVersion string
 	state          *model.StateMachine
-	group          process.Group[model.UsageSnapshot]
+	groups         [sourceSelectionCount]process.Group[model.UsageSnapshot]
+	webGroup       process.Group[model.UsageSnapshot]
+	webProvider    *WebProvider
+	source         atomic.Uint32
 	now            func() time.Time
 }
 
@@ -40,11 +67,51 @@ func newProvider(client Client, oauth oauthUsageFetcher, minimumVersion string) 
 	return &Provider{client: client, oauth: oauth, minimumVersion: minimumVersion, state: model.NewStateMachine(), now: time.Now}
 }
 
-// SetWebAuth attaches the embedded-browser fetcher as a fallback used only
-// when the CLI path is unavailable. It never displaces a working CLI: the
-// refresh order stays CLI credential, then CLI auth-status, then web.
+// SetSourceMode applies a stored connection-method value. Unknown values are
+// treated as Auto, matching settings validation's safe fallback.
+func (p *Provider) SetSourceMode(value string) {
+	selection := selectAuto
+	switch SourceMode(value) {
+	case SourceModeCLI:
+		selection = selectCLI
+	case SourceModeAuth:
+		selection = selectAuth
+	case SourceModeOther:
+		selection = selectOther
+	}
+	p.source.Store(uint32(selection))
+}
+
+func (p *Provider) sourceSelection() sourceSelection {
+	selection := sourceSelection(p.source.Load())
+	if selection >= sourceSelectionCount {
+		return selectAuto
+	}
+	return selection
+}
+
+// SetWebAuth attaches the embedded-browser fetcher used by Auth mode, the
+// independent Auth lane, and Auto's final fallback. In Auto it never displaces
+// a working CLI: the order stays credential, CLI auth-status, then web.
 func (p *Provider) SetWebAuth(webAuth oauthUsageFetcher) {
 	p.webAuth = webAuth
+	if webAuth == nil {
+		p.webProvider = nil
+		return
+	}
+	p.webProvider = &WebProvider{parent: p, state: model.NewStateMachine()}
+	p.webProvider.SetSourceMode(string(SourceModeAuth))
+}
+
+// AdditionalProviders exposes the isolated embedded-browser account as a
+// second Claude lane. It shares the fetch group with the root provider so a
+// CLI-less fallback and the explicit Auth lane never open duplicate WebView2
+// sessions against the same profile.
+func (p *Provider) AdditionalProviders() map[model.ProviderID]model.Provider {
+	if p.webProvider == nil {
+		return nil
+	}
+	return map[model.ProviderID]model.Provider{model.ProviderClaudeAuth: p.webProvider}
 }
 
 type authStatus struct {
@@ -54,20 +121,27 @@ type authStatus struct {
 }
 
 func (p *Provider) Inspect(ctx context.Context) model.ConnectionState {
-	if p.oauth != nil && p.oauth.Available() {
-		state := model.ConnectionState{Status: model.StatusConnected}
-		if source, ok := p.client.(executableSource); ok {
-			path, err := source.ExecutablePath()
-			switch {
-			case errors.Is(err, shared.ErrNotInstalled):
-				state.Error = model.ErrCLINotInstalled
-				state.ErrorKey = "error.cli_not_installed"
-			case err == nil:
-				state.CLIPath = path
-				state.CLIVersion, _ = p.client.Version(ctx)
-			}
+	switch p.sourceSelection() {
+	case selectCLI:
+		if state, ok := p.inspectOAuth(ctx, OAuthCredentialFile, true); ok {
+			return state
 		}
-		return p.setState(state)
+		return p.inspectCLI(ctx)
+	case selectAuth:
+		return p.inspectWebOnly()
+	case selectOther:
+		if state, ok := p.inspectOAuth(ctx, OAuthCredentialEnvironment, false); ok {
+			return state
+		}
+		return p.set(model.StatusLoggedOut, model.ErrNotLoggedIn, "error.not_logged_in")
+	default:
+		return p.inspectAuto(ctx)
+	}
+}
+
+func (p *Provider) inspectAuto(ctx context.Context) model.ConnectionState {
+	if state, ok := p.inspectOAuth(ctx, OAuthCredentialDefault, true); ok {
+		return state
 	}
 	state := p.inspectCLI(ctx)
 	if state.Status == model.StatusConnected {
@@ -81,33 +155,94 @@ func (p *Provider) Inspect(ctx context.Context) model.ConnectionState {
 	return state
 }
 
+func (p *Provider) inspectOAuth(ctx context.Context, sources OAuthCredentialSources, includeCLIDiagnostics bool) (model.ConnectionState, bool) {
+	state, ok := p.inspectOAuthState(ctx, sources, includeCLIDiagnostics)
+	if !ok {
+		return model.ConnectionState{}, false
+	}
+	return p.setState(state), true
+}
+
+func (p *Provider) inspectOAuthState(ctx context.Context, sources OAuthCredentialSources, includeCLIDiagnostics bool) (model.ConnectionState, bool) {
+	if !p.oauthAvailable(sources) {
+		return model.ConnectionState{}, false
+	}
+	state := model.ConnectionState{Status: model.StatusConnected}
+	if includeCLIDiagnostics {
+		if source, ok := p.client.(executableSource); ok {
+			path, err := source.ExecutablePath()
+			switch {
+			case errors.Is(err, shared.ErrNotInstalled):
+				state.Error = model.ErrCLINotInstalled
+				state.ErrorKey = "error.cli_not_installed"
+			case err == nil:
+				state.CLIPath = path
+				state.CLIVersion, _ = p.client.Version(ctx)
+			}
+		}
+	}
+	return state, true
+}
+
+func (p *Provider) inspectWebOnly() model.ConnectionState {
+	state := model.ConnectionState{Status: model.StatusLoggedOut, Error: model.ErrNotLoggedIn, ErrorKey: "error.not_logged_in", Source: model.SourceWebSignIn}
+	if p.webAuth != nil && p.webAuth.Available() {
+		state = model.ConnectionState{Status: model.StatusConnected, Source: model.SourceWebSignIn}
+	}
+	return p.setState(state)
+}
+
+func (p *Provider) oauthAvailable(sources OAuthCredentialSources) bool {
+	if p.oauth == nil {
+		return false
+	}
+	if selectable, ok := p.oauth.(sourceSelectableOAuthUsageFetcher); ok {
+		return selectable.AvailableFrom(sources)
+	}
+	return p.oauth.Available()
+}
+
+func (p *Provider) fetchOAuth(ctx context.Context, sources OAuthCredentialSources) (oauthResult, error) {
+	if p.oauth == nil {
+		return oauthResult{}, errOAuthCredentialsUnavailable
+	}
+	if selectable, ok := p.oauth.(sourceSelectableOAuthUsageFetcher); ok {
+		return selectable.FetchFrom(ctx, sources)
+	}
+	return p.oauth.Fetch(ctx)
+}
+
 func (p *Provider) inspectCLI(ctx context.Context) model.ConnectionState {
+	return p.setState(p.inspectCLIState(ctx))
+}
+
+func (p *Provider) inspectCLIState(ctx context.Context) model.ConnectionState {
 	version, err := p.client.Version(ctx)
 	if errors.Is(err, shared.ErrNotInstalled) {
-		return p.set(model.StatusUnavailable, model.ErrCLINotInstalled, "error.cli_not_installed")
+		return model.ConnectionState{Status: model.StatusUnavailable, Error: model.ErrCLINotInstalled, ErrorKey: "error.cli_not_installed"}
 	}
 	if err != nil {
-		return p.set(model.StatusError, model.ErrUnavailable, "error.unavailable")
+		return model.ConnectionState{Status: model.StatusError, Error: model.ErrUnavailable, ErrorKey: "error.unavailable"}
 	}
 	path := ""
 	if source, ok := p.client.(executableSource); ok {
 		path, _ = source.ExecutablePath()
 	}
 	if p.minimumVersion != "" && !shared.VersionAtLeast(version, p.minimumVersion) {
-		return p.setCLI(model.StatusOutdated, model.ErrCLIOutdated, "error.cli_outdated", path, version)
+		return model.ConnectionState{Status: model.StatusOutdated, Error: model.ErrCLIOutdated, ErrorKey: "error.cli_outdated", CLIPath: path, CLIVersion: version}
 	}
 	raw, err := p.client.AuthStatus(ctx)
 	if err != nil {
-		return p.setCLI(model.StatusError, model.ErrInvalidResponse, "error.invalid_response", path, version)
+		return model.ConnectionState{Status: model.StatusError, Error: model.ErrInvalidResponse, ErrorKey: "error.invalid_response", CLIPath: path, CLIVersion: version}
 	}
 	var status authStatus
 	if json.Unmarshal(raw, &status) != nil {
-		return p.setCLI(model.StatusError, model.ErrInvalidResponse, "error.invalid_response", path, version)
+		return model.ConnectionState{Status: model.StatusError, Error: model.ErrInvalidResponse, ErrorKey: "error.invalid_response", CLIPath: path, CLIVersion: version}
 	}
 	if !status.LoggedIn && !status.Authenticated {
-		return p.setCLI(model.StatusLoggedOut, model.ErrNotLoggedIn, "error.not_logged_in", path, version)
+		return model.ConnectionState{Status: model.StatusLoggedOut, Error: model.ErrNotLoggedIn, ErrorKey: "error.not_logged_in", CLIPath: path, CLIVersion: version}
 	}
-	return p.setCLI(model.StatusConnected, model.ErrNone, "", path, version)
+	return model.ConnectionState{Status: model.StatusConnected, CLIPath: path, CLIVersion: version}
 }
 func (p *Provider) set(status model.ConnectionStatus, code model.ErrorCode, key string) model.ConnectionState {
 	state := model.ConnectionState{Status: status, Error: code, ErrorKey: key}
@@ -123,75 +258,177 @@ func (p *Provider) setState(state model.ConnectionState) model.ConnectionState {
 }
 
 func (p *Provider) Refresh(ctx context.Context) (model.UsageSnapshot, error) {
-	return p.group.Do(ctx, func() (model.UsageSnapshot, error) {
-		if p.oauth != nil {
-			result, err := p.oauth.Fetch(ctx)
-			if err == nil {
-				snapshot, normalizeErr := NormalizeOAuthUsage(result.raw, result.rateLimitTier, result.subscriptionType, p.now())
-				if normalizeErr != nil {
-					return p.refreshCLI(ctx)
-				}
-				if snapshot.Plan == model.PlanUnknown {
-					if authRaw, authErr := p.client.AuthStatus(ctx); authErr == nil {
-						var auth authStatus
-						if json.Unmarshal(authRaw, &auth) == nil {
-							snapshot.Plan = NormalizeClaudeOAuthPlan("", auth.SubscriptionType)
-						}
-					}
-				}
-				p.set(model.StatusConnected, model.ErrNone, "")
-				return snapshot, nil
-			}
-			switch {
-			case errors.Is(err, errOAuthCredentialsUnavailable):
-				// Fall through to the existing CLI auth-status path.
-			case errors.Is(err, errOAuthReauthentication):
-				p.set(model.StatusLoggedOut, model.ErrNotLoggedIn, "error.not_logged_in")
-				return model.UsageSnapshot{}, model.SafeError{Code: model.ErrNotLoggedIn, Key: "error.not_logged_in"}
-			case errors.Is(err, context.DeadlineExceeded):
-				return model.UsageSnapshot{}, model.SafeError{Code: model.ErrTimeout, Key: "error.timeout"}
-			case errors.Is(err, errOAuthRateLimited):
-				return model.UsageSnapshot{}, model.SafeError{Code: model.ErrUsageUnavailable, Key: "error.usage_unavailable"}
-			default:
-				// Endpoint and refresh failures safely fall back to the CLI auth-status path.
-			}
+	selection := p.sourceSelection()
+	return p.groups[selection].Do(ctx, func() (model.UsageSnapshot, error) {
+		switch selection {
+		case selectCLI:
+			return p.refreshCLIOnly(ctx)
+		case selectAuth:
+			return p.refreshWebOnly(ctx)
+		case selectOther:
+			return p.refreshOtherOnly(ctx)
+		default:
+			return p.refreshAuto(ctx)
 		}
-		cliSnapshot, cliErr := p.refreshCLI(ctx)
-		if cliErr == nil {
-			return cliSnapshot, nil
-		}
-		// The CLI is unavailable. If the user signed in through the embedded
-		// browser, read usage from that session instead. It only produces a
-		// snapshot on success; any failure leaves the CLI error standing so
-		// the lane keeps guiding the user to install or sign in.
-		if snapshot, ok := p.refreshWebAuth(ctx); ok {
-			return snapshot, nil
-		}
-		return cliSnapshot, cliErr
 	})
 }
 
-func (p *Provider) refreshWebAuth(ctx context.Context) (model.UsageSnapshot, bool) {
-	if p.webAuth == nil || !p.webAuth.Available() {
-		return model.UsageSnapshot{}, false
+// refreshAuto is the pre-selector behavior kept intact for configurations
+// without a stored connection method.
+func (p *Provider) refreshAuto(ctx context.Context) (model.UsageSnapshot, error) {
+	if p.oauth != nil {
+		result, err := p.fetchOAuth(ctx, OAuthCredentialDefault)
+		if err == nil {
+			snapshot, normalizeErr := NormalizeOAuthUsage(result.raw, result.rateLimitTier, result.subscriptionType, p.now())
+			if normalizeErr != nil {
+				return p.refreshCLI(ctx)
+			}
+			if snapshot.Plan == model.PlanUnknown {
+				if authRaw, authErr := p.client.AuthStatus(ctx); authErr == nil {
+					var auth authStatus
+					if json.Unmarshal(authRaw, &auth) == nil {
+						snapshot.Plan = NormalizeClaudeOAuthPlan("", auth.SubscriptionType)
+					}
+				}
+			}
+			p.set(model.StatusConnected, model.ErrNone, "")
+			return snapshot, nil
+		}
+		switch {
+		case errors.Is(err, errOAuthCredentialsUnavailable):
+			// Fall through to the existing CLI auth-status path.
+		case errors.Is(err, errOAuthReauthentication):
+			p.set(model.StatusLoggedOut, model.ErrNotLoggedIn, "error.not_logged_in")
+			return model.UsageSnapshot{}, model.SafeError{Code: model.ErrNotLoggedIn, Key: "error.not_logged_in"}
+		case errors.Is(err, context.DeadlineExceeded):
+			return model.UsageSnapshot{}, model.SafeError{Code: model.ErrTimeout, Key: "error.timeout"}
+		case errors.Is(err, errOAuthRateLimited):
+			return model.UsageSnapshot{}, model.SafeError{Code: model.ErrUsageUnavailable, Key: "error.usage_unavailable"}
+		default:
+			// Endpoint and refresh failures safely fall back to the CLI auth-status path.
+		}
 	}
-	result, err := p.webAuth.Fetch(ctx)
+	cliSnapshot, cliErr := p.refreshCLI(ctx)
+	if cliErr == nil {
+		return cliSnapshot, nil
+	}
+	// The CLI is unavailable. If the user signed in through the embedded
+	// browser, read usage from that session instead. It only produces a
+	// snapshot on success; any failure leaves the CLI error standing so
+	// the lane keeps guiding the user to install or sign in.
+	if snapshot, ok := p.refreshWebAuth(ctx); ok {
+		return snapshot, nil
+	}
+	return cliSnapshot, cliErr
+}
+
+func (p *Provider) refreshCLIOnly(ctx context.Context) (model.UsageSnapshot, error) {
+	if p.oauth != nil {
+		result, err := p.fetchOAuth(ctx, OAuthCredentialFile)
+		if err == nil {
+			snapshot, normalizeErr := NormalizeOAuthUsage(result.raw, result.rateLimitTier, result.subscriptionType, p.now())
+			if normalizeErr != nil {
+				return p.refreshCLI(ctx)
+			}
+			if snapshot.Plan == model.PlanUnknown {
+				if authRaw, authErr := p.client.AuthStatus(ctx); authErr == nil {
+					var auth authStatus
+					if json.Unmarshal(authRaw, &auth) == nil {
+						snapshot.Plan = NormalizeClaudeOAuthPlan("", auth.SubscriptionType)
+					}
+				}
+			}
+			p.set(model.StatusConnected, model.ErrNone, "")
+			return snapshot, nil
+		}
+		// CLI mode gives the official auth-status path the final decision for
+		// every credential-file failure, and never consults the web session.
+	}
+	return p.refreshCLI(ctx)
+}
+
+func (p *Provider) refreshOtherOnly(ctx context.Context) (model.UsageSnapshot, error) {
+	result, err := p.fetchOAuth(ctx, OAuthCredentialEnvironment)
 	if err != nil {
-		return model.UsageSnapshot{}, false
+		return p.failSelectedSource(err, "")
 	}
-	snapshot, normalizeErr := NormalizeOAuthUsage(result.raw, result.rateLimitTier, result.subscriptionType, p.now())
-	if normalizeErr != nil {
+	snapshot, err := NormalizeOAuthUsage(result.raw, result.rateLimitTier, result.subscriptionType, p.now())
+	if err != nil {
+		return p.failSelectedSource(errOAuthInvalidResponse, "")
+	}
+	p.set(model.StatusConnected, model.ErrNone, "")
+	return snapshot, nil
+}
+
+func (p *Provider) refreshWebOnly(ctx context.Context) (model.UsageSnapshot, error) {
+	snapshot, err := p.fetchWebAuth(ctx)
+	if err != nil {
+		return p.failSelectedSource(err, model.SourceWebSignIn)
+	}
+	p.setState(model.ConnectionState{Status: model.StatusConnected, Source: model.SourceWebSignIn})
+	return snapshot, nil
+}
+
+func (p *Provider) failSelectedSource(err error, source string) (model.UsageSnapshot, error) {
+	status := model.StatusError
+	code := model.ErrUnavailable
+	key := "error.unavailable"
+	switch {
+	case errors.Is(err, errOAuthCredentialsUnavailable), errors.Is(err, errOAuthReauthentication):
+		status, code, key = model.StatusLoggedOut, model.ErrNotLoggedIn, "error.not_logged_in"
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):
+		code, key = model.ErrTimeout, "error.timeout"
+	case errors.Is(err, errOAuthRateLimited):
+		status, code, key = model.StatusConnected, model.ErrUsageUnavailable, "error.usage_unavailable"
+	case errors.Is(err, errOAuthInvalidResponse):
+		code, key = model.ErrInvalidResponse, "error.invalid_response"
+	}
+	p.setState(model.ConnectionState{Status: status, Error: code, ErrorKey: key, Source: source})
+	return model.UsageSnapshot{}, model.SafeError{Code: code, Key: key}
+}
+
+func (p *Provider) refreshWebAuth(ctx context.Context) (model.UsageSnapshot, bool) {
+	snapshot, err := p.fetchWebAuth(ctx)
+	if err != nil {
 		return model.UsageSnapshot{}, false
 	}
 	p.setState(model.ConnectionState{Status: model.StatusConnected, Source: model.SourceWebSignIn})
 	return snapshot, true
 }
 
+func (p *Provider) fetchWebAuth(ctx context.Context) (model.UsageSnapshot, error) {
+	return p.webGroup.Do(ctx, func() (model.UsageSnapshot, error) {
+		if p.webAuth == nil || !p.webAuth.Available() {
+			return model.UsageSnapshot{}, errOAuthCredentialsUnavailable
+		}
+		result, err := p.webAuth.Fetch(ctx)
+		if err != nil {
+			return model.UsageSnapshot{}, err
+		}
+		return NormalizeOAuthUsage(result.raw, result.rateLimitTier, result.subscriptionType, p.now())
+	})
+}
+
 func (p *Provider) refreshCLI(ctx context.Context) (model.UsageSnapshot, error) {
-	state := p.inspectCLI(ctx)
+	state := p.inspectCLIState(ctx)
+	p.setState(state)
 	if state.Status != model.StatusConnected {
 		return model.UsageSnapshot{}, model.SafeError{Code: state.Error, Key: state.ErrorKey}
 	}
+	return p.refreshCLIAfterInspection(ctx)
+}
+
+// refreshCLISnapshot is the state-neutral CLI path used by an additional
+// account. It must not overwrite the root account's connection badge.
+func (p *Provider) refreshCLISnapshot(ctx context.Context) (model.UsageSnapshot, error) {
+	state := p.inspectCLIState(ctx)
+	if state.Status != model.StatusConnected {
+		return model.UsageSnapshot{}, model.SafeError{Code: state.Error, Key: state.ErrorKey}
+	}
+	return p.refreshCLIAfterInspection(ctx)
+}
+
+func (p *Provider) refreshCLIAfterInspection(ctx context.Context) (model.UsageSnapshot, error) {
 	authRaw, err := p.client.AuthStatus(ctx)
 	if err != nil {
 		return model.UsageSnapshot{}, model.SafeError{Code: model.ErrInvalidResponse, Key: "error.invalid_response"}
@@ -223,6 +460,9 @@ func (p *Provider) refreshCLI(ctx context.Context) (model.UsageSnapshot, error) 
 func (p *Provider) Reconnect(ctx context.Context) (model.UsageSnapshot, error) { return p.Refresh(ctx) }
 func (p *Provider) Close() error {
 	p.state.Set(model.ConnectionState{Status: model.StatusClosed})
+	if p.webProvider != nil {
+		_ = p.webProvider.Close()
+	}
 	return p.client.Close()
 }
 
@@ -273,3 +513,4 @@ func parseTime(raw json.RawMessage) time.Time {
 }
 
 var _ model.Provider = (*Provider)(nil)
+var _ model.ProviderCollection = (*Provider)(nil)

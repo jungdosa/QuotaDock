@@ -9,13 +9,16 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/jungdosa/QuotaDock/internal/i18n"
 	"github.com/jungdosa/QuotaDock/internal/security"
 )
 
 const (
-	CurrentSchemaVersion       = 4
+	CurrentSchemaVersion       = 5
 	MaxFileSize          int64 = 256 << 10
 )
 
@@ -70,22 +73,26 @@ func NextDisplayMode(mode DisplayMode) DisplayMode {
 }
 
 type Config struct {
-	SchemaVersion    int               `json:"schemaVersion"`
-	Language         Language          `json:"language"`
-	DateTimeFormat   DateTimeFormat    `json:"dateTimeFormat"`
-	Theme            Theme             `json:"theme"`
-	UsageMode        UsageMode         `json:"usageMode"`
-	RefreshSeconds   int               `json:"refreshSeconds"`
-	WarningsEnabled  bool              `json:"warningsEnabled"`
-	WarningPercent   float64           `json:"warningPercent"`
-	DangerPercent    float64           `json:"dangerPercent"`
-	WarningColor     string            `json:"warningColor"`
-	DangerColor      string            `json:"dangerColor"`
-	ProviderColors   map[string]string `json:"providerColors"`
-	ShowClaude       bool              `json:"showClaude"`
-	ShowCodex        bool              `json:"showCodex"`
-	ShowAGGemini     bool              `json:"showAGGemini"`
-	ShowAGClaude     bool              `json:"showAGClaude"`
+	SchemaVersion   int               `json:"schemaVersion"`
+	Language        Language          `json:"language"`
+	DateTimeFormat  DateTimeFormat    `json:"dateTimeFormat"`
+	Theme           Theme             `json:"theme"`
+	UsageMode       UsageMode         `json:"usageMode"`
+	RefreshSeconds  int               `json:"refreshSeconds"`
+	WarningsEnabled bool              `json:"warningsEnabled"`
+	WarningPercent  float64           `json:"warningPercent"`
+	DangerPercent   float64           `json:"dangerPercent"`
+	WarningColor    string            `json:"warningColor"`
+	DangerColor     string            `json:"dangerColor"`
+	ProviderColors  map[string]string `json:"providerColors"`
+	// AccountLabels are optional, user-authored display aliases. QuotaDock
+	// never derives them from credentials, tokens, or account email addresses.
+	AccountLabels  map[string]string `json:"accountLabels,omitempty"`
+	ShowClaude     bool              `json:"showClaude"`
+	ShowClaudeAuth bool              `json:"showClaudeAuth"`
+	ShowCodex      bool              `json:"showCodex"`
+	ShowAGGemini   bool              `json:"showAGGemini"`
+	ShowAGClaude   bool              `json:"showAGClaude"`
 	// ShowGrok defaults to off: the lane would only report "sign in" noise
 	// for users without the Grok CLI, and existing screens stay unchanged.
 	ShowGrok bool `json:"showGrok"`
@@ -99,19 +106,19 @@ type Config struct {
 	// they did. Validation drops unknown providers and unknown methods rather
 	// than failing the load: a stale value must never lock someone out.
 	ConnectionMethods map[string]string `json:"connectionMethods"`
-	AutoStart bool `json:"autoStart"`
+	AutoStart         bool              `json:"autoStart"`
 	// StartMinimized controls whether a launch at Windows startup goes straight
 	// to the tray. It defaults to false: a widget the user asked to start with
 	// Windows should be on screen, and the old always-hidden behaviour left
 	// people wondering whether the app had started at all.
-	StartMinimized   bool              `json:"startMinimized"`
-	AlwaysOnTop      bool              `json:"alwaysOnTop"`
-	ShowInTaskbar    bool              `json:"showInTaskbar"`
-	PromoteTrayIcon  bool              `json:"promoteTrayIcon"`
-	DisplayMode      DisplayMode       `json:"displayMode"`
-	WindowX          int               `json:"windowX,omitempty"`
-	WindowY          int               `json:"windowY,omitempty"`
-	WindowPositioned bool              `json:"windowPositioned,omitempty"`
+	StartMinimized   bool        `json:"startMinimized"`
+	AlwaysOnTop      bool        `json:"alwaysOnTop"`
+	ShowInTaskbar    bool        `json:"showInTaskbar"`
+	PromoteTrayIcon  bool        `json:"promoteTrayIcon"`
+	DisplayMode      DisplayMode `json:"displayMode"`
+	WindowX          int         `json:"windowX,omitempty"`
+	WindowY          int         `json:"windowY,omitempty"`
+	WindowPositioned bool        `json:"windowPositioned,omitempty"`
 }
 
 // Default provider hues follow the official brand-logo icons so the icon and
@@ -119,7 +126,50 @@ type Config struct {
 // violet, AG Claude slate. (An earlier draft banned warm provider hues;
 // that reservation was withdrawn when defaults were matched to the logos.)
 func Default() Config {
-	return Config{SchemaVersion: CurrentSchemaVersion, Language: LanguageSystem, DateTimeFormat: Format12HourDate, Theme: ThemeLight, UsageMode: UsageUsed, RefreshSeconds: 300, WarningsEnabled: true, WarningPercent: 80, DangerPercent: 90, WarningColor: "amber", DangerColor: "red", ProviderColors: map[string]string{"claude": "orange", "codex": "gray", "antigravity": "slate", "antigravity-gemini": "violet", "grok": "sky"}, ShowClaude: true, ShowCodex: true, ShowAGGemini: true, ShowAGClaude: true, ShowGrok: false, ShowClaudeCredits: true, ShowCodexCredits: true, ShowInTaskbar: true, PromoteTrayIcon: true, DisplayMode: ModeNormal}
+	return Config{SchemaVersion: CurrentSchemaVersion, Language: LanguageSystem, DateTimeFormat: Format12HourDate, Theme: ThemeLight, UsageMode: UsageUsed, RefreshSeconds: 300, WarningsEnabled: true, WarningPercent: 80, DangerPercent: 90, WarningColor: "amber", DangerColor: "red", ProviderColors: map[string]string{"claude": "orange", "claude-auth": "white", "codex": "gray", "antigravity": "slate", "antigravity-gemini": "violet", "grok": "sky"}, ShowClaude: true, ShowClaudeAuth: false, ShowCodex: true, ShowAGGemini: true, ShowAGClaude: true, ShowGrok: false, ShowClaudeCredits: true, ShowCodexCredits: true, ShowInTaskbar: true, PromoteTrayIcon: true, DisplayMode: ModeNormal}
+}
+
+const MaxAccountLabelRunes = 20
+
+var accountLabelProviderIDs = map[string]struct{}{
+	"claude": {}, "claude-auth": {},
+}
+
+// NormalizeAccountLabel keeps user aliases short and single-line. It never
+// reads or invents identity data; an empty result means the UI uses its stable
+// Claude/Claude CLI/Claude Auth fallback labels.
+func NormalizeAccountLabel(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	var output strings.Builder
+	output.Grow(min(len(value), MaxAccountLabelRunes*utf8.UTFMax))
+	count := 0
+	spacePending := false
+	for _, valueRune := range value {
+		if unicode.IsControl(valueRune) {
+			continue
+		}
+		if unicode.IsSpace(valueRune) {
+			spacePending = output.Len() > 0
+			continue
+		}
+		if count >= MaxAccountLabelRunes {
+			break
+		}
+		if spacePending {
+			output.WriteByte(' ')
+			count++
+			spacePending = false
+			if count >= MaxAccountLabelRunes {
+				break
+			}
+		}
+		output.WriteRune(valueRune)
+		count++
+	}
+	return strings.TrimSpace(output.String())
 }
 
 // Connection method identifiers as persisted in ConnectionMethods. The UI owns
@@ -140,7 +190,7 @@ var connectionMethodIDs = map[string]struct{}{
 }
 
 var connectionProviderIDs = map[string]struct{}{
-	"claude": {}, "codex": {}, "antigravity": {}, "grok": {},
+	"claude": {}, "claude-auth": {}, "codex": {}, "antigravity": {}, "grok": {},
 }
 
 // IsConnectionMethodID reports whether a stored method identifier is one this
@@ -202,6 +252,23 @@ func (c Config) Validated() Config {
 		output[provider] = value
 	}
 	c.ProviderColors = output
+	if len(c.AccountLabels) > 0 {
+		labels := make(map[string]string, len(c.AccountLabels))
+		for provider, value := range c.AccountLabels {
+			if _, known := accountLabelProviderIDs[provider]; !known {
+				continue
+			}
+			if label := NormalizeAccountLabel(value); label != "" {
+				labels[provider] = label
+			}
+		}
+		if len(labels) == 0 {
+			labels = nil
+		}
+		c.AccountLabels = labels
+	} else {
+		c.AccountLabels = nil
+	}
 	// Drop entries this build cannot honor instead of rejecting the file: a
 	// method removed in a later version, or a provider that no longer exists,
 	// must degrade to the provider default rather than block startup.

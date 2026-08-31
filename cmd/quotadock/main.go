@@ -18,13 +18,13 @@ import (
 	platform "github.com/jungdosa/QuotaDock/internal/platform/windows"
 	"github.com/jungdosa/QuotaDock/internal/provider"
 	agprovider "github.com/jungdosa/QuotaDock/internal/provider/antigravity"
-	grokprovider "github.com/jungdosa/QuotaDock/internal/provider/grok"
 	claudeprovider "github.com/jungdosa/QuotaDock/internal/provider/claude"
 	codexprovider "github.com/jungdosa/QuotaDock/internal/provider/codex"
+	grokprovider "github.com/jungdosa/QuotaDock/internal/provider/grok"
 	"github.com/jungdosa/QuotaDock/internal/settings"
 	"github.com/jungdosa/QuotaDock/internal/ui"
-	"github.com/jungdosa/QuotaDock/internal/webview"
 	updater "github.com/jungdosa/QuotaDock/internal/update"
+	"github.com/jungdosa/QuotaDock/internal/webview"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -146,6 +146,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		claudeWebAuth = claudeprovider.NewWebAuthFetcher(filepath.Join(dataDir, webview.DefaultUserDataDir))
 		claudeProvider.SetWebAuth(claudeWebAuth)
 	}
+	claudeProvider.SetSourceMode(cfg.ConnectionMethods[string(model.ProviderClaude)])
 	coordinator := provider.Coordinator{Providers: map[model.ProviderID]model.Provider{
 		model.ProviderClaude:      claudeProvider,
 		model.ProviderCodex:       codexprovider.New(codexprovider.NewAppServerTransport(processLog), codexprovider.MinimumCLIVersion),
@@ -294,6 +295,8 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	applyConfig := func(next settings.Config) {
 		previous := cfg
 		cfg = next.Validated()
+		claudeSourceChanged := cfg.ConnectionMethods[string(model.ProviderClaude)] != previous.ConnectionMethods[string(model.ProviderClaude)]
+		claudeProvider.SetSourceMode(cfg.ConnectionMethods[string(model.ProviderClaude)])
 		controller.SetConfig(cfg)
 		a.Settings().SetTheme(ui.NewBrandTheme(cfg.Theme))
 		_ = native.SetAlwaysOnTop(cfg.AlwaysOnTop)
@@ -328,6 +331,9 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		scheduler.Stop()
 		if !demo {
 			scheduler.Start(ctx, time.Duration(cfg.RefreshSeconds)*time.Second, scheduledRefresh)
+		}
+		if claudeSourceChanged && !demo {
+			refresh()
 		}
 	}
 	setDisplayMode := func(mode settings.DisplayMode) {

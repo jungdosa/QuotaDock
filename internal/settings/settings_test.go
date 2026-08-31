@@ -109,6 +109,54 @@ func TestDecodeMissingFieldsPreservesDefaults(t *testing.T) {
 		}
 	})
 }
+
+func TestClaudeAuthLaneIsOptInAndPersists(t *testing.T) {
+	if Default().ShowClaudeAuth {
+		t.Fatal("the second Claude account must remain opt-in for existing users")
+	}
+	if got := Default().ProviderColors["claude-auth"]; got != "white" {
+		t.Fatalf("Claude Auth default color = %q, want white", got)
+	}
+	config, err := Decode(strings.NewReader(`{"schemaVersion":5,"showClaudeAuth":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !config.ShowClaudeAuth || config.SchemaVersion != CurrentSchemaVersion {
+		t.Fatalf("Claude Auth setting was not preserved: %+v", config)
+	}
+}
+
+func TestAccountLabelsAreOptionalShortUserValues(t *testing.T) {
+	config := Default()
+	config.AccountLabels = map[string]string{
+		"claude":      "  Personal   Work  ",
+		"claude-auth": strings.Repeat("界", MaxAccountLabelRunes+5),
+		"codex":       "must be dropped",
+	}
+	got := config.Validated()
+	if got.AccountLabels["claude"] != "Personal Work" {
+		t.Fatalf("normalized root label = %q", got.AccountLabels["claude"])
+	}
+	if len([]rune(got.AccountLabels["claude-auth"])) != MaxAccountLabelRunes {
+		t.Fatalf("auth label length = %d, want %d", len([]rune(got.AccountLabels["claude-auth"])), MaxAccountLabelRunes)
+	}
+	if _, exists := got.AccountLabels["codex"]; exists {
+		t.Fatal("unsupported provider account label survived validation")
+	}
+	if label := NormalizeAccountLabel(strings.Repeat("x", MaxAccountLabelRunes-1) + "  y"); strings.HasSuffix(label, " ") || len([]rune(label)) > MaxAccountLabelRunes {
+		t.Fatalf("truncated label retained trailing whitespace: %q", label)
+	}
+}
+
+func TestVersionFourConfigKeepsAccountCustomizationOptIn(t *testing.T) {
+	config, err := Decode(strings.NewReader(`{"schemaVersion":4,"showClaude":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.ShowClaudeAuth || len(config.AccountLabels) != 0 || config.ProviderColors["claude-auth"] != "white" {
+		t.Fatalf("v4 migration changed account visibility or missed defaults: %+v", config)
+	}
+}
 func TestPhaseTwoSettingsValidation(t *testing.T) {
 	config := Default()
 	config.Theme = Theme("neon")

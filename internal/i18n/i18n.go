@@ -61,6 +61,7 @@ const (
 	KeyGroupDisplay              = "settings.group.display"
 	KeyGroupConnections          = "settings.group.connections"
 	KeyShowClaude                = "settings.show_claude"
+	KeyShowClaudeAuth            = "settings.show_claude_auth"
 	KeyShowCodex                 = "settings.show_codex"
 	KeyShowAGGemini              = "settings.show_ag_gemini"
 	KeyShowAGClaude              = "settings.show_ag_claude"
@@ -160,6 +161,10 @@ const (
 	KeyConnectionStateAvailable    = "connection.state_available"
 	KeyConnectionStateMissing      = "connection.state_missing"
 	KeyConnectionStatePlanned      = "connection.state_planned"
+	KeyConnectionAccountLabel      = "connection.account_label"
+	KeyConnectionAccountLabelHint  = "connection.account_label_hint"
+	KeyConnectionAddAccount        = "connection.add_account"
+	KeyConnectionCLIInUse          = "connection.cli_in_use"
 	KeyConnectionSignIn            = "connection.sign_in"
 	KeyConnectionAuthWebHint       = "connection.auth_web_hint"
 	KeyConnectionPanelInstallTitle = "connection.panel_install_title"
@@ -313,6 +318,7 @@ var RequiredKeys = []string{
 	KeyGroupDisplay,
 	KeyGroupConnections,
 	KeyShowClaude,
+	KeyShowClaudeAuth,
 	KeyShowCodex,
 	KeyShowAGGemini,
 	KeyShowAGClaude,
@@ -357,6 +363,10 @@ var RequiredKeys = []string{
 	KeyConnectionStateAvailable,
 	KeyConnectionStateMissing,
 	KeyConnectionStatePlanned,
+	KeyConnectionAccountLabel,
+	KeyConnectionAccountLabelHint,
+	KeyConnectionAddAccount,
+	KeyConnectionCLIInUse,
 	KeyConnectionSignIn,
 	KeyConnectionAuthWebHint,
 	KeyConnectionPanelInstallTitle,

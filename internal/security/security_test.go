@@ -70,7 +70,7 @@ func TestUpdateURLAllowlist(t *testing.T) {
 }
 
 func TestPaletteValidation(t *testing.T) {
-	if len(PaletteIDs()) != 16 || !IsPaletteID("blue") || IsPaletteID("#00aaff") {
+	if len(PaletteIDs()) != 17 || !IsPaletteID("white") || !IsPaletteID("blue") || IsPaletteID("#00aaff") {
 		t.Fatal("palette allowlist mismatch")
 	}
 }

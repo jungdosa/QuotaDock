@@ -22,6 +22,17 @@ const (
 // cannot enter the tooltip.
 func BuildTrayTooltip(state ViewState, config settings.Config, systemLanguage i18n.Language, now time.Time) string {
 	config = config.Validated()
+	rootVisible := false
+	authVisible := false
+	for _, lane := range state.Lanes {
+		switch lane.Provider {
+		case model.ProviderClaude:
+			rootVisible = config.ShowClaude && !(config.ShowClaudeAuth && lane.Source == model.SourceWebSignIn)
+		case model.ProviderClaudeAuth:
+			authVisible = config.ShowClaudeAuth
+		}
+	}
+	dualClaude := rootVisible && authVisible
 	lines := make([]string, 0, len(state.Lanes))
 	for _, lane := range state.Lanes {
 		if lane.Status != model.StatusConnected {
@@ -30,6 +41,9 @@ func BuildTrayTooltip(state ViewState, config settings.Config, systemLanguage i1
 		row, ok := highestVisibleUsageRow(lane, config)
 		if !ok {
 			continue
+		}
+		if lane.Provider == model.ProviderClaude || lane.Provider == model.ProviderClaudeAuth {
+			lane.Name = claudeAccountDisplayName(config, lane.Provider, dualClaude)
 		}
 		until, _ := resetStrings(row, now, config, systemLanguage)
 		countdown := strings.ReplaceAll(until, " ", "")
@@ -47,7 +61,11 @@ func BuildTrayTooltip(state ViewState, config settings.Config, systemLanguage i1
 func highestVisibleUsageRow(lane LaneState, config settings.Config) (UsageRowState, bool) {
 	switch lane.Provider {
 	case model.ProviderClaude:
-		if !config.ShowClaude {
+		if !config.ShowClaude || config.ShowClaudeAuth && lane.Source == model.SourceWebSignIn {
+			return UsageRowState{}, false
+		}
+	case model.ProviderClaudeAuth:
+		if !config.ShowClaudeAuth {
 			return UsageRowState{}, false
 		}
 	case model.ProviderCodex:

@@ -106,20 +106,26 @@ func TestThresholdDisplayAndConnectionGeometry(t *testing.T) {
 		}
 	}
 
-	var actionX float32
+	var actionRight float32
 	for index, handles := range v.connectionCache {
 		rowLayout, ok := handles.actionRow.Layout.(*GapColumnLayout)
-		if !ok || len(rowLayout.Gaps) != 2 || rowLayout.Gaps[0] != 6 || rowLayout.Gaps[1] != 6 || rowLayout.Height != SmallButtonHeight {
+		if !ok || len(rowLayout.Gaps) != len(handles.actionRow.Objects)-1 || rowLayout.Height != SmallButtonHeight {
 			t.Fatalf("connection %d action layout=%+v", index, rowLayout)
+		}
+		for _, gap := range rowLayout.Gaps {
+			if gap != 6 {
+				t.Fatalf("connection %d action gap=%.1f, want 6", index, gap)
+			}
 		}
 		position, found := objectPosition(v.Settings, handles.actionRow, fyne.NewPos(0, 0))
 		if !found {
 			t.Fatalf("connection %d action row position not found", index)
 		}
+		right := position.X + handles.actionRow.MinSize().Width
 		if index == 0 {
-			actionX = position.X
-		} else if position.X != actionX {
-			t.Fatalf("connection action x row %d=%.1f, want %.1f", index, position.X, actionX)
+			actionRight = right
+		} else if right != actionRight {
+			t.Fatalf("connection action right row %d=%.1f, want %.1f", index, right, actionRight)
 		}
 		if !handles.testButton.Outlined || !handles.reconnect.Outlined || !handles.helpButton.Outlined {
 			t.Fatalf("connection %d secondary button styles differ", index)

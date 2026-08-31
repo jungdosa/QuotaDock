@@ -653,8 +653,8 @@ func TestLaneHeaderShowsAllowedPlanWithoutDecorativeConnectionDot(t *testing.T) 
 	}
 }
 
-func TestPaletteControllerHasSixteenAllowedColorsAndRejectsCSS(t *testing.T) {
-	if len(security.PaletteIDs()) != 16 {
+func TestPaletteControllerHasSeventeenAllowedColorsAndRejectsCSS(t *testing.T) {
+	if len(security.PaletteIDs()) != 17 {
 		t.Fatalf("palette size=%d", len(security.PaletteIDs()))
 	}
 	b := NewPaletteButton("blue", nil, nil)
@@ -1170,8 +1170,8 @@ func TestMeterPaletteUpdatesColorWithoutReplacingCachedMeter(t *testing.T) {
 			swatches = append(swatches, swatch)
 		}
 	})
-	if len(swatches) != 17 {
-		t.Fatalf("provider palette swatches=%d, want reset + 16 colors", len(swatches))
+	if len(swatches) != 18 {
+		t.Fatalf("provider palette swatches=%d, want reset + 17 colors", len(swatches))
 	}
 	selected := 0
 	var purple *PaletteSwatch

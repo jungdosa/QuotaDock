@@ -37,8 +37,7 @@ func TestSettingsLayoutMetrics(t *testing.T) {
 		pair.Layout.Layout(pair.Objects, pair.Size())
 		starts := [2]float32{}
 		for columnIndex, object := range pair.Objects {
-			// The Grok row pairs a toggle with a spacer: only real setting
-			// rows join the alignment check.
+			// Only real setting rows join the alignment check.
 			row, ok := object.(*fyne.Container)
 			if !ok {
 				continue
@@ -50,10 +49,6 @@ func TestSettingsLayoutMetrics(t *testing.T) {
 	}
 	for rowIndex, starts := range controlStarts {
 		want := [2]float32{120, 120}
-		if rowIndex == 2 {
-			// The Grok row keeps a spacer in its right cell.
-			want = [2]float32{120, 0}
-		}
 		if starts != want {
 			t.Fatalf("usage row %d control starts=%v, want %v", rowIndex, starts, want)
 		}
@@ -99,8 +94,11 @@ func TestSettingsLayoutMetrics(t *testing.T) {
 	if rows := v.connectionsBody.Objects; len(rows) > 0 {
 		grokAllowance += rows[len(rows)-1].MinSize().Height + theme.Padding()
 	}
-	if warningOn > phase3SLegacyWarningOffHeight+legacyDelta/2+grokAllowance {
-		t.Fatalf("warning-on height %.1f exceeds half-expansion target %.1f", warningOn, phase3SLegacyWarningOffHeight+legacyDelta/2+grokAllowance)
+	// The inline Claude account-label input is intentionally eight pixels
+	// taller than the former detail-only row, while keeping the card compact.
+	accountLabelAllowance := float32(8)
+	if warningOn > phase3SLegacyWarningOffHeight+legacyDelta/2+grokAllowance+accountLabelAllowance {
+		t.Fatalf("warning-on height %.1f exceeds half-expansion target %.1f", warningOn, phase3SLegacyWarningOffHeight+legacyDelta/2+grokAllowance+accountLabelAllowance)
 	}
 	t.Logf("warning height on %.1f->%.1f, off %.1f->%.1f, expansion %.1f->%.1f", phase3SLegacyWarningOnHeight, warningOn, phase3SLegacyWarningOffHeight, warningOff, legacyDelta, warningOn-warningOff)
 
@@ -178,7 +176,11 @@ func TestCustomRadioAndSettingsButtons(t *testing.T) {
 			wrapper := object.(*fyne.Container)
 			actual = append(actual, wrapper.Objects[0].(*SmallButton))
 		}
-		expected := []*SmallButton{handles.testButton, handles.reconnect, handles.helpButton}
+		expected := []*SmallButton{handles.testButton, handles.reconnect}
+		if handles.addButton != nil {
+			expected = append(expected, handles.addButton)
+		}
+		expected = append(expected, handles.helpButton)
 		if len(actual) != len(expected) {
 			t.Fatalf("connection %d action count=%d, want %d", index, len(actual), len(expected))
 		}
