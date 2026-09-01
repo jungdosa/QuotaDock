@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 
 	"github.com/jungdosa/QuotaDock/internal/i18n"
 	"github.com/jungdosa/QuotaDock/internal/settings"
@@ -27,11 +28,65 @@ const (
 	NanoBarLetterHeight float32 = 11
 	// NanoBarNameGap separates the actions from the name below them.
 	NanoBarNameGap float32 = 10
-	// NanoVerticalCellWidth is the reading area beside the strip. Vertical nano
-	// gives a card the whole width instead of splitting it between providers, so
-	// the meters are longer here than in the horizontal layout.
-	NanoVerticalCellWidth float32 = 168
+	// NanoCardGap separates stacked cards. It is the gap the flat layout leaves
+	// between cards across, turned to run down.
+	NanoCardGap float32 = 6
+	// nanoBodyPadX is the inset buildNano puts either side of the cards.
+	nanoBodyPadX float32 = 4
 )
+
+// NanoStackLayout runs the cards down the window, each keeping the size it has
+// when they run across it.
+//
+// The grid layout this replaces shares the space out equally, so a card in a
+// window made tall by the title strip beside it was stretched to two and a half
+// times its height and the meter inside it grew with it. Standing nano up is
+// meant to move the readings, not resize them, so the leftover height is simply
+// left empty.
+type NanoStackLayout struct{ Gap float32 }
+
+// cardHeight is one height for every card, the way the flat grid gives every
+// column one height: rows of differing height would leave the meters unaligned
+// down the strip.
+func (l *NanoStackLayout) cardHeight(objects []fyne.CanvasObject) float32 {
+	height := float32(0)
+	for _, object := range objects {
+		height = max(height, object.MinSize().Height)
+	}
+	return height
+}
+
+func (l *NanoStackLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	height := l.cardHeight(objects)
+	y := float32(0)
+	for _, object := range objects {
+		object.Resize(fyne.NewSize(size.Width, height))
+		object.Move(fyne.NewPos(0, y))
+		y += height + l.Gap
+	}
+}
+
+func (l *NanoStackLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	if len(objects) == 0 {
+		return fyne.NewSize(0, 0)
+	}
+	width := float32(0)
+	for _, object := range objects {
+		width = max(width, object.MinSize().Width)
+	}
+	return fyne.NewSize(width, l.cardHeight(objects)*float32(len(objects))+l.Gap*float32(len(objects)-1))
+}
+
+// nanoCardWidth is the width one card is given when the cards run across the
+// window. The upright layout hands a card the same number, so turning nano on
+// its side moves the meters without resizing them.
+func nanoCardWidth(cells int) float32 {
+	if cells <= 0 {
+		return NanoWidth - 2*nanoBodyPadX
+	}
+	body := max(NanoWidth, float32(cells)*NanoCellMinimumWidth) - 2*nanoBodyPadX
+	return (body - float32(cells-1)*theme.Padding()) / float32(cells)
+}
 
 // VerticalTextLayout stacks single characters down a column, each centred in
 // the width it is given. Fyne cannot rotate a canvas.Text, so a name that has
@@ -152,15 +207,25 @@ func (v *View) windowTitleVertical() *fyne.Container {
 	return container.NewStack(background, drag, container.New(layout.NewCustomPaddedLayout(4, 4, 0, 0), content))
 }
 
-// nanoVerticalMinimumSize is the window vertical nano asks for: the strip and
-// the reading area side by side, tall enough for whichever of the two needs
-// more room.
+// nanoVerticalMinimumSize is the window vertical nano asks for: one card's
+// worth of width beside the strip, and height enough for whichever of the
+// readout and the strip needs more.
+//
+// The strip usually needs more, because seven stacked actions are taller than a
+// handful of stacked cards. The readout keeps its own size regardless and the
+// spare height stays empty rather than being shared out among the cards.
 func (v *View) nanoVerticalMinimumSize() fyne.Size {
 	cells := len(v.nanoCellStates())
-	body := float32(cells)*NanoBodyHeight + max(0, float32(cells-1))*NanoLineGap + 6
+	card := (&NanoStackLayout{Gap: NanoCardGap}).cardHeight(v.nanoBody.Objects)
+	body := float32(cells)*card + max(0, float32(cells-1))*NanoCardGap + 2*3
 	bar := float32(0)
 	if v.nanoBar != nil {
 		bar = v.nanoBar.MinSize().Height
 	}
-	return fyne.NewSize(NanoVerticalCellWidth+NanoBarWidth, max(body, bar))
+	// The border layout that puts the strip beside the readout leaves its own
+	// padding between the two, which comes out of the readout's width. Without
+	// that term here the cards would come up one padding narrower than the same
+	// cards laid out flat.
+	width := nanoCardWidth(cells) + 2*nanoBodyPadX + NanoBarWidth + theme.Padding()
+	return fyne.NewSize(width, max(body, bar))
 }

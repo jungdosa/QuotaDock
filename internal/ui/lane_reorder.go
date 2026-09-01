@@ -86,6 +86,16 @@ type LaneReorderSurface struct {
 	OnDragMove  func(y float32)
 	OnDragEnd   func()
 	dragging    bool
+
+	// plate is the translucent card that follows the pointer while a group is
+	// being carried. Without it a reorder simply happened: the rows swapped
+	// under a cursor that showed nothing being held, so there was no sign of
+	// what had been picked up or where it was going.
+	plateTop     float32
+	plateHeight  float32
+	plateVisible bool
+	plateFill    color.Color
+	plateStroke  color.Color
 }
 
 var _ fyne.Draggable = (*LaneReorderSurface)(nil)
@@ -94,6 +104,26 @@ func NewLaneReorderSurface(onDragStart, onDragMove func(y float32), onDragEnd fu
 	s := &LaneReorderSurface{OnDragStart: onDragStart, OnDragMove: onDragMove, OnDragEnd: onDragEnd}
 	s.ExtendBaseWidget(s)
 	return s
+}
+
+// ShowPlate puts the carried card at top, height tall. It is called on every
+// pointer move, so it repaints only when something actually changed.
+func (s *LaneReorderSurface) ShowPlate(top, height float32, fill, stroke color.Color) {
+	if s.plateVisible && s.plateTop == top && s.plateHeight == height {
+		return
+	}
+	s.plateTop, s.plateHeight = top, height
+	s.plateFill, s.plateStroke = fill, stroke
+	s.plateVisible = true
+	s.Refresh()
+}
+
+func (s *LaneReorderSurface) HidePlate() {
+	if !s.plateVisible {
+		return
+	}
+	s.plateVisible = false
+	s.Refresh()
 }
 
 func (s *LaneReorderSurface) Dragged(event *fyne.DragEvent) {
@@ -128,8 +158,44 @@ func (s *LaneReorderSurface) DragEnd() {
 // on the body so the two share a coordinate space, and any minimum size here
 // would become a floor under an empty provider list.
 func (s *LaneReorderSurface) CreateRenderer() fyne.WidgetRenderer {
-	return &singleRenderer{object: canvas.NewRectangle(color.Transparent), min: fyne.NewSize(0, 0)}
+	plate := canvas.NewRectangle(color.Transparent)
+	plate.CornerRadius = 6
+	plate.StrokeWidth = 1
+	plate.Hide()
+	return &laneReorderRenderer{surface: s, plate: plate}
 }
+
+type laneReorderRenderer struct {
+	surface *LaneReorderSurface
+	plate   *canvas.Rectangle
+}
+
+func (r *laneReorderRenderer) Layout(size fyne.Size) { r.place(size) }
+
+// place keeps the carried card inside the list. Dragging past either end would
+// otherwise slide it off the window while the rows below it kept reacting.
+func (r *laneReorderRenderer) place(size fyne.Size) {
+	if !r.surface.plateVisible {
+		r.plate.Hide()
+		return
+	}
+	top := min(max(0, r.surface.plateTop), max(0, size.Height-r.surface.plateHeight))
+	r.plate.Move(fyne.NewPos(0, top))
+	r.plate.Resize(fyne.NewSize(size.Width, r.surface.plateHeight))
+	r.plate.Show()
+}
+
+func (r *laneReorderRenderer) MinSize() fyne.Size { return fyne.NewSize(0, 0) }
+
+func (r *laneReorderRenderer) Refresh() {
+	r.plate.FillColor = r.surface.plateFill
+	r.plate.StrokeColor = r.surface.plateStroke
+	r.place(r.surface.Size())
+	r.plate.Refresh()
+}
+
+func (r *laneReorderRenderer) Objects() []fyne.CanvasObject { return []fyne.CanvasObject{r.plate} }
+func (r *laneReorderRenderer) Destroy()                     {}
 
 // newLaneReorderSurface wires a surface to this view. Both the window body and
 // the compact body get one; nano does not, because its whole surface is already
@@ -166,6 +232,36 @@ func (v *View) beginLaneDrag(y float32) {
 	v.dragBounds = bounds
 	v.dragBase = slices.Clone(v.laneOrder())
 	v.dragOrder = slices.Clone(v.dragBase)
+	// The card is carried by the point it was grabbed at rather than by its top
+	// edge, so it stays under the cursor instead of jumping to meet it.
+	v.dragGrabOffset = y - bounds[index].top
+	v.dragPlateHeight = bounds[index].bottom - bounds[index].top
+	v.showLanePlate(y)
+}
+
+// showLanePlate draws the carried card under the pointer. The colours are the
+// accent at two strengths: enough to read as lifted off the list, faint enough
+// that the rows it covers stay legible underneath.
+func (v *View) showLanePlate(y float32) {
+	surface := v.laneReorderSurfaceFor(v.screen)
+	if surface == nil {
+		return
+	}
+	accent := v.colors.Accent
+	red, green, blue, _ := accent.RGBA()
+	fill := color.NRGBA{R: uint8(red >> 8), G: uint8(green >> 8), B: uint8(blue >> 8), A: 38}
+	stroke := color.NRGBA{R: uint8(red >> 8), G: uint8(green >> 8), B: uint8(blue >> 8), A: 150}
+	surface.ShowPlate(y-v.dragGrabOffset, v.dragPlateHeight, fill, stroke)
+}
+
+func (v *View) laneReorderSurfaceFor(screen Screen) *LaneReorderSurface {
+	switch screen {
+	case NormalScreen:
+		return v.normalReorder
+	case CompactScreen:
+		return v.compactReorder
+	}
+	return nil
 }
 
 // moveLaneDrag places the grabbed provider in the slot the pointer is over.
@@ -193,6 +289,9 @@ func (v *View) moveLaneDrag(y float32) {
 	if from < 0 {
 		return
 	}
+	// The carried card follows every pointer move, even the ones too small to
+	// change the arrangement, so the drag feels continuous rather than stepped.
+	v.showLanePlate(y)
 	arranged := slices.Insert(slices.Delete(slices.Clone(shown), from, from+1), slot, v.dragLane)
 	order := applyVisibleOrder(v.dragBase, shown, arranged)
 	if order == nil || slices.Equal(order, v.dragOrder) {
@@ -237,8 +336,12 @@ func applyVisibleOrder(base, shown, arranged []string) []string {
 // settings file until here: a swap happens every time the pointer crosses a
 // group, and saving each one would write the file many times a second.
 func (v *View) endLaneDrag() {
+	if surface := v.laneReorderSurfaceFor(v.screen); surface != nil {
+		surface.HidePlate()
+	}
 	order := v.dragOrder
 	v.dragOrder, v.dragLane, v.dragBase, v.dragBounds = nil, "", nil, nil
+	v.dragGrabOffset, v.dragPlateHeight = 0, 0
 	if order == nil {
 		return
 	}

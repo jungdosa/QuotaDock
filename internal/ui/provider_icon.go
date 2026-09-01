@@ -56,7 +56,6 @@ func NewProviderIcon(kind ProviderIconKind, modes ...settings.Theme) *canvas.Ima
 	return icon
 }
 
-
 func newNativeProviderIcon(kind ProviderIconKind) *canvas.Image {
 	icon := canvas.NewImageFromResource(providerIconResource(kind))
 	icon.FillMode = canvas.ImageFillContain

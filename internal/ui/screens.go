@@ -94,9 +94,16 @@ const (
 	NanoResetBarHeight         float32 = 2
 	NanoResetGap               float32 = 1
 	NanoLineGap                float32 = 2
-	NormalRowGap               float32 = 5
-	NormalRowHeight            float32 = 38
-	NormalMeterHeight          float32 = 10
+	NormalRowGap               float32 = 4
+	// NormalRowHeight was 38 while the tallest thing a row holds — the
+	// percentage band over the meter over the reset bar — measures 29. The nine
+	// spare points were multiplied by every row on the screen.
+	NormalRowHeight float32 = 32
+	// NormalBodyRowGap replaces the layout's own 6-point padding between rows.
+	// Thirteen of those gaps on a four-provider window came to more than a
+	// provider group's worth of height on their own.
+	NormalBodyRowGap  float32 = 2
+	NormalMeterHeight float32 = 10
 	// The normal-mode reset bar is thicker than compact/nano's 2px: the
 	// row has the room, and 2px vanishes on high-DPI and dark themes.
 	NormalResetBarHeight float32 = 3
@@ -132,13 +139,21 @@ const (
 // wide as the widest label of the *current* language plus a fixed gap, so adding
 // a locale never widens the layout for everyone.
 const (
-	NormalLabelPadding    float32 = 8
+	NormalLabelPadding    float32 = 6
 	NormalLabelMinWidth   float32 = 56
 	NormalLabelMaxWidth   float32 = 150
 	NormalPercentTextSize float32 = 13
+	// The reset column is measured the same way the label column is. It was a
+	// flat 140 while its contents came to 71, and because the block is centred
+	// in the column the leftover opened as a gap on either side of the reset
+	// time. The ceiling keeps the old width as the limit, so a longer date
+	// format or a wider locale still fits.
+	NormalResetPadding  float32 = 8
+	NormalResetMinWidth float32 = 70
+	NormalResetMaxWidth float32 = 140
 )
 
-var normalFixedColumns = []float32{0, 140}
+var normalFixedColumns = []float32{0, NormalResetMaxWidth}
 
 func (v *View) normalLabelWidth(lanes []LaneState) float32 {
 	maximum := float32(0)
@@ -155,9 +170,37 @@ func (v *View) normalLabelWidth(lanes []LaneState) float32 {
 }
 
 func normalRowColumnsFor(labelWidth float32) []float32 {
-	columns := make([]float32, 0, len(normalFixedColumns)+1)
-	columns = append(columns, labelWidth)
-	return append(columns, normalFixedColumns...)
+	return normalRowColumnsWith(labelWidth, NormalResetMaxWidth)
+}
+
+func normalRowColumnsWith(labelWidth, resetWidth float32) []float32 {
+	return []float32{labelWidth, 0, resetWidth}
+}
+
+// normalResetWidth sizes the reset column the way compact already sizes its
+// own: from the widest string the format can produce, not from the values on
+// screen right now. Measuring live values would let the column breathe as a
+// countdown ticked from "4h 18m" to "4h 8m", moving the meters beside it.
+//
+// The block is centred in the column, so whatever the column has beyond its
+// contents opens as a gap on either side of every reset time.
+func (v *View) normalResetWidth() float32 {
+	maximum := float32(0)
+	// The countdown renders bold, but it is measured without: a theme is not
+	// obliged to carry a bold monospace face, and asking for one it lacks takes
+	// the process down inside the font cache. The date line below is the wider
+	// of the two anyway, and the column's padding covers the difference.
+	for _, pattern := range []string{"23h 59m", "6d 23h"} {
+		maximum = max(maximum, fyne.MeasureText(pattern, NormalMetaTextSize, fyne.TextStyle{Monospace: true}).Width)
+	}
+	// A December date at two minutes to midnight is the widest moment every
+	// supported format can render, so the column fits the longest reset time a
+	// year can produce whatever language and format are in use.
+	widest, err := qdatetime.FormatUnix(time.Date(2026, time.December, 28, 23, 58, 0, 0, time.Local).Unix(), time.Local, v.resolvedLanguage(), qdatetime.Format(v.config.DateTimeFormat))
+	if err == nil {
+		maximum = max(maximum, fyne.MeasureText(widest, NormalMetaTextSize, fyne.TextStyle{Monospace: true}).Width)
+	}
+	return min(NormalResetMaxWidth, max(NormalResetMinWidth, float32(math.Ceil(float64(maximum+NormalResetPadding)))))
 }
 
 var normalRowColumns = normalRowColumnsFor(120)
@@ -236,10 +279,14 @@ type View struct {
 	// trying out, the provider it grabbed, the order and the slot geometry it
 	// started from. All are cleared at rest, and nothing reaches the settings
 	// file until the drag ends.
-	dragOrder  []string
-	dragLane   string
-	dragBase   []string
-	dragBounds []laneBound
+	dragOrder       []string
+	dragLane        string
+	dragBase        []string
+	dragBounds      []laneBound
+	dragGrabOffset  float32
+	dragPlateHeight float32
+	normalReorder   *LaneReorderSurface
+	compactReorder  *LaneReorderSurface
 	// nanoBar is the vertical title strip, held only while nano is standing on
 	// its end so the window can be sized to whichever of the strip and the
 	// readout is taller. It is nil in every other layout.
@@ -786,12 +833,13 @@ func (v *View) roundedScreen(background color.Color, content fyne.CanvasObject) 
 }
 
 func (v *View) buildNormal() *fyne.Container {
-	v.normalBody = container.NewVBox()
+	v.normalBody = container.New(&CompactRowsLayout{Gap: NormalBodyRowGap})
 	v.normalHeaderWrap = container.NewStack()
 	v.renderNormalBody()
 	// The reorder surface is stacked directly on the body, not on the padded
 	// wrapper, so a drag position and a row position are the same number.
-	padded := container.New(layout.NewCustomPaddedLayout(4, 8, 12, 12), container.NewStack(v.normalBody, v.newLaneReorderSurface()))
+	v.normalReorder = v.newLaneReorderSurface()
+	padded := container.New(layout.NewCustomPaddedLayout(4, 8, 12, 12), container.NewStack(v.normalBody, v.normalReorder))
 	v.lastRefreshText = textLabel(v.lastRefreshLabel(), 9.5, v.colors.Text, false, true)
 	v.lastRefreshText.Alignment = fyne.TextAlignTrailing
 	footer := container.New(layout.NewCustomPaddedLayout(0, 6, 12, 12), v.lastRefreshText)
@@ -800,9 +848,10 @@ func (v *View) buildNormal() *fyne.Container {
 }
 func (v *View) buildCompact() *fyne.Container {
 	v.compactBody = container.New(&CompactRowsLayout{Gap: 1})
+	v.compactReorder = v.newLaneReorderSurface()
 	v.compactHeaderWrap = container.NewStack()
 	v.renderCompactBody()
-	rows := container.New(layout.NewCustomPaddedLayout(2, 2, CompactPaddingLeft, CompactPaddingRight), container.NewStack(v.compactBody, v.newLaneReorderSurface()))
+	rows := container.New(layout.NewCustomPaddedLayout(2, 2, CompactPaddingLeft, CompactPaddingRight), container.NewStack(v.compactBody, v.compactReorder))
 	content := container.NewBorder(v.compactHeaderWrap, nil, nil, nil, rows)
 	return v.roundedScreen(v.colors.Background, container.NewBorder(v.windowTitle(settings.ModeCompact), nil, nil, nil, content))
 }

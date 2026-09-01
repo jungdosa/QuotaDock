@@ -172,3 +172,59 @@ func TestCompactPercentFontAndOffsetsRemainExact(t *testing.T) {
 		}
 	}
 }
+
+// The window body used to spend more height on the gaps between rows than on a
+// whole provider group, and each row reserved nine points more than the tallest
+// thing it holds. Both are pinned here because the numbers are easy to raise
+// again one at a time without anyone noticing the window grow.
+func TestNormalRowsSpendTheirHeightOnContent(t *testing.T) {
+	v, window := phase2DTestView(t)
+	defer window.Close()
+	v.Show(NormalScreen)
+	window.Resize(v.MinimumSize(NormalScreen))
+
+	if len(v.normalCache.rows) == 0 {
+		t.Fatal("no usage rows were drawn")
+	}
+	content := v.normalCache.rows[0].meterStack.MinSize().Height
+	if NormalRowHeight < content {
+		t.Fatalf("a row is %.1f tall but holds %.1f of content", NormalRowHeight, content)
+	}
+	if slack := NormalRowHeight - content; slack > 4 {
+		t.Fatalf("a row reserves %.1f points beyond its content, multiplied by every row on screen", slack)
+	}
+
+	objects := v.normalBody.Objects
+	if len(objects) < 3 {
+		t.Fatalf("the body drew %d objects, want a header and rows", len(objects))
+	}
+	gap := objects[1].Position().Y - (objects[0].Position().Y + objects[0].Size().Height)
+	if gap != NormalBodyRowGap {
+		t.Fatalf("the body leaves %.1f between rows, want %.1f", gap, NormalBodyRowGap)
+	}
+}
+
+// The reset column is centred on its contents, so every point it has beyond
+// them opens as a gap on both sides of the reset time — and takes that width
+// away from the meter, which is the part worth looking at.
+func TestTheResetColumnIsNoWiderThanItsContents(t *testing.T) {
+	v, window := phase2DTestView(t)
+	defer window.Close()
+	v.Show(NormalScreen)
+	window.Resize(v.MinimumSize(NormalScreen))
+
+	row := v.normalCache.rows[0].row
+	columns := row.Layout.(*ColumnLayout).Widths
+	// The column is sized to the widest reset time the format can produce, not
+	// to the one this row happens to show, so that is what it is measured
+	// against. A row with a shorter time is expected to leave room.
+	if columns[2] != v.normalResetWidth() {
+		t.Fatalf("the reset column is %.1f, not the measured %.1f", columns[2], v.normalResetWidth())
+	}
+	if columns[2] >= NormalResetMaxWidth {
+		t.Fatalf("the reset column reached its %.1f ceiling, so it is no longer being measured", NormalResetMaxWidth)
+	}
+	if contents := row.Objects[2].MinSize().Width; columns[2] < contents {
+		t.Fatalf("the reset column is %.1f against %.1f of content", columns[2], contents)
+	}
+}

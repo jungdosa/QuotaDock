@@ -57,9 +57,9 @@ func (t *Toggle) TypedKey(e *fyne.KeyEvent) {
 		t.SetChecked(!t.Checked)
 	}
 }
-func (t *Toggle) TypedRune(rune) {}
-func (t *Toggle) FocusGained()   { t.Refresh() }
-func (t *Toggle) FocusLost()     { t.Refresh() }
+func (t *Toggle) TypedRune(rune)       {}
+func (t *Toggle) FocusGained()         { t.Refresh() }
+func (t *Toggle) FocusLost()           { t.Refresh() }
 func (t *Toggle) tooltipActive() bool  { return t.Hovered }
 func (t *Toggle) tooltipValue() string { return t.Tooltip }
 func (t *Toggle) MouseIn(*desktop.MouseEvent) {
@@ -85,6 +85,7 @@ func (t *Toggle) SetChecked(value bool) {
 		t.OnChanged(value)
 	}
 }
+
 var _ desktop.Hoverable = (*Toggle)(nil)
 
 func (t *Toggle) CreateRenderer() fyne.WidgetRenderer {
@@ -799,7 +800,6 @@ func displayModeIconResource(mode settings.DisplayMode, colors BrandColors) fyne
 	svg := fmt.Sprintf("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'>%s</svg>", rect)
 	return fyne.NewStaticResource(name, []byte(svg))
 }
-
 
 func busyResource(colors BrandColors) fyne.Resource {
 	stroke := colorHex(colors.Accent)

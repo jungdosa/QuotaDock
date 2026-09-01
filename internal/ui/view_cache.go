@@ -195,6 +195,12 @@ func (v *View) syncNormalBody() {
 	}
 	lanes := v.visibleLanes()
 	now := time.Now()
+	// The columns are settled before the signature is taken: the signature
+	// counts how many lines a reset time wraps to, which depends on the width of
+	// the column it wraps into. Sizing the columns during the rebuild instead
+	// left the next signature disagreeing with the one that produced the rows,
+	// and every state update threw the widget cache away.
+	normalRowColumns = normalRowColumnsWith(v.normalLabelWidth(lanes), v.normalResetWidth())
 	signature := v.normalBodySignature(lanes, now)
 	if v.normalCache == nil || v.normalCache.signature != signature {
 		v.rebuildNormalBody(lanes, now, signature)
@@ -219,9 +225,6 @@ func (v *View) syncNormalBody() {
 }
 
 func (v *View) rebuildNormalBody(lanes []LaneState, now time.Time, signature string) {
-	// Size the label column for the labels this language actually shows before
-	// any row or header is built, so every column shares the same geometry.
-	normalRowColumns = normalRowColumnsFor(v.normalLabelWidth(lanes))
 	cache := &normalBodyView{signature: signature}
 	columnHeader, usageHeader, resetHeader := v.makeNormalColumnHeader()
 	cache.columnHeader = columnHeader
@@ -842,14 +845,14 @@ func (v *View) rebuildNanoBody(cells []nanoCellState, signature string, now time
 		objects = append(objects, object)
 		cache.cells = append(cache.cells, handles)
 	}
-	// One column stacks the cards downwards; one column per card lays them out
-	// across. The cards themselves are identical either way — only the direction
-	// they run in changes.
-	columns := max(1, len(objects))
+	// Upright, the cards stack at the size they already have; flat, they share
+	// the width between them. A grid either way would have divided the upright
+	// window's height among the cards and grown every meter with it.
 	if v.config.NanoVertical {
-		columns = 1
+		v.nanoBody.Layout = &NanoStackLayout{Gap: NanoCardGap}
+	} else {
+		v.nanoBody.Layout = layout.NewGridLayoutWithColumns(max(1, len(objects)))
 	}
-	v.nanoBody.Layout = layout.NewGridLayoutWithColumns(columns)
 	v.nanoBody.Objects = objects
 	v.nanoCache = cache
 	v.nanoBody.Refresh()

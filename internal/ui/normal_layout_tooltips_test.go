@@ -33,8 +33,14 @@ func TestNormalThreeColumnGeometryAndPercentBand(t *testing.T) {
 		t.Fatalf("meter stack x/width=%.1f/%.1f, want %.1f/%.1f", handles.meterStack.Position().X, handles.meterStack.Size().Width, columns[0]+NormalRowGap, wantMeterWidth)
 	}
 	wantResetX := columns[0] + NormalRowGap + wantMeterWidth + NormalRowGap
-	if row.Objects[2].Position().X != wantResetX || row.Objects[2].Size().Width != 140 {
-		t.Fatalf("reset x/width=%.1f/%.1f, want %.1f/140", row.Objects[2].Position().X, row.Objects[2].Size().Width, wantResetX)
+	// The reset column is measured from the widest reset time the current format
+	// can produce, so this asserts the row honours whatever width that came to
+	// rather than a number written down here.
+	if row.Objects[2].Position().X != wantResetX || row.Objects[2].Size().Width != columns[2] {
+		t.Fatalf("reset x/width=%.1f/%.1f, want %.1f/%.1f", row.Objects[2].Position().X, row.Objects[2].Size().Width, wantResetX, columns[2])
+	}
+	if columns[2] >= NormalResetMaxWidth {
+		t.Fatalf("reset column is %.1f, the old fixed width — it is no longer being measured", columns[2])
 	}
 	// The meter/reset-bar bundle is centred in the region below the
 	// percent band; the reset bar spans exactly the meter's x range.
