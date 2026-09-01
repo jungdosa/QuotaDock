@@ -45,6 +45,8 @@ var appEvents = []string{
 	"session.invalidate",
 	"session.reconnect",
 	"web.signin",
+	"web.fetch",
+	"webauth.fetch",
 	"display.change",
 	"window.fit",
 	"window.yield",

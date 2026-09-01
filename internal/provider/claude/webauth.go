@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/jungdosa/QuotaDock/internal/webview"
 )
@@ -72,21 +74,32 @@ func (w *WebAuthFetcher) Fetch(ctx context.Context) (oauthResult, error) {
 	session := w.newSession(w.userDataDir)
 	defer session.Close()
 
+	trace := webAuthTrace{started: time.Now()}
+	defer func() { trace.log() }()
+
+	orgsStarted := time.Now()
 	orgsRaw, err := session.Fetch(ctx, webOrganizationsURL)
+	trace.organizations = time.Since(orgsStarted).Milliseconds()
 	if err != nil {
+		trace.fail("organizations", err)
 		return oauthResult{}, err
 	}
 	org, ok := chatOrganization(orgsRaw)
 	if !ok {
 		// The endpoint answered but not with a usable organization list —
 		// almost always a signed-out redirect to HTML or a challenge page.
+		trace.fail("organizations", errOAuthReauthentication)
 		return oauthResult{}, errOAuthReauthentication
 	}
+	usageStarted := time.Now()
 	usageRaw, err := session.Fetch(ctx, webOrganizationsURL+"/"+org.UUID+"/usage")
+	trace.usage = time.Since(usageStarted).Milliseconds()
 	if err != nil {
+		trace.fail("usage", err)
 		return oauthResult{}, err
 	}
 	if !json.Valid([]byte(usageRaw)) {
+		trace.fail("usage", errOAuthReauthentication)
 		return oauthResult{}, errOAuthReauthentication
 	}
 	return oauthResult{
@@ -94,6 +107,47 @@ func (w *WebAuthFetcher) Fetch(ctx context.Context) (oauthResult, error) {
 		rateLimitTier:    org.RateLimitTier,
 		subscriptionType: org.BillingType,
 	}, nil
+}
+
+// webAuthTrace records how one usage read spent its time. Each read costs two
+// browser round trips, and the refresh that wraps them has a fixed budget, so
+// the useful question when a read times out is which of the two was still
+// running — a single line per read answers it without the volume of logging
+// each trip separately.
+type webAuthTrace struct {
+	started       time.Time
+	organizations int64
+	usage         int64
+	stage         string
+	reason        string
+}
+
+// fail names the round trip that ended the read and classifies why. The error
+// is never quoted: it can wrap a browser-profile path that carries the user's
+// home directory.
+func (t *webAuthTrace) fail(stage string, err error) {
+	t.stage = stage
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		t.reason = "deadline"
+	case errors.Is(err, context.Canceled):
+		t.reason = "cancelled"
+	case errors.Is(err, errOAuthReauthentication):
+		t.reason = "signed_out"
+	default:
+		t.reason = "failed"
+	}
+}
+
+func (t *webAuthTrace) log() {
+	slog.Info("webauth.fetch",
+		"ok", t.stage == "",
+		"stage", t.stage,
+		"err", t.reason,
+		"orgs_ms", t.organizations,
+		"usage_ms", t.usage,
+		"ms", time.Since(t.started).Milliseconds(),
+	)
 }
 
 // chatOrganization picks the organization that backs the Claude app (the one

@@ -6,11 +6,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"runtime"
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"github.com/wailsapp/go-webview2/pkg/edge"
@@ -173,6 +175,12 @@ type Session struct {
 
 	mu       sync.Mutex
 	messages chan string
+
+	// embedMillis is how long the browser environment took to come up on the
+	// most recent open. The pump goroutine writes it and the caller reads it
+	// only after that goroutine has reported through its done channel, so the
+	// channel receive is the ordering guarantee; there is no second reader.
+	embedMillis int64
 }
 
 func NewSession(userDataDir string) *Session {
@@ -260,6 +268,7 @@ func (s *Session) open(options windowOptions, onMessage func(string) bool) error
 		windowsMu.Unlock()
 	}()
 
+	embedStarted := time.Now()
 	chromium := edge.NewChromium()
 	chromium.DataPath = s.userDataDir
 	chromium.MessageCallback = func(message string, _ *edge.ICoreWebView2, _ *edge.ICoreWebView2WebMessageReceivedEventArgs) {
@@ -269,9 +278,11 @@ func (s *Session) open(options windowOptions, onMessage func(string) bool) error
 	}
 	chromium.SetErrorCallback(func(error) {})
 	if !chromium.Embed(hwnd) {
+		s.embedMillis = time.Since(embedStarted).Milliseconds()
 		destroyWindowProc.Call(hwnd)
 		return errors.New("the embedded browser could not start")
 	}
+	s.embedMillis = time.Since(embedStarted).Milliseconds()
 	s.chromium = chromium
 	// Closing the controller ends the browser process. Without it the
 	// msedgewebview2 host lingers and keeps the profile folder locked.
@@ -383,10 +394,12 @@ func (s *Session) Fetch(ctx context.Context, requestURL string) (string, error) 
 		return "", fmt.Errorf("request address is not allowed")
 	}
 	var (
-		mu     sync.Mutex
-		body   string
-		failed string
+		mu        sync.Mutex
+		body      string
+		failed    string
+		navMillis int64
 	)
+	started := time.Now()
 	done := make(chan error, 1)
 	requested := false
 	go func() {
@@ -402,6 +415,9 @@ func (s *Session) Fetch(ctx context.Context, requestURL string) (string, error) 
 			if _, ok := decodeURLMessage(message); ok {
 				if !requested && s.chromium != nil {
 					requested = true
+					mu.Lock()
+					navMillis = time.Since(started).Milliseconds()
+					mu.Unlock()
 					s.chromium.Eval(fetchScript(requestURL))
 				}
 				return false
@@ -427,22 +443,56 @@ func (s *Session) Fetch(ctx context.Context, requestURL string) (string, error) 
 	select {
 	case err := <-done:
 		if err != nil {
+			s.logFetch("window_failed", navMillis, started, 0)
 			return "", err
 		}
 		mu.Lock()
 		defer mu.Unlock()
 		if failed != "" {
+			s.logFetch("script_failed", navMillis, started, 0)
 			return "", errors.New("the request did not complete")
 		}
 		if body == "" {
+			s.logFetch("empty", navMillis, started, 0)
 			return "", errors.New("the request returned nothing")
 		}
+		s.logFetch("", navMillis, started, len(body))
 		return body, nil
 	case <-ctx.Done():
 		s.cancel()
 		<-done
+		s.logFetch("deadline", navMillis, started, 0)
 		return "", ctx.Err()
 	}
+}
+
+// slowFetch is the point past which one browser round trip is worth a log
+// line on its own. Healthy requests finish in about two seconds, and the
+// caller's whole refresh budget is twelve, so anything past four seconds is
+// already eating the budget of the providers that follow.
+const slowFetch = 4 * time.Second
+
+// logFetch records the timing shape of one round trip, and only when it
+// failed or ran long: a line every minute would shorten the bounded log's
+// reach past the point where slower-moving incidents stay visible in it.
+//
+// The address never appears here. The usage endpoint carries the account's
+// organization identifier, and an open failure wraps a profile-folder path
+// that contains the user's home directory, so the reason is classified rather
+// than quoted.
+func (s *Session) logFetch(reason string, navMillis int64, started time.Time, size int) {
+	elapsed := time.Since(started)
+	if reason == "" && elapsed < slowFetch {
+		return
+	}
+	slog.Info("web.fetch",
+		"ok", reason == "",
+		"err", reason,
+		"embed_ms", s.embedMillis,
+		"nav_ms", navMillis,
+		"ms", elapsed.Milliseconds(),
+		"bytes", size,
+	)
 }
 
 // Close releases the window if one is still open.
