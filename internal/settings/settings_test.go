@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -306,6 +307,58 @@ func TestSettingsLanguageSchemaAcceptsPhase4KCJKValues(t *testing.T) {
 		}
 		if got := i18n.Language(config.Language); got != language {
 			t.Errorf("Decode(%s) language = %s", language, got)
+		}
+	}
+}
+
+// A settings file written before provider order existed must keep drawing the
+// providers in the order it always did, not fall into whatever order a map
+// iteration or an empty slice would produce.
+func TestConfigWithoutLaneOrderKeepsTheShippedOrder(t *testing.T) {
+	config, err := Decode(strings.NewReader(`{"schemaVersion":5,"showClaude":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(config.LaneOrder, DefaultLaneOrder()) {
+		t.Fatalf("lane order = %v, want the shipped order %v", config.LaneOrder, DefaultLaneOrder())
+	}
+}
+
+// The order a user drags into is theirs; validation may complete it but must
+// never rearrange it.
+func TestLaneOrderKeepsTheUserArrangement(t *testing.T) {
+	config := Config{LaneOrder: []string{"codex", "grok", "claude"}}.Validated()
+	want := []string{"codex", "grok", "claude", "claude-auth", "antigravity"}
+	if !slices.Equal(config.LaneOrder, want) {
+		t.Fatalf("lane order = %v, want %v", config.LaneOrder, want)
+	}
+}
+
+// A stale name from a build that knew a provider this one does not, or a
+// duplicate from a half-written file, must degrade to a usable order rather
+// than hide a provider or draw one twice.
+func TestLaneOrderDropsUnknownAndRepeatedNames(t *testing.T) {
+	config := Config{LaneOrder: []string{"grok", "gemini-cli", "grok", "", "codex"}}.Validated()
+	want := []string{"grok", "codex", "claude", "claude-auth", "antigravity"}
+	if !slices.Equal(config.LaneOrder, want) {
+		t.Fatalf("lane order = %v, want %v", config.LaneOrder, want)
+	}
+}
+
+// Every caller indexes into this list without checking it first, so it has to
+// name the whole provider set whatever it was handed.
+func TestLaneOrderIsAlwaysComplete(t *testing.T) {
+	for _, order := range [][]string{nil, {}, {"nope"}, DefaultLaneOrder()} {
+		got := NormalizeLaneOrder(order)
+		if len(got) != len(DefaultLaneOrder()) {
+			t.Fatalf("NormalizeLaneOrder(%v) = %v, want every provider once", order, got)
+		}
+		seen := map[string]bool{}
+		for _, id := range got {
+			if seen[id] {
+				t.Fatalf("NormalizeLaneOrder(%v) repeated %q", order, id)
+			}
+			seen[id] = true
 		}
 	}
 }

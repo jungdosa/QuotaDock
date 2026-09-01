@@ -934,36 +934,46 @@ func (v *View) nanoCellStates() []nanoCellState {
 		lanes[lane.Provider] = lane
 	}
 	cells := make([]nanoCellState, 0, 6)
-	rootLane := lanes[model.ProviderClaude]
-	rootVisible := v.config.ShowClaude && !(v.config.ShowClaudeAuth && rootLane.Source == model.SourceWebSignIn)
-	authVisible := v.config.ShowClaudeAuth
-	dualClaude := rootVisible && authVisible
-	if v.config.ShowClaude {
-		lane := rootLane
-		if !(v.config.ShowClaudeAuth && lane.Source == model.SourceWebSignIn) {
+	// Nano is the one screen that splits Antigravity into two cells. They stay
+	// side by side wherever the user dragged the provider, because the order
+	// names provider groups, not the readings inside one.
+	rootVisible, authVisible, dualClaude := v.claudeLaneVisibility(lanes)
+	for _, entry := range v.laneOrder() {
+		switch model.ProviderID(entry) {
+		case model.ProviderClaude:
+			if !rootVisible {
+				continue
+			}
+			lane := lanes[model.ProviderClaude]
 			name := claudeAccountDisplayName(v.config, model.ProviderClaude, dualClaude)
 			cells = append(cells, nanoCellState{key: "claude", name: name, kind: ProviderIconClaude, connected: lane.Status == model.StatusConnected, rows: selectNanoRows(lane.Rows, false)})
+		case model.ProviderClaudeAuth:
+			if !authVisible {
+				continue
+			}
+			lane := lanes[model.ProviderClaudeAuth]
+			cells = append(cells, nanoCellState{key: "claude-auth", name: claudeAccountDisplayName(v.config, model.ProviderClaudeAuth, dualClaude), kind: ProviderIconClaude, connected: lane.Status == model.StatusConnected, rows: selectNanoRows(lane.Rows, false)})
+		case model.ProviderCodex:
+			if !v.config.ShowCodex {
+				continue
+			}
+			lane := lanes[model.ProviderCodex]
+			cells = append(cells, nanoCellState{key: "codex", name: "Codex", kind: ProviderIconCodex, connected: lane.Status == model.StatusConnected, rows: selectNanoRows(lane.Rows, true)})
+		case model.ProviderAntigravity:
+			lane := lanes[model.ProviderAntigravity]
+			if v.config.ShowAGGemini {
+				cells = append(cells, nanoCellState{key: "antigravity-gemini", name: "AG Gemini", kind: ProviderIconGemini, connected: lane.Status == model.StatusConnected, rows: selectNanoRows(filterNanoRows(lane.Rows, true), false)})
+			}
+			if v.config.ShowAGClaude {
+				cells = append(cells, nanoCellState{key: "antigravity", name: "AG Claude", kind: ProviderIconAGClaude, connected: lane.Status == model.StatusConnected, rows: selectNanoRows(filterNanoRows(lane.Rows, false), false)})
+			}
+		case model.ProviderGrok:
+			if !v.config.ShowGrok {
+				continue
+			}
+			lane := lanes[model.ProviderGrok]
+			cells = append(cells, nanoCellState{key: "grok", name: "Grok", kind: ProviderIconGrok, connected: lane.Status == model.StatusConnected, rows: selectNanoRows(lane.Rows, true)})
 		}
-	}
-	if v.config.ShowClaudeAuth {
-		lane := lanes[model.ProviderClaudeAuth]
-		cells = append(cells, nanoCellState{key: "claude-auth", name: claudeAccountDisplayName(v.config, model.ProviderClaudeAuth, dualClaude), kind: ProviderIconClaude, connected: lane.Status == model.StatusConnected, rows: selectNanoRows(lane.Rows, false)})
-	}
-	if v.config.ShowCodex {
-		lane := lanes[model.ProviderCodex]
-		cells = append(cells, nanoCellState{key: "codex", name: "Codex", kind: ProviderIconCodex, connected: lane.Status == model.StatusConnected, rows: selectNanoRows(lane.Rows, true)})
-	}
-	if v.config.ShowAGGemini {
-		lane := lanes[model.ProviderAntigravity]
-		cells = append(cells, nanoCellState{key: "antigravity-gemini", name: "AG Gemini", kind: ProviderIconGemini, connected: lane.Status == model.StatusConnected, rows: selectNanoRows(filterNanoRows(lane.Rows, true), false)})
-	}
-	if v.config.ShowAGClaude {
-		lane := lanes[model.ProviderAntigravity]
-		cells = append(cells, nanoCellState{key: "antigravity", name: "AG Claude", kind: ProviderIconAGClaude, connected: lane.Status == model.StatusConnected, rows: selectNanoRows(filterNanoRows(lane.Rows, false), false)})
-	}
-	if v.config.ShowGrok {
-		lane := lanes[model.ProviderGrok]
-		cells = append(cells, nanoCellState{key: "grok", name: "Grok", kind: ProviderIconGrok, connected: lane.Status == model.StatusConnected, rows: selectNanoRows(lane.Rows, true)})
 	}
 	return cells
 }
@@ -1085,34 +1095,22 @@ func (v *View) syncConnections() {
 }
 
 func (v *View) buildConnectionRows() {
-	descriptors := []struct {
-		id   model.ProviderID
-		name string
-	}{{model.ProviderClaude, "Claude"}}
-	if v.config.ShowClaudeAuth {
-		descriptors = append(descriptors, struct {
-			id   model.ProviderID
-			name string
-		}{model.ProviderClaudeAuth, "Claude Auth"})
+	// Connections lists every provider, shown or not, so a hidden one can still
+	// be signed in — but it follows the same order the screens do, so a card
+	// here sits where its lane sits. The second Claude account is the one
+	// exception: it has no card until the user adds it.
+	order := v.laneOrder()
+	descriptors := make([]model.ProviderID, 0, len(order))
+	for _, entry := range order {
+		id := model.ProviderID(entry)
+		if id == model.ProviderClaudeAuth && !v.config.ShowClaudeAuth {
+			continue
+		}
+		descriptors = append(descriptors, id)
 	}
-	descriptors = append(descriptors,
-		struct {
-			id   model.ProviderID
-			name string
-		}{model.ProviderCodex, "Codex"},
-		struct {
-			id   model.ProviderID
-			name string
-		}{model.ProviderAntigravity, "Antigravity"},
-		struct {
-			id   model.ProviderID
-			name string
-		}{model.ProviderGrok, "Grok"},
-	)
 	objects := make([]fyne.CanvasObject, 0, len(descriptors))
 	v.connectionCache = make([]*connectionView, 0, len(descriptors))
-	for _, descriptor := range descriptors {
-		id := descriptor.id
+	for _, id := range descriptors {
 		lane := v.connectionLane(id)
 		helpButton := NewOutlinedSmallIconButton(theme.HelpIcon(), v.text(i18n.KeyHelp), func() { v.showConnectionHelp(id) }, v.colors)
 		testButton := NewOutlinedSmallButton(v.text(i18n.KeyTestConnection), v.text(i18n.KeyTestConnection), func() {

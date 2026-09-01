@@ -795,62 +795,90 @@ func (v *View) refreshLastRefreshText() {
 		v.dismissTooltip()
 	}
 }
+
+// laneOrder is the single answer to "which provider comes first". Every screen
+// asks it, so a drag in one of them moves the provider in all of them. It
+// normalizes on each call rather than trusting the stored list, which lets a
+// test build a View from a bare Config.
+func (v *View) laneOrder() []string {
+	return settings.NormalizeLaneOrder(v.config.LaneOrder)
+}
+
+// claudeLaneVisibility answers which of the two Claude lanes are drawn, and
+// whether both are, which is what decides between the plain "Claude" label and
+// the per-account names.
+func (v *View) claudeLaneVisibility(lanes map[model.ProviderID]LaneState) (root, auth, dual bool) {
+	rootLane, hasRootLane := lanes[model.ProviderClaude]
+	_, hasAuthLane := lanes[model.ProviderClaudeAuth]
+	// When the CLI is absent, the legacy Claude lane falls back to this same
+	// browser account. Hide that duplicate if the explicit Auth lane is
+	// enabled; with a working CLI, label both sources clearly.
+	root = hasRootLane && v.config.ShowClaude && !(v.config.ShowClaudeAuth && rootLane.Source == model.SourceWebSignIn)
+	auth = hasAuthLane && v.config.ShowClaudeAuth
+	return root, auth, root && auth
+}
+
+// antigravityRowsFor keeps only the readings whose half of the Antigravity
+// lane the user still shows.
+func (v *View) antigravityRowsFor(lane LaneState) LaneState {
+	filtered := lane
+	filtered.Rows = nil
+	for _, row := range lane.Rows {
+		gemini := antigravityRowIsGemini(row)
+		if gemini && v.config.ShowAGGemini || !gemini && v.config.ShowAGClaude {
+			filtered.Rows = append(filtered.Rows, row)
+		}
+	}
+	return filtered
+}
+
+func (v *View) laneVisible(id model.ProviderID) bool {
+	switch id {
+	case model.ProviderCodex:
+		return v.config.ShowCodex
+	case model.ProviderAntigravity:
+		return v.config.ShowAGGemini || v.config.ShowAGClaude
+	case model.ProviderGrok:
+		return v.config.ShowGrok
+	}
+	return false
+}
+
 func (v *View) visibleLanes() []LaneState {
+	lanes := make(map[model.ProviderID]LaneState, len(v.state.Lanes))
+	for _, lane := range v.state.Lanes {
+		lanes[lane.Provider] = lane
+	}
+	rootVisible, authVisible, dualClaude := v.claudeLaneVisibility(lanes)
 	out := []LaneState{}
-	var authLane LaneState
-	hasAuthLane := false
-	var rootLane LaneState
-	hasRootLane := false
-	for _, lane := range v.state.Lanes {
-		if lane.Provider == model.ProviderClaudeAuth {
-			authLane, hasAuthLane = lane, true
-		}
-		if lane.Provider == model.ProviderClaude {
-			rootLane, hasRootLane = lane, true
-		}
-	}
-	rootVisible := hasRootLane && v.config.ShowClaude && !(v.config.ShowClaudeAuth && rootLane.Source == model.SourceWebSignIn)
-	authVisible := hasAuthLane && v.config.ShowClaudeAuth
-	dualClaude := rootVisible && authVisible
-	authAdded := false
-	for _, lane := range v.state.Lanes {
-		if lane.Provider == model.ProviderClaudeAuth {
+	for _, entry := range v.laneOrder() {
+		id := model.ProviderID(entry)
+		lane, present := lanes[id]
+		if !present {
 			continue
 		}
-		if lane.Provider == model.ProviderClaude {
-			// When the CLI is absent, the legacy Claude lane falls back to this
-			// same browser account. Hide that duplicate if the explicit Auth lane
-			// is enabled; with a working CLI, label both sources clearly.
-			if rootVisible {
-				lane.Name = claudeAccountDisplayName(v.config, model.ProviderClaude, dualClaude)
-				out = append(out, lane)
+		switch id {
+		case model.ProviderClaude:
+			if !rootVisible {
+				continue
 			}
-			if authVisible {
-				authLane.Name = claudeAccountDisplayName(v.config, model.ProviderClaudeAuth, dualClaude)
-				out = append(out, authLane)
-				authAdded = true
+			lane.Name = claudeAccountDisplayName(v.config, model.ProviderClaude, dualClaude)
+		case model.ProviderClaudeAuth:
+			if !authVisible {
+				continue
 			}
-			continue
+			lane.Name = claudeAccountDisplayName(v.config, model.ProviderClaudeAuth, dualClaude)
+		case model.ProviderAntigravity:
+			if !v.laneVisible(id) {
+				continue
+			}
+			lane = v.antigravityRowsFor(lane)
+		default:
+			if !v.laneVisible(id) {
+				continue
+			}
 		}
-		show := lane.Provider == model.ProviderCodex && v.config.ShowCodex || lane.Provider == model.ProviderAntigravity && (v.config.ShowAGGemini || v.config.ShowAGClaude) || lane.Provider == model.ProviderGrok && v.config.ShowGrok
-		if show {
-			if lane.Provider == model.ProviderAntigravity {
-				filtered := lane
-				filtered.Rows = nil
-				for _, row := range lane.Rows {
-					gemini := antigravityRowIsGemini(row)
-					if gemini && v.config.ShowAGGemini || !gemini && v.config.ShowAGClaude {
-						filtered.Rows = append(filtered.Rows, row)
-					}
-				}
-				lane = filtered
-			}
-			out = append(out, lane)
-		}
-	}
-	if authVisible && !authAdded {
-		authLane.Name = claudeAccountDisplayName(v.config, model.ProviderClaudeAuth, false)
-		out = append(out, authLane)
+		out = append(out, lane)
 	}
 	return out
 }

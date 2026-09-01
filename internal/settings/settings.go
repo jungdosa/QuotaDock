@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	CurrentSchemaVersion       = 5
+	CurrentSchemaVersion       = 6
 	MaxFileSize          int64 = 256 << 10
 )
 
@@ -87,12 +87,19 @@ type Config struct {
 	ProviderColors  map[string]string `json:"providerColors"`
 	// AccountLabels are optional, user-authored display aliases. QuotaDock
 	// never derives them from credentials, tokens, or account email addresses.
-	AccountLabels  map[string]string `json:"accountLabels,omitempty"`
-	ShowClaude     bool              `json:"showClaude"`
-	ShowClaudeAuth bool              `json:"showClaudeAuth"`
-	ShowCodex      bool              `json:"showCodex"`
-	ShowAGGemini   bool              `json:"showAGGemini"`
-	ShowAGClaude   bool              `json:"showAGClaude"`
+	AccountLabels map[string]string `json:"accountLabels,omitempty"`
+	// LaneOrder is the user's own top-to-bottom provider order. It names whole
+	// provider groups rather than individual usage rows, so one entry moves a
+	// provider's entire block in every display mode at once. A partial list is
+	// completed from the shipped order rather than rejected: a file written
+	// before this key, or one naming a provider a later build dropped, has to
+	// keep working.
+	LaneOrder      []string `json:"laneOrder,omitempty"`
+	ShowClaude     bool     `json:"showClaude"`
+	ShowClaudeAuth bool     `json:"showClaudeAuth"`
+	ShowCodex      bool     `json:"showCodex"`
+	ShowAGGemini   bool     `json:"showAGGemini"`
+	ShowAGClaude   bool     `json:"showAGClaude"`
 	// ShowGrok defaults to off: the lane would only report "sign in" noise
 	// for users without the Grok CLI, and existing screens stay unchanged.
 	ShowGrok bool `json:"showGrok"`
@@ -126,7 +133,7 @@ type Config struct {
 // violet, AG Claude slate. (An earlier draft banned warm provider hues;
 // that reservation was withdrawn when defaults were matched to the logos.)
 func Default() Config {
-	return Config{SchemaVersion: CurrentSchemaVersion, Language: LanguageSystem, DateTimeFormat: Format12HourDate, Theme: ThemeLight, UsageMode: UsageUsed, RefreshSeconds: 300, WarningsEnabled: true, WarningPercent: 80, DangerPercent: 90, WarningColor: "amber", DangerColor: "red", ProviderColors: map[string]string{"claude": "orange", "claude-auth": "white", "codex": "gray", "antigravity": "slate", "antigravity-gemini": "violet", "grok": "sky"}, ShowClaude: true, ShowClaudeAuth: false, ShowCodex: true, ShowAGGemini: true, ShowAGClaude: true, ShowGrok: false, ShowClaudeCredits: true, ShowCodexCredits: true, ShowInTaskbar: true, PromoteTrayIcon: true, DisplayMode: ModeNormal}
+	return Config{SchemaVersion: CurrentSchemaVersion, Language: LanguageSystem, DateTimeFormat: Format12HourDate, Theme: ThemeLight, UsageMode: UsageUsed, RefreshSeconds: 300, WarningsEnabled: true, WarningPercent: 80, DangerPercent: 90, WarningColor: "amber", DangerColor: "red", ProviderColors: map[string]string{"claude": "orange", "claude-auth": "white", "codex": "gray", "antigravity": "slate", "antigravity-gemini": "violet", "grok": "sky"}, LaneOrder: DefaultLaneOrder(), ShowClaude: true, ShowClaudeAuth: false, ShowCodex: true, ShowAGGemini: true, ShowAGClaude: true, ShowGrok: false, ShowClaudeCredits: true, ShowCodexCredits: true, ShowInTaskbar: true, PromoteTrayIcon: true, DisplayMode: ModeNormal}
 }
 
 const MaxAccountLabelRunes = 20
@@ -200,6 +207,47 @@ func IsConnectionMethodID(value string) bool {
 	return ok
 }
 
+// DefaultLaneOrder is the order QuotaDock has always drawn its providers in,
+// and the fallback that completes any partial list. Antigravity appears once:
+// its Gemini and Claude readings are one provider group that moves together,
+// even though the nano screen draws them as two cells.
+func DefaultLaneOrder() []string {
+	return []string{"claude", "claude-auth", "codex", "antigravity", "grok"}
+}
+
+var laneOrderIDs = func() map[string]struct{} {
+	ids := make(map[string]struct{}, 5)
+	for _, id := range DefaultLaneOrder() {
+		ids[id] = struct{}{}
+	}
+	return ids
+}()
+
+// NormalizeLaneOrder always answers with the complete provider set. Unknown
+// and repeated names are dropped, and anything the list left out is appended
+// in the shipped order, so callers can walk the result without first checking
+// that the user's file mentioned every provider.
+func NormalizeLaneOrder(order []string) []string {
+	seen := make(map[string]struct{}, len(laneOrderIDs))
+	out := make([]string, 0, len(laneOrderIDs))
+	for _, id := range order {
+		if _, known := laneOrderIDs[id]; !known {
+			continue
+		}
+		if _, repeated := seen[id]; repeated {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	for _, id := range DefaultLaneOrder() {
+		if _, placed := seen[id]; !placed {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
 func (c Config) Validated() Config {
 	defaults := Default()
 	c.SchemaVersion = CurrentSchemaVersion
@@ -269,6 +317,7 @@ func (c Config) Validated() Config {
 	} else {
 		c.AccountLabels = nil
 	}
+	c.LaneOrder = NormalizeLaneOrder(c.LaneOrder)
 	// Drop entries this build cannot honor instead of rejecting the file: a
 	// method removed in a later version, or a provider that no longer exists,
 	// must degrade to the provider default rather than block startup.

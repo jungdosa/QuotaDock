@@ -34,7 +34,7 @@ func BuildTrayTooltip(state ViewState, config settings.Config, systemLanguage i1
 	}
 	dualClaude := rootVisible && authVisible
 	lines := make([]string, 0, len(state.Lanes))
-	for _, lane := range state.Lanes {
+	for _, lane := range trayTooltipLanes(state, config) {
 		if lane.Status != model.StatusConnected {
 			continue
 		}
@@ -56,6 +56,24 @@ func BuildTrayTooltip(state ViewState, config settings.Config, systemLanguage i1
 		lines = append(lines, fmt.Sprintf("%s %s%% · %s", lane.Name, formatUsagePercent(row.Percent), countdown))
 	}
 	return combineTrayTooltip(trayTooltipAppName, lines)
+}
+
+// trayTooltipLanes walks the lanes in the order the user arranged them, so the
+// tooltip reads top to bottom the way the window does. A lane the order does
+// not name is dropped here rather than appended: the tooltip only ever lists
+// providers this build knows, and NormalizeLaneOrder names all of them.
+func trayTooltipLanes(state ViewState, config settings.Config) []LaneState {
+	lanes := make(map[model.ProviderID]LaneState, len(state.Lanes))
+	for _, lane := range state.Lanes {
+		lanes[lane.Provider] = lane
+	}
+	ordered := make([]LaneState, 0, len(state.Lanes))
+	for _, entry := range settings.NormalizeLaneOrder(config.LaneOrder) {
+		if lane, ok := lanes[model.ProviderID(entry)]; ok {
+			ordered = append(ordered, lane)
+		}
+	}
+	return ordered
 }
 
 func highestVisibleUsageRow(lane LaneState, config settings.Config) (UsageRowState, bool) {
