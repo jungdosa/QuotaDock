@@ -31,6 +31,7 @@ type normalBodyView struct {
 }
 
 type normalHeaderView struct {
+	icon    *canvas.Image
 	name    *canvas.Text
 	plan    *canvas.Text
 	credits *canvas.Text
@@ -305,10 +306,16 @@ func (v *View) normalBodySignature(lanes []LaneState, now time.Time) string {
 
 func (v *View) makeLaneHeader(lane LaneState) (fyne.CanvasObject, normalHeaderView) {
 	// The provider name is the strongest label in the row group: slightly larger
-	// and in the full text colour, while row labels stay a shade lighter.
+	// and in the full text colour, while row labels stay a shade lighter. The
+	// brand mark leads it, the same mark compact puts in front of that group's
+	// rows, so a provider is introduced the same way in both modes.
+	icon := NewProviderIcon(laneIconKind(lane), v.config.Theme)
 	name := textLabel(lane.Name, LaneHeaderTextSize, v.colors.Text, true, false)
-	handles := normalHeaderView{name: name}
-	objects := []fyne.CanvasObject{name}
+	handles := normalHeaderView{icon: icon, name: name}
+	objects := []fyne.CanvasObject{
+		container.NewCenter(icon),
+		container.New(layout.NewCustomPaddedLayout(0, 0, LaneHeaderIconGap, 0), name),
+	}
 	if lane.Plan != model.PlanUnknown && lane.Plan != "" {
 		handles.plan = textLabel(string(lane.Plan), PlanChipTextSize, v.colors.PlanChipText, true, false)
 		chipBackground := canvas.NewRectangle(v.colors.PlanChip)
@@ -652,7 +659,7 @@ func isClaudeAccountProvider(id model.ProviderID) bool {
 }
 
 func (v *View) makeCompactAccountHeader(name string) compactAccountHeaderView {
-	label := textLabel(name, CompactResetTextSize, v.colors.Secondary, false, false)
+	label := textLabel(name, CompactAccountNameTextSize, v.colors.Secondary, false, false)
 	row := container.New(
 		layout.NewCustomPaddedLayout(2, 1, CompactIconWidth+CompactColumnGap, 0),
 		label,

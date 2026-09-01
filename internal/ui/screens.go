@@ -67,7 +67,13 @@ const (
 	CompactSymbolTextSize  float32 = 9
 	CompactPercentOffset   float32 = -2
 	CompactResetTextSize   float32 = 10
-	CompactResetPadding    float32 = 6
+	// CompactAccountNameTextSize is the account name above a Claude group. It
+	// sits two points above the reset type it used to borrow: at 10 the name was
+	// the smallest thing on the screen even though it labels a whole group. It
+	// now matches the row labels in size and stays quieter than them through
+	// colour and weight instead.
+	CompactAccountNameTextSize float32 = 12
+	CompactResetPadding        float32 = 6
 	CompactMeterMinWidth   float32 = 46
 	CompactMeterHeight     float32 = 7
 	CompactMeterGap        float32 = 2
@@ -104,6 +110,7 @@ const (
 	PlanChipPaddingX       float32 = 5
 	PlanChipPaddingY       float32 = 1.5
 	LaneHeaderChipGap      float32 = 6
+	LaneHeaderIconGap      float32 = 6
 	NormalResetLineGap     float32 = -2
 	NormalLabelTextSize    float32 = 12
 	NormalMetaTextSize     float32 = 11.5
@@ -1072,6 +1079,17 @@ func (v *View) compactUsageRow(lane LaneState, row UsageRowState, showIcon bool)
 	object, _ := v.makeCompactUsageRow(lane, row, showIcon, v.compactLabelWidth(v.visibleLanes()), time.Now())
 	return object
 }
+// laneIconKind picks the mark for a whole provider group. Antigravity is the
+// only lane that draws two different logos across its rows, so its header
+// follows the first row it actually shows — which is the mark compact already
+// puts at the top of that same group.
+func laneIconKind(lane LaneState) ProviderIconKind {
+	if len(lane.Rows) > 0 {
+		return providerIconKind(lane, lane.Rows[0])
+	}
+	return providerIconKind(lane, UsageRowState{})
+}
+
 func providerIconKind(lane LaneState, row UsageRowState) ProviderIconKind {
 	switch lane.Provider {
 	case model.ProviderClaude, model.ProviderClaudeAuth:

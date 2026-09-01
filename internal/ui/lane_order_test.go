@@ -130,3 +130,48 @@ func TestAnAbsentOrderStillDrawsEveryProvider(t *testing.T) {
 		t.Fatalf("visible lanes = %s, want the shipped order %s", got, want)
 	}
 }
+
+// The window body introduces a provider with the same mark compact puts in
+// front of that provider's rows. Two different logos for one provider would
+// read as two different services.
+func TestNormalLaneHeaderLeadsWithTheSameMarkCompactUses(t *testing.T) {
+	view := orderedView(t, nil)
+	for _, lane := range view.visibleLanes() {
+		_, handles := view.makeLaneHeader(lane)
+		if handles.icon == nil {
+			t.Fatalf("%s lane header has no brand mark", lane.Provider)
+		}
+		if len(lane.Rows) == 0 {
+			continue
+		}
+		want := view.rowVisual(lane, lane.Rows[0], time.Now()).iconKind
+		if got := laneIconKind(lane); got != want {
+			t.Fatalf("%s header mark=%s, compact first row=%s", lane.Provider, got, want)
+		}
+	}
+}
+
+// Antigravity draws two logos across its rows. Hiding the Gemini half has to
+// move the header onto the mark that is actually left, not leave it announcing
+// a reading the group no longer shows.
+func TestAntigravityHeaderMarkFollowsTheHalfStillShown(t *testing.T) {
+	view := orderedView(t, nil)
+	find := func() LaneState {
+		for _, lane := range view.visibleLanes() {
+			if lane.Provider == model.ProviderAntigravity {
+				return lane
+			}
+		}
+		t.Fatal("the Antigravity lane is not visible")
+		return LaneState{}
+	}
+	if got := laneIconKind(find()); got != ProviderIconGemini {
+		t.Fatalf("both halves shown: mark=%s, want the Gemini mark", got)
+	}
+	config := view.config
+	config.ShowAGGemini = false
+	view.config = config.Validated()
+	if got := laneIconKind(find()); got != ProviderIconAGClaude {
+		t.Fatalf("Gemini hidden: mark=%s, want the Antigravity Claude mark", got)
+	}
+}

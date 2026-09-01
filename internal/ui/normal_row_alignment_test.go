@@ -20,10 +20,13 @@ func TestPlanChipPaddingAndNormalVerticalCenters(t *testing.T) {
 	header, handles := v.makeLaneHeader(LaneState{Provider: model.ProviderClaude, Name: "Claude", Plan: "MAX 20X", Status: model.StatusConnected})
 	header.Resize(header.MinSize())
 	headerContainer := header.(*fyne.Container)
-	if len(headerContainer.Objects) != 2 {
-		t.Fatalf("lane header objects=%d, want name + plan chip with no connection dot", len(headerContainer.Objects))
+	if len(headerContainer.Objects) != 3 {
+		t.Fatalf("lane header objects=%d, want mark + name + plan chip with no connection dot", len(headerContainer.Objects))
 	}
-	chip := headerContainer.Objects[1]
+	if handles.icon == nil {
+		t.Fatal("lane header lost its brand mark")
+	}
+	chip := headerContainer.Objects[2]
 	if handles.plan.TextSize != PlanChipTextSize || PlanChipTextSize != 9 {
 		t.Fatalf("plan chip font=%.1f, want 9", handles.plan.TextSize)
 	}

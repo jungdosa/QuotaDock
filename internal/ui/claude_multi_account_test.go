@@ -223,8 +223,14 @@ func TestCompactClaudeAccountHeadersOnlyAppearForDualAccounts(t *testing.T) {
 		if header.label.Text != want {
 			t.Fatalf("compact header %d=%q, normal lane name=%q", index, header.label.Text, want)
 		}
-		if !sameColor(header.label.Color, view.colors.Secondary) || header.label.TextSize >= CompactLabelTextSize {
-			t.Fatalf("compact header %d color/size=%v/%.1f, want Secondary and smaller than %.1f", index, header.label.Color, header.label.TextSize, CompactLabelTextSize)
+		// The name reads as quietly as before but is no longer the smallest
+		// thing on the screen: it now matches the row labels in size and stays
+		// subordinate to them through its colour and its lighter weight.
+		if !sameColor(header.label.Color, view.colors.Secondary) || header.label.TextSize > CompactLabelTextSize {
+			t.Fatalf("compact header %d color/size=%v/%.1f, want Secondary and no larger than %.1f", index, header.label.Color, header.label.TextSize, CompactLabelTextSize)
+		}
+		if header.label.TextStyle.Bold {
+			t.Fatalf("compact header %d is bold, which would outweigh the row labels it introduces", index)
 		}
 	}
 	rowCount := 0
