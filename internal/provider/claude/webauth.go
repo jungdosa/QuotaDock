@@ -30,9 +30,10 @@ type WebAuthFetcher struct {
 }
 
 // webSession is the slice of webview.Session this fetcher needs, named so it
-// can be faked in tests without a real browser.
+// can be faked in tests without a real browser. Fetch takes the whole chain of
+// requests rather than one address, so both of them ride a single browser.
 type webSession interface {
-	Fetch(ctx context.Context, url string) (string, error)
+	Fetch(ctx context.Context, next func(index int, previous string) (string, bool)) ([]string, error)
 	Close() error
 }
 
@@ -77,27 +78,51 @@ func (w *WebAuthFetcher) Fetch(ctx context.Context) (oauthResult, error) {
 	trace := webAuthTrace{started: time.Now()}
 	defer func() { trace.log() }()
 
-	orgsStarted := time.Now()
-	orgsRaw, err := session.Fetch(ctx, webOrganizationsURL)
-	trace.organizations = time.Since(orgsStarted).Milliseconds()
+	// Both requests are described up front and run inside one browser. The
+	// organization list has to come back before the usage address can be built,
+	// so the chain is a function of the previous response rather than a list.
+	var org webOrganization
+	// issued names the round trip that is in flight. A duration cannot stand in
+	// for it: a request that finishes inside a millisecond rounds to zero, and
+	// the failure would then be blamed on the trip before it.
+	issued := 0
+	stage := time.Now()
+	bodies, err := session.Fetch(ctx, func(index int, previous string) (string, bool) {
+		switch index {
+		case 0:
+			issued = 1
+			return webOrganizationsURL, true
+		case 1:
+			trace.organizations = time.Since(stage).Milliseconds()
+			stage = time.Now()
+			found, ok := chatOrganization(previous)
+			if !ok {
+				return "", false
+			}
+			org = found
+			issued = 2
+			return webOrganizationsURL + "/" + found.UUID + "/usage", true
+		}
+		trace.usage = time.Since(stage).Milliseconds()
+		return "", false
+	})
 	if err != nil {
-		trace.fail("organizations", err)
+		if issued >= 2 {
+			trace.usage = time.Since(stage).Milliseconds()
+			trace.fail("usage", err)
+		} else {
+			trace.organizations = time.Since(stage).Milliseconds()
+			trace.fail("organizations", err)
+		}
 		return oauthResult{}, err
 	}
-	org, ok := chatOrganization(orgsRaw)
-	if !ok {
+	if len(bodies) < 2 {
 		// The endpoint answered but not with a usable organization list —
 		// almost always a signed-out redirect to HTML or a challenge page.
 		trace.fail("organizations", errOAuthReauthentication)
 		return oauthResult{}, errOAuthReauthentication
 	}
-	usageStarted := time.Now()
-	usageRaw, err := session.Fetch(ctx, webOrganizationsURL+"/"+org.UUID+"/usage")
-	trace.usage = time.Since(usageStarted).Milliseconds()
-	if err != nil {
-		trace.fail("usage", err)
-		return oauthResult{}, err
-	}
+	usageRaw := bodies[1]
 	if !json.Valid([]byte(usageRaw)) {
 		trace.fail("usage", errOAuthReauthentication)
 		return oauthResult{}, errOAuthReauthentication

@@ -58,12 +58,19 @@ func TestLiveHiddenFetchReturnsABody(t *testing.T) {
 	session := NewSession(dir)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	body, err := session.Fetch(ctx, "https://claude.ai/api/organizations")
+	// Two requests, so the live run also proves a second one can follow the
+	// first inside the same browser rather than racing its teardown.
+	bodies, err := session.Fetch(ctx, func(index int, _ string) (string, bool) {
+		if index < 2 {
+			return "https://claude.ai/api/organizations", true
+		}
+		return "", false
+	})
 	if err != nil {
 		t.Fatalf("hidden fetch failed: %v", err)
 	}
-	if len(body) == 0 {
-		t.Fatal("hidden fetch returned an empty body")
+	if len(bodies) != 2 || len(bodies[0]) == 0 || len(bodies[1]) == 0 {
+		t.Fatalf("hidden fetch returned %d bodies, want two non-empty", len(bodies))
 	}
-	t.Logf("hidden fetch returned %d bytes", len(body))
+	t.Logf("hidden fetch returned %d and %d bytes", len(bodies[0]), len(bodies[1]))
 }

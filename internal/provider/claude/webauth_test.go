@@ -158,18 +158,29 @@ type stubWebSession struct {
 	errs    []error
 }
 
-func (s *stubWebSession) Fetch(_ context.Context, url string) (string, error) {
-	index := len(s.urls)
-	s.urls = append(s.urls, url)
-	var reply string
-	if index < len(s.replies) {
-		reply = s.replies[index]
+// Fetch drives the caller's chain the way the real session does — asking for
+// the next address, answering it, and stopping where the caller stops or where
+// the queued error says the browser gave up.
+func (s *stubWebSession) Fetch(_ context.Context, next func(index int, previous string) (string, bool)) ([]string, error) {
+	var bodies []string
+	previous := ""
+	for {
+		url, more := next(len(bodies), previous)
+		if !more {
+			return bodies, nil
+		}
+		index := len(s.urls)
+		s.urls = append(s.urls, url)
+		if index < len(s.errs) && s.errs[index] != nil {
+			return nil, s.errs[index]
+		}
+		if index < len(s.replies) {
+			previous = s.replies[index]
+		} else {
+			previous = ""
+		}
+		bodies = append(bodies, previous)
 	}
-	var err error
-	if index < len(s.errs) {
-		err = s.errs[index]
-	}
-	return reply, err
 }
 
 func (s *stubWebSession) Close() error { return nil }

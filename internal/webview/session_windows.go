@@ -387,20 +387,39 @@ func (s *Session) SignIn(ctx context.Context, startURL string, ready func(url st
 	}
 }
 
-// Fetch runs a same-session request in a hidden window and returns the body.
-// The response is never logged: account pages carry personal data.
-func (s *Session) Fetch(ctx context.Context, requestURL string) (string, error) {
-	if !IsAllowedFetch(requestURL) {
-		return "", fmt.Errorf("request address is not allowed")
+// Fetch runs a chain of same-session requests inside one hidden window and
+// returns the bodies. next is asked for the address to request, given the
+// index and the previous response, and ends the chain by answering false. The
+// responses are never logged: account pages carry personal data.
+//
+// The whole chain shares one browser. Opening a window per request looked
+// simpler but raced itself: the profile folder takes one writer, and a second
+// window created right after the first was torn down would attach to the host
+// process still shutting down, come up implausibly fast, and then never finish
+// navigating — measured as an environment ready in about 50ms against the
+// usual 400, followed by a navigation that never reported and burned the whole
+// refresh budget. Roughly a third of readings died that way.
+func (s *Session) Fetch(ctx context.Context, next func(index int, previous string) (string, bool)) ([]string, error) {
+	if next == nil {
+		return nil, errors.New("no request was described")
+	}
+	first, ok := next(0, "")
+	if !ok {
+		return nil, nil
+	}
+	if !IsAllowedFetch(first) {
+		return nil, fmt.Errorf("request address is not allowed")
 	}
 	var (
 		mu        sync.Mutex
-		body      string
+		bodies    []string
 		failed    string
+		refused   bool
 		navMillis int64
 	)
 	started := time.Now()
 	done := make(chan error, 1)
+	pending := first
 	requested := false
 	go func() {
 		defer func() {
@@ -408,9 +427,9 @@ func (s *Session) Fetch(ctx context.Context, requestURL string) (string, error) 
 				done <- fmt.Errorf("fetch window failed: %v", recovered)
 			}
 		}()
-		err := s.open(windowOptions{title: "QuotaDock", width: 480, height: 360, visible: false, startURL: originOf(requestURL)}, func(message string) bool {
+		err := s.open(windowOptions{title: "QuotaDock", width: 480, height: 360, visible: false, startURL: originOf(first)}, func(message string) bool {
 			// This callback runs on the pump thread, which is the only thread
-			// allowed to call the browser, so the request is issued from here
+			// allowed to call the browser, so every request is issued from here
 			// once the origin has loaded and its cookies are in scope.
 			if _, ok := decodeURLMessage(message); ok {
 				if !requested && s.chromium != nil {
@@ -418,7 +437,7 @@ func (s *Session) Fetch(ctx context.Context, requestURL string) (string, error) 
 					mu.Lock()
 					navMillis = time.Since(started).Milliseconds()
 					mu.Unlock()
-					s.chromium.Eval(fetchScript(requestURL))
+					s.chromium.Eval(fetchScript(pending))
 				}
 				return false
 			}
@@ -430,13 +449,27 @@ func (s *Session) Fetch(ctx context.Context, requestURL string) (string, error) 
 			defer mu.Unlock()
 			switch kind {
 			case "body":
-				body = value
+				bodies = append(bodies, value)
 			case "error":
 				failed = value
+				return true
 			default:
 				return false
 			}
-			return true
+			address, more, allowed := nextRequest(next, len(bodies), value)
+			if !more {
+				return true
+			}
+			if !allowed {
+				refused = true
+				return true
+			}
+			pending = address
+			if s.chromium == nil {
+				return true
+			}
+			s.chromium.Eval(fetchScript(address))
+			return false
 		})
 		done <- err
 	}()
@@ -444,26 +477,53 @@ func (s *Session) Fetch(ctx context.Context, requestURL string) (string, error) 
 	case err := <-done:
 		if err != nil {
 			s.logFetch("window_failed", navMillis, started, 0)
-			return "", err
+			return nil, err
 		}
 		mu.Lock()
 		defer mu.Unlock()
-		if failed != "" {
+		switch {
+		case refused:
+			s.logFetch("not_allowed", navMillis, started, 0)
+			return nil, fmt.Errorf("request address is not allowed")
+		case failed != "":
 			s.logFetch("script_failed", navMillis, started, 0)
-			return "", errors.New("the request did not complete")
-		}
-		if body == "" {
+			return nil, errors.New("the request did not complete")
+		case len(bodies) == 0:
 			s.logFetch("empty", navMillis, started, 0)
-			return "", errors.New("the request returned nothing")
+			return nil, errors.New("the request returned nothing")
 		}
-		s.logFetch("", navMillis, started, len(body))
-		return body, nil
+		total := 0
+		for _, body := range bodies {
+			total += len(body)
+		}
+		s.logFetch("", navMillis, started, total)
+		return bodies, nil
 	case <-ctx.Done():
 		s.cancel()
 		<-done
 		s.logFetch("deadline", navMillis, started, 0)
-		return "", ctx.Err()
+		return nil, ctx.Err()
 	}
+}
+
+// nextRequest asks the caller for the address to request after a response and
+// reports whether it may be requested at all.
+//
+// Only the first address in a chain is fixed by the caller; every later one is
+// built from a response, which makes it the address an unexpected reply could
+// steer. The allow list is what keeps this window on the sites the sign-in was
+// granted for, so it is applied to each of them. The decision lives here rather
+// than inline in the message callback because that callback only runs on the
+// browser's pump thread, where no test can reach it.
+func nextRequest(next func(index int, previous string) (string, bool), index int, previous string) (url string, more, allowed bool) {
+	if next == nil {
+		return "", false, false
+	}
+	address, more := next(index, previous)
+	if !more {
+		return "", false, false
+	}
+	return address, true, IsAllowedFetch(address)
 }
 
 // slowFetch is the point past which one browser round trip is worth a log
