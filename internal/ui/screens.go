@@ -225,6 +225,14 @@ type View struct {
 	dangerSlider            *widget.Slider
 	lastResizeRequest       fyne.Size
 	screen                  Screen
+	// These belong to a reordering drag in progress: the arrangement it is
+	// trying out, the provider it grabbed, the order and the slot geometry it
+	// started from. All are cleared at rest, and nothing reaches the settings
+	// file until the drag ends.
+	dragOrder  []string
+	dragLane   string
+	dragBase   []string
+	dragBounds []laneBound
 }
 
 func NewView(c fyne.Canvas, catalog *i18n.Catalog, systemLanguage i18n.Language, config settings.Config, actions Actions) *View {
@@ -746,7 +754,9 @@ func (v *View) buildNormal() *fyne.Container {
 	v.normalBody = container.NewVBox()
 	v.normalHeaderWrap = container.NewStack()
 	v.renderNormalBody()
-	padded := container.New(layout.NewCustomPaddedLayout(4, 8, 12, 12), v.normalBody)
+	// The reorder surface is stacked directly on the body, not on the padded
+	// wrapper, so a drag position and a row position are the same number.
+	padded := container.New(layout.NewCustomPaddedLayout(4, 8, 12, 12), container.NewStack(v.normalBody, v.newLaneReorderSurface()))
 	v.lastRefreshText = textLabel(v.lastRefreshLabel(), 9.5, v.colors.Text, false, true)
 	v.lastRefreshText.Alignment = fyne.TextAlignTrailing
 	footer := container.New(layout.NewCustomPaddedLayout(0, 6, 12, 12), v.lastRefreshText)
@@ -757,7 +767,7 @@ func (v *View) buildCompact() *fyne.Container {
 	v.compactBody = container.New(&CompactRowsLayout{Gap: 1})
 	v.compactHeaderWrap = container.NewStack()
 	v.renderCompactBody()
-	rows := container.New(layout.NewCustomPaddedLayout(2, 2, CompactPaddingLeft, CompactPaddingRight), v.compactBody)
+	rows := container.New(layout.NewCustomPaddedLayout(2, 2, CompactPaddingLeft, CompactPaddingRight), container.NewStack(v.compactBody, v.newLaneReorderSurface()))
 	content := container.NewBorder(v.compactHeaderWrap, nil, nil, nil, rows)
 	return v.roundedScreen(v.colors.Background, container.NewBorder(v.windowTitle(settings.ModeCompact), nil, nil, nil, content))
 }
@@ -800,7 +810,14 @@ func (v *View) refreshLastRefreshText() {
 // asks it, so a drag in one of them moves the provider in all of them. It
 // normalizes on each call rather than trusting the stored list, which lets a
 // test build a View from a bare Config.
+//
+// A drag in progress answers with the arrangement it is trying out, so the
+// screens redraw as the pointer travels while the settings file stays as it
+// was until the drag ends.
 func (v *View) laneOrder() []string {
+	if v.dragOrder != nil {
+		return v.dragOrder
+	}
 	return settings.NormalizeLaneOrder(v.config.LaneOrder)
 }
 

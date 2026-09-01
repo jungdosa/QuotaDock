@@ -27,6 +27,7 @@ type normalBodyView struct {
 	statuses     []*canvas.Text
 	rows         []normalUsageView
 	dividers     []*canvas.Rectangle
+	groups       []laneGroupSpan
 }
 
 type normalHeaderView struct {
@@ -57,6 +58,7 @@ type compactBodyView struct {
 	statuses       []*canvas.Text
 	rows           []compactUsageView
 	dividers       []*canvas.Rectangle
+	groups         []laneGroupSpan
 }
 
 type compactAccountHeaderView struct {
@@ -237,6 +239,10 @@ func (v *View) rebuildNormalBody(lanes []LaneState, now time.Time, signature str
 			cache.dividers = append(cache.dividers, line)
 			objects = append(objects, divider)
 		}
+		// The span starts at the header, not the divider: the divider belongs
+		// between two groups, and counting it into the one below would make the
+		// gap above a group answer as that group during a drag.
+		first := len(objects)
 		header, handles := v.makeLaneHeader(lane)
 		cache.headers = append(cache.headers, handles)
 		objects = append(objects, header)
@@ -244,6 +250,7 @@ func (v *View) rebuildNormalBody(lanes []LaneState, now time.Time, signature str
 			status, text := v.makeNormalStatusRow(lane)
 			cache.statuses = append(cache.statuses, text)
 			objects = append(objects, status)
+			cache.groups = append(cache.groups, laneGroupSpan{id: string(lane.Provider), first: first, last: len(objects) - 1})
 			continue
 		}
 		for _, row := range lane.Rows {
@@ -251,6 +258,7 @@ func (v *View) rebuildNormalBody(lanes []LaneState, now time.Time, signature str
 			cache.rows = append(cache.rows, handles)
 			objects = append(objects, object)
 		}
+		cache.groups = append(cache.groups, laneGroupSpan{id: string(lane.Provider), first: first, last: len(objects) - 1})
 	}
 	v.normalBody.Objects = objects
 	v.normalCache = cache
@@ -606,6 +614,7 @@ func (v *View) rebuildCompactBody(lanes []LaneState, signature string) {
 			cache.dividers = append(cache.dividers, line)
 			objects = append(objects, divider)
 		}
+		first := len(objects)
 		if showClaudeAccountHeaders && isClaudeAccountProvider(lane.Provider) {
 			header := v.makeCompactAccountHeader(lane.Name)
 			cache.accountHeaders = append(cache.accountHeaders, header)
@@ -621,6 +630,7 @@ func (v *View) rebuildCompactBody(lanes []LaneState, signature string) {
 			cache.statuses = append(cache.statuses, text)
 			objects = append(objects, status)
 		}
+		cache.groups = append(cache.groups, laneGroupSpan{id: string(lane.Provider), first: first, last: len(objects) - 1})
 	}
 	v.compactBody.Objects = objects
 	v.compactCache = cache
