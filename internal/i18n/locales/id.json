@@ -106,6 +106,8 @@
   "action.display_normal": "Beralih ke mode normal",
   "action.compact": "Mode ringkas",
   "action.nano": "Nano",
+  "action.nano_vertical": "Buat nano jadi tegak",
+  "action.nano_horizontal": "Buat nano jadi mendatar",
   "action.settings": "Setelan",
   "action.help": "Bantuan",
   "action.update": "Perbarui",

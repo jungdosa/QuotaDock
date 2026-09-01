@@ -106,6 +106,8 @@
   "action.display_normal": "일반",
   "action.compact": "컴팩트",
   "action.nano": "나노",
+  "action.nano_vertical": "나노 세로로 세우기",
+  "action.nano_horizontal": "나노 가로로 눕히기",
   "action.settings": "설정",
   "action.help": "도움말",
   "action.update": "업데이트",

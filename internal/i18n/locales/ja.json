@@ -106,6 +106,8 @@
   "action.display_normal": "通常",
   "action.compact": "コンパクト",
   "action.nano": "ナノ",
+  "action.nano_vertical": "ナノを縦にする",
+  "action.nano_horizontal": "ナノを横にする",
   "action.settings": "設定",
   "action.help": "ヘルプ",
   "action.update": "更新",

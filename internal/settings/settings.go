@@ -118,7 +118,12 @@ type Config struct {
 	// to the tray. It defaults to false: a widget the user asked to start with
 	// Windows should be on screen, and the old always-hidden behaviour left
 	// people wondering whether the app had started at all.
-	StartMinimized   bool        `json:"startMinimized"`
+	StartMinimized bool `json:"startMinimized"`
+	// NanoVertical turns the nano readout on its side: the provider cards stack
+	// downwards and the title bar becomes a strip down the right edge, for
+	// parking the widget against the side of a screen rather than along the top.
+	// It is off by default, so nano looks exactly as it always has until asked.
+	NanoVertical     bool        `json:"nanoVertical,omitempty"`
 	AlwaysOnTop      bool        `json:"alwaysOnTop"`
 	ShowInTaskbar    bool        `json:"showInTaskbar"`
 	PromoteTrayIcon  bool        `json:"promoteTrayIcon"`

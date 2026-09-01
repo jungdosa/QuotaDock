@@ -106,6 +106,8 @@
   "action.display_normal": "Normal",
   "action.compact": "Compact",
   "action.nano": "Nano",
+  "action.nano_vertical": "Stand nano upright",
+  "action.nano_horizontal": "Lay nano flat",
   "action.settings": "Settings",
   "action.help": "Help",
   "action.update": "Update",

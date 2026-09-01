@@ -106,6 +106,8 @@
   "action.display_normal": "普通",
   "action.compact": "紧凑",
   "action.nano": "迷你",
+  "action.nano_vertical": "将迷你视图竖排",
+  "action.nano_horizontal": "将迷你视图横排",
   "action.settings": "设置",
   "action.help": "帮助",
   "action.update": "更新",

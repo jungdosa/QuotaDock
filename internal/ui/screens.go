@@ -74,49 +74,49 @@ const (
 	// colour and weight instead.
 	CompactAccountNameTextSize float32 = 12
 	CompactResetPadding        float32 = 6
-	CompactMeterMinWidth   float32 = 46
-	CompactMeterHeight     float32 = 7
-	CompactMeterGap        float32 = 2
-	CompactDividerInset    float32 = 7
-	CompactDividerPaddingY float32 = 3
-	CompactDividerAlpha    uint8   = 0x3D
-	CompactRowHeight       float32 = 22
-	UsageHeaderTextSize    float32 = 14
-	UsageHeaderRowHeight   float32 = 19
-	NanoBodyHeight float32 = 26
+	CompactMeterMinWidth       float32 = 46
+	CompactMeterHeight         float32 = 7
+	CompactMeterGap            float32 = 2
+	CompactDividerInset        float32 = 7
+	CompactDividerPaddingY     float32 = 3
+	CompactDividerAlpha        uint8   = 0x3D
+	CompactRowHeight           float32 = 22
+	UsageHeaderTextSize        float32 = 14
+	UsageHeaderRowHeight       float32 = 19
+	NanoBodyHeight             float32 = 26
 	// NanoLabelTextSize is nano-scoped only: compact/normal type tokens
 	// are separate constants, so this bump never leaks into other modes. The
 	// row line height stays pinned to the former 7.5px metric (nanoRowHeight),
 	// so the nano window height does not change.
 	NanoLabelTextSize          float32 = 8.5
 	nanoLabelReferenceTextSize float32 = 7.5
-	NanoUsageBarHeight     float32 = 6
-	NanoResetBarHeight     float32 = 2
-	NanoResetGap           float32 = 1
-	NanoLineGap            float32 = 2
-	NormalRowGap           float32 = 5
-	NormalRowHeight        float32 = 38
-	NormalMeterHeight      float32 = 10
+	NanoUsageBarHeight         float32 = 6
+	NanoResetBarHeight         float32 = 2
+	NanoResetGap               float32 = 1
+	NanoLineGap                float32 = 2
+	NormalRowGap               float32 = 5
+	NormalRowHeight            float32 = 38
+	NormalMeterHeight          float32 = 10
 	// The normal-mode reset bar is thicker than compact/nano's 2px: the
 	// row has the room, and 2px vanishes on high-DPI and dark themes.
 	NormalResetBarHeight float32 = 3
 	NormalResetBarGap    float32 = 1
-	TitleBarHeight         float32 = 38
-	TitleTextSize          float32 = 14
-	TitleVersionTextSize   float32 = 11
-	LaneHeaderTextSize     float32 = 14
-	PlanChipTextSize       float32 = 9
-	CreditsTextSize        float32 = 9.5
-	PlanChipPaddingX       float32 = 5
-	PlanChipPaddingY       float32 = 1.5
-	LaneHeaderChipGap      float32 = 6
-	LaneHeaderIconGap      float32 = 6
-	NormalResetLineGap     float32 = -2
-	NormalLabelTextSize    float32 = 12
-	NormalMetaTextSize     float32 = 11.5
-	CompactLabelTextSize   float32 = 12
-	SettingsTextSize       float32 = 11
-	ThresholdTextSize      float32 = 9
+	TitleBarHeight       float32 = 38
+	TitleTextSize        float32 = 14
+	TitleVersionTextSize float32 = 11
+	LaneHeaderTextSize   float32 = 14
+	PlanChipTextSize     float32 = 9
+	CreditsTextSize      float32 = 9.5
+	PlanChipPaddingX     float32 = 5
+	PlanChipPaddingY     float32 = 1.5
+	LaneHeaderChipGap    float32 = 6
+	LaneHeaderIconGap    float32 = 6
+	NormalResetLineGap   float32 = -2
+	NormalLabelTextSize  float32 = 12
+	NormalMetaTextSize   float32 = 11.5
+	CompactLabelTextSize float32 = 12
+	SettingsTextSize     float32 = 11
+	ThresholdTextSize    float32 = 9
 	// ButtonLabelPadding keeps translated button labels from touching the border.
 	ButtonLabelPadding float32 = 9
 	// The percentage sits in a band directly above the meter, flush with its right end.
@@ -180,13 +180,13 @@ type Actions struct {
 	Reconnect       func(model.ProviderID)
 	// SignIn opens the embedded browser so the user can sign in to a provider
 	// that supports the Auth method. Nil when no provider offers it.
-	SignIn          func(model.ProviderID)
-	CheckUpdate     func()
-	OpenURL         func(string) error
-	Activity        func()
-	AppVersion               string
-	DemoMode                 bool
-	TrayPromotionSupported   bool
+	SignIn                 func(model.ProviderID)
+	CheckUpdate            func()
+	OpenURL                func(string) error
+	Activity               func()
+	AppVersion             string
+	DemoMode               bool
+	TrayPromotionSupported bool
 	// WebAuthAvailable reports whether the embedded browser sign-in can run,
 	// so the Claude Auth method reads as available instead of planned.
 	WebAuthAvailable bool
@@ -207,31 +207,31 @@ type View struct {
 	normalBody, compactBody *fyne.Container
 	// Header wraps hold the full-width caption strips: the strip sits
 	// outside the padded body so its titlebar tone reaches both window edges.
-	normalHeaderWrap  *fyne.Container
-	compactHeaderWrap *fyne.Container
-	nanoBody          *fyne.Container
-	lastRefreshText   *canvas.Text
-	helpPopup               *widget.PopUp
-	palettePopup            *widget.PopUp
-	tooltipLayer            *fyne.Container
-	tooltipObject           fyne.CanvasObject
-	tooltipTimer            *time.Timer
-	tooltipOwner            tooltipAnchor
-	tooltipMu               sync.Mutex
-	refreshButtons          []*SmallButton
-	refreshing              bool
-	connectionsBody         *fyne.Container
-	normalCache             *normalBodyView
-	compactCache            *compactBodyView
-	nanoCache               *nanoBodyView
-	connectionCache         []*connectionView
-	openConnectionPanel     connectionPanelSelection
-	warningEntry            *widget.Entry
-	dangerEntry             *widget.Entry
-	warningSlider           *widget.Slider
-	dangerSlider            *widget.Slider
-	lastResizeRequest       fyne.Size
-	screen                  Screen
+	normalHeaderWrap    *fyne.Container
+	compactHeaderWrap   *fyne.Container
+	nanoBody            *fyne.Container
+	lastRefreshText     *canvas.Text
+	helpPopup           *widget.PopUp
+	palettePopup        *widget.PopUp
+	tooltipLayer        *fyne.Container
+	tooltipObject       fyne.CanvasObject
+	tooltipTimer        *time.Timer
+	tooltipOwner        tooltipAnchor
+	tooltipMu           sync.Mutex
+	refreshButtons      []*SmallButton
+	refreshing          bool
+	connectionsBody     *fyne.Container
+	normalCache         *normalBodyView
+	compactCache        *compactBodyView
+	nanoCache           *nanoBodyView
+	connectionCache     []*connectionView
+	openConnectionPanel connectionPanelSelection
+	warningEntry        *widget.Entry
+	dangerEntry         *widget.Entry
+	warningSlider       *widget.Slider
+	dangerSlider        *widget.Slider
+	lastResizeRequest   fyne.Size
+	screen              Screen
 	// These belong to a reordering drag in progress: the arrangement it is
 	// trying out, the provider it grabbed, the order and the slot geometry it
 	// started from. All are cleared at rest, and nothing reaches the settings
@@ -240,6 +240,10 @@ type View struct {
 	dragLane   string
 	dragBase   []string
 	dragBounds []laneBound
+	// nanoBar is the vertical title strip, held only while nano is standing on
+	// its end so the window can be sized to whichever of the strip and the
+	// readout is taller. It is nil in every other layout.
+	nanoBar *fyne.Container
 }
 
 func NewView(c fyne.Canvas, catalog *i18n.Catalog, systemLanguage i18n.Language, config settings.Config, actions Actions) *View {
@@ -311,6 +315,7 @@ func (v *View) SetConfig(config settings.Config) {
 	oldWarningsEnabled := v.config.WarningsEnabled
 	oldShowClaude := v.config.ShowClaude
 	oldShowClaudeAuth := v.config.ShowClaudeAuth
+	oldNanoVertical := v.config.NanoVertical
 	current := v.screen
 
 	v.config = config.Validated()
@@ -320,7 +325,10 @@ func (v *View) SetConfig(config settings.Config) {
 	if v.Actions.ConfigChanged != nil {
 		v.Actions.ConfigChanged(v.config)
 	}
-	if (oldLanguage != v.config.Language || oldTheme != v.config.Theme || oldWarningsEnabled != v.config.WarningsEnabled || oldShowClaude != v.config.ShowClaude || oldShowClaudeAuth != v.config.ShowClaudeAuth) && v.Root != nil {
+	// Nano's orientation moves the title bar from the top edge to the right one,
+	// which is a different frame rather than a different arrangement inside the
+	// same one, so it rebuilds like a theme or language change does.
+	if (oldLanguage != v.config.Language || oldTheme != v.config.Theme || oldWarningsEnabled != v.config.WarningsEnabled || oldShowClaude != v.config.ShowClaude || oldShowClaudeAuth != v.config.ShowClaudeAuth || oldNanoVertical != v.config.NanoVertical) && v.Root != nil {
 		v.rebuildScreens(current)
 		v.resizeCurrentWidget()
 		return
@@ -392,6 +400,29 @@ func (v *View) resolvedLanguage() i18n.Language {
 	}
 	return language
 }
+
+// titleButtons is the one place the title actions and their order are decided,
+// so the strip vertical nano stands on its end carries the same buttons in the
+// same sequence as the bar every other screen lays across the top.
+//
+// Nano gains one the others have no use for: the orientation toggle, which only
+// governs how nano itself is drawn.
+func (v *View) titleButtons(mode settings.DisplayMode) []*SmallButton {
+	buttons := []*SmallButton{
+		NewSmallIconButton(displayModeResource(mode, v.colors), v.displayModeTooltip(mode), v.Actions.ToggleCompact, v.colors),
+	}
+	if mode == settings.ModeNano {
+		buttons = append(buttons, NewSmallIconButton(nanoOrientationResource(v.config.NanoVertical, v.colors), v.nanoOrientationTooltip(), v.toggleNanoOrientation, v.colors))
+	}
+	return append(buttons,
+		v.newRefreshButton(),
+		v.newThemeButton(),
+		NewSmallIconButton(theme.SettingsIcon(), v.text(i18n.KeySettings), v.Actions.OpenSettings, v.colors),
+		NewSmallIconButton(theme.WindowMinimizeIcon(), v.text(i18n.KeyMinimize), v.Actions.Minimize, v.colors),
+		NewSmallIconButton(theme.CancelIcon(), v.text(i18n.KeyClose), v.Actions.Close, v.colors),
+	)
+}
+
 func (v *View) windowTitle(mode settings.DisplayMode) *fyne.Container {
 	title := textLabel(v.text(i18n.KeyAppTitle), TitleTextSize, v.colors.Text, true, false)
 	titleObjects := []fyne.CanvasObject{title, v.titleVersionLabel(v.text(i18n.KeyAppTitle), TitleTextSize, v.Actions.AppVersion)}
@@ -402,14 +433,7 @@ func (v *View) windowTitle(mode settings.DisplayMode) *fyne.Container {
 		titleObjects = append(titleObjects, container.NewStack(demoBackground, container.New(layout.NewCustomPaddedLayout(2, 2, 5, 5), container.NewCenter(demoText))))
 	}
 	titleGroup := container.NewHBox(titleObjects...)
-	buttons := []*SmallButton{
-		NewSmallIconButton(displayModeResource(mode, v.colors), v.displayModeTooltip(mode), v.Actions.ToggleCompact, v.colors),
-		v.newRefreshButton(),
-		v.newThemeButton(),
-		NewSmallIconButton(theme.SettingsIcon(), v.text(i18n.KeySettings), v.Actions.OpenSettings, v.colors),
-		NewSmallIconButton(theme.WindowMinimizeIcon(), v.text(i18n.KeyMinimize), v.Actions.Minimize, v.colors),
-		NewSmallIconButton(theme.CancelIcon(), v.text(i18n.KeyClose), v.Actions.Close, v.colors),
-	}
+	buttons := v.titleButtons(mode)
 	buttonObjects := make([]fyne.CanvasObject, 0, len(buttons))
 	for _, button := range buttons {
 		buttonObjects = append(buttonObjects, v.bindTitleButton(button))
@@ -418,7 +442,11 @@ func (v *View) windowTitle(mode settings.DisplayMode) *fyne.Container {
 		NewDragSurface(v.Actions.BeginWindowDrag, v.Actions.MoveWindow, v.Actions.EndWindowDrag),
 		container.New(layout.NewCustomPaddedLayout(0, 0, 8, 0), titleGroup),
 	)
-	widths := []float32{0, 24, 24, 24, 24, 24, 24}
+	widths := make([]float32, 0, len(buttonObjects)+1)
+	widths = append(widths, 0)
+	for range buttonObjects {
+		widths = append(widths, 24)
+	}
 	row := container.New(NewColumnLayout(widths, 2, TitleBarHeight), append([]fyne.CanvasObject{dragTitle}, buttonObjects...)...)
 	gradient := canvas.NewLinearGradient(v.colors.TitleTop, v.colors.TitleBottom, 0)
 	divider := canvas.NewRectangle(v.colors.TitleDivider)
@@ -788,6 +816,15 @@ func (v *View) buildNano() *fyne.Container {
 		}
 	}, v.Actions.OpenContextMenu)
 	body := container.NewStack(visual, gestures)
+	if v.config.NanoVertical {
+		// The bar moves to the right edge and the cards stack beneath each
+		// other, so the readout parks against the side of a screen instead of
+		// along the top of one.
+		v.nanoBar = v.windowTitleVertical()
+		strip := container.NewGridWrap(fyne.NewSize(NanoBarWidth, v.nanoBar.MinSize().Height), v.nanoBar)
+		return v.roundedScreen(v.colors.Background, container.NewBorder(nil, nil, nil, strip, body))
+	}
+	v.nanoBar = nil
 	return v.roundedScreen(v.colors.Background, container.NewBorder(v.windowTitle(settings.ModeNano), nil, nil, nil, body))
 }
 func (v *View) renderNormalBody()  { v.syncNormalBody() }
@@ -1079,6 +1116,7 @@ func (v *View) compactUsageRow(lane LaneState, row UsageRowState, showIcon bool)
 	object, _ := v.makeCompactUsageRow(lane, row, showIcon, v.compactLabelWidth(v.visibleLanes()), time.Now())
 	return object
 }
+
 // laneIconKind picks the mark for a whole provider group. Antigravity is the
 // only lane that draws two different logos across its rows, so its header
 // follows the first row it actually shows — which is the mark compact already
@@ -1925,6 +1963,13 @@ func (v *View) MinimumSize(screen Screen) fyne.Size {
 		}
 		return fyne.NewSize(CompactWidth, 1)
 	case NanoScreen:
+		if v.config.NanoVertical {
+			size := v.nanoVerticalMinimumSize()
+			if v.Nano != nil {
+				return fyne.NewSize(size.Width, max(v.Nano.MinSize().Height, size.Height))
+			}
+			return size
+		}
 		width := NanoWidth
 		if cells := len(v.nanoCellStates()); cells > 0 {
 			width = max(width, float32(cells)*NanoCellMinimumWidth)

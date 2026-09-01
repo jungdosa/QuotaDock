@@ -842,7 +842,13 @@ func (v *View) rebuildNanoBody(cells []nanoCellState, signature string, now time
 		objects = append(objects, object)
 		cache.cells = append(cache.cells, handles)
 	}
+	// One column stacks the cards downwards; one column per card lays them out
+	// across. The cards themselves are identical either way — only the direction
+	// they run in changes.
 	columns := max(1, len(objects))
+	if v.config.NanoVertical {
+		columns = 1
+	}
 	v.nanoBody.Layout = layout.NewGridLayoutWithColumns(columns)
 	v.nanoBody.Objects = objects
 	v.nanoCache = cache

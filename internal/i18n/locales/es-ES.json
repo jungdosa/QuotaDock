@@ -106,6 +106,8 @@
   "action.display_normal": "Cambiar a modo normal",
   "action.compact": "Modo compacto",
   "action.nano": "Nano",
+  "action.nano_vertical": "Poner nano en vertical",
+  "action.nano_horizontal": "Poner nano en horizontal",
   "action.settings": "Ajustes",
   "action.help": "Ayuda",
   "action.update": "Actualizar",

@@ -105,6 +105,8 @@ const (
 	KeyDisplayNormal             = "action.display_normal"
 	KeyCompact                   = "action.compact"
 	KeyNano                      = "action.nano"
+	KeyNanoVertical              = "action.nano_vertical"
+	KeyNanoHorizontal            = "action.nano_horizontal"
 	KeySettings                  = "action.settings"
 	KeyHelp                      = "action.help"
 	KeyUpdate                    = "action.update"
@@ -388,6 +390,8 @@ var RequiredKeys = []string{
 	KeyDisplayNormal,
 	KeyCompact,
 	KeyNano,
+	KeyNanoVertical,
+	KeyNanoHorizontal,
 	KeySettings,
 	KeyHelp,
 	KeyUpdate,

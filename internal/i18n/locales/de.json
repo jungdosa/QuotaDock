@@ -106,6 +106,8 @@
   "action.display_normal": "Zum Normalmodus wechseln",
   "action.compact": "Kompaktmodus",
   "action.nano": "Nano",
+  "action.nano_vertical": "Nano hochkant stellen",
+  "action.nano_horizontal": "Nano quer legen",
   "action.settings": "Einstellungen",
   "action.help": "Hilfe",
   "action.update": "Update",
