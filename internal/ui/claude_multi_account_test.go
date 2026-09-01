@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -166,8 +167,11 @@ func TestDualClaudeCompactGroupingAndNanoWidth(t *testing.T) {
 	view.SetState(dualClaudeTestState())
 
 	view.Show(CompactScreen)
-	if view.compactCache == nil || len(view.compactCache.dividers) != 3 {
+	if view.compactCache == nil || len(view.compactCache.dividers) != 3 || len(view.compactCache.accountHeaders) != 2 {
 		t.Fatalf("dual-account compact groups/dividers = %+v", view.compactCache)
+	}
+	if got := []string{view.compactCache.accountHeaders[0].label.Text, view.compactCache.accountHeaders[1].label.Text}; got[0] != "Claude CLI" || got[1] != "Claude Auth" {
+		t.Fatalf("default compact account headers=%v", got)
 	}
 	view.Show(NanoScreen)
 	if cells := len(view.nanoCellStates()); cells != 5 {
@@ -185,6 +189,121 @@ func TestDualClaudeCompactGroupingAndNanoWidth(t *testing.T) {
 	}
 	if width := view.MinimumSize(NanoScreen).Width; width != 6*NanoCellMinimumWidth {
 		t.Fatalf("six-cell nano width=%.1f, want %.1f", width, 6*NanoCellMinimumWidth)
+	}
+}
+
+func TestCompactClaudeAccountHeadersOnlyAppearForDualAccounts(t *testing.T) {
+	view, window := newTestView(t)
+	defer window.Close()
+	view.SetState(dualClaudeTestState())
+	view.Show(CompactScreen)
+
+	singleCache := view.compactCache
+	singleHeight := view.MinimumSize(CompactScreen).Height
+	if len(singleCache.accountHeaders) != 0 {
+		t.Fatalf("single Claude account rendered compact headers: %+v", singleCache.accountHeaders)
+	}
+	config := view.config
+	config.AccountLabels = map[string]string{"claude": "Work", "claude-auth": "Personal"}
+	view.SetConfig(config)
+	if view.compactCache != singleCache || len(view.compactCache.accountHeaders) != 0 || view.MinimumSize(CompactScreen).Height != singleHeight {
+		t.Fatal("hidden second Claude account changed the compact cache or geometry")
+	}
+
+	config = view.config
+	config.ShowClaudeAuth = true
+	view.SetConfig(config)
+	window.Resize(view.MinimumSize(CompactScreen))
+	lanes := view.visibleLanes()
+	if len(view.compactCache.accountHeaders) != 2 || len(lanes) < 2 {
+		t.Fatalf("dual Claude compact headers/lanes=%d/%d, want 2/at least 2", len(view.compactCache.accountHeaders), len(lanes))
+	}
+	for index, want := range []string{lanes[0].Name, lanes[1].Name} {
+		header := view.compactCache.accountHeaders[index]
+		if header.label.Text != want {
+			t.Fatalf("compact header %d=%q, normal lane name=%q", index, header.label.Text, want)
+		}
+		if !sameColor(header.label.Color, view.colors.Secondary) || header.label.TextSize >= CompactLabelTextSize {
+			t.Fatalf("compact header %d color/size=%v/%.1f, want Secondary and smaller than %.1f", index, header.label.Color, header.label.TextSize, CompactLabelTextSize)
+		}
+	}
+	rowCount := 0
+	for _, lane := range lanes {
+		rowCount += len(lane.Rows)
+	}
+	if len(view.compactCache.rows) != rowCount {
+		t.Fatalf("compact usage cache rows=%d, want %d without account headers", len(view.compactCache.rows), rowCount)
+	}
+	if got, want := len(view.compactBody.Objects), rowCount+len(view.compactCache.dividers)+len(view.compactCache.accountHeaders); got != want {
+		t.Fatalf("compact body objects=%d, want rows+dividers+headers=%d", got, want)
+	}
+	rowsLayout := view.compactBody.Layout.(*CompactRowsLayout)
+	withoutHeaders := make([]fyne.CanvasObject, 0, len(view.compactBody.Objects)-len(view.compactCache.accountHeaders))
+	headerHeight := float32(0)
+	for _, object := range view.compactBody.Objects {
+		isHeader := false
+		for _, header := range view.compactCache.accountHeaders {
+			if object == header.row {
+				isHeader = true
+				headerHeight += header.row.MinSize().Height
+				break
+			}
+		}
+		if !isHeader {
+			withoutHeaders = append(withoutHeaders, object)
+		}
+	}
+	wantBodyHeight := rowsLayout.MinSize(withoutHeaders).Height + headerHeight + rowsLayout.Gap*float32(len(view.compactCache.accountHeaders))
+	if got := view.compactBody.MinSize().Height; got != wantBodyHeight {
+		t.Fatalf("compact body height=%.1f, want %.1f including two account header lines", got, wantBodyHeight)
+	}
+
+	for index, firstRow := range []int{0, len(lanes[0].Rows)} {
+		header := view.compactCache.accountHeaders[index]
+		headerPosition, headerFound := objectPosition(view.Compact, header.row, fyne.NewPos(0, 0))
+		rowPosition, rowFound := objectPosition(view.Compact, view.compactCache.rows[firstRow].row, fyne.NewPos(0, 0))
+		if !headerFound || !rowFound || headerPosition.Y+header.row.Size().Height > rowPosition.Y {
+			t.Fatalf("compact group %d header/row geometry found=%t/%t pos=%v/%v size=%v", index, headerFound, rowFound, headerPosition, rowPosition, header.row.Size())
+		}
+	}
+	capture := window.Canvas().Capture()
+	if capture.Bounds().Dy() != int(math.Ceil(float64(view.MinimumSize(CompactScreen).Height))) {
+		t.Fatalf("dual compact capture height=%d, minimum=%.1f", capture.Bounds().Dy(), view.MinimumSize(CompactScreen).Height)
+	}
+	for index, header := range view.compactCache.accountHeaders {
+		if ink, found := phase3WHeaderInk(capture, view.Compact, header.label, view.colors.Background); !found || ink == 0 {
+			t.Fatalf("compact account header %d is clipped or not rasterized: found=%t ink=%d", index, found, ink)
+		}
+	}
+}
+
+func TestCompactClaudeAccountLabelChangeInvalidatesSignature(t *testing.T) {
+	view, window := newTestView(t)
+	defer window.Close()
+	config := view.config
+	config.ShowClaudeAuth = true
+	config.AccountLabels = map[string]string{"claude": "Work", "claude-auth": "Personal"}
+	view.SetConfig(config)
+	view.SetState(dualClaudeTestState())
+	view.Show(CompactScreen)
+
+	before := view.compactCache
+	config = view.config
+	config.AccountLabels = map[string]string{"claude": "Office", "claude-auth": "Home"}
+	view.SetConfig(config)
+	if view.compactCache == before {
+		t.Fatal("compact cache was not rebuilt after Claude account labels changed")
+	}
+	if len(view.compactCache.accountHeaders) != 2 {
+		t.Fatalf("compact account headers after rename=%d, want 2", len(view.compactCache.accountHeaders))
+	}
+	if got := []string{view.compactCache.accountHeaders[0].label.Text, view.compactCache.accountHeaders[1].label.Text}; got[0] != "Office" || got[1] != "Home" {
+		t.Fatalf("compact account headers after rename=%v", got)
+	}
+
+	view.Show(NormalScreen)
+	if got := []string{view.normalCache.headers[0].name.Text, view.normalCache.headers[1].name.Text}; got[0] != "Office" || got[1] != "Home" {
+		t.Fatalf("normal account names after rename=%v, want compact names", got)
 	}
 }
 

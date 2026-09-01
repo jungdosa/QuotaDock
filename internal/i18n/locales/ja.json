@@ -81,7 +81,7 @@
   "connection.state_available": "利用可能",
   "connection.state_missing": "未インストール",
   "connection.state_planned": "近日対応",
-  "connection.account_label": "アカウントラベル",
+  "connection.account_label": "表示名",
   "connection.account_label_hint": "短い名前（任意）",
   "connection.add_account": "Claude アカウントを追加",
   "connection.cli_in_use": "CLI は別の Claude アカウントで使用中です",

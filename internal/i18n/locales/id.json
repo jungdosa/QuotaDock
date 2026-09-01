@@ -81,7 +81,7 @@
   "connection.state_available": "Tersedia",
   "connection.state_missing": "Belum terpasang",
   "connection.state_planned": "Segera hadir",
-  "connection.account_label": "Label akun",
+  "connection.account_label": "Nama tampilan",
   "connection.account_label_hint": "Nama singkat (opsional)",
   "connection.add_account": "Tambah akun Claude",
   "connection.cli_in_use": "CLI sudah digunakan oleh akun Claude lain",

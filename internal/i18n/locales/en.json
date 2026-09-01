@@ -81,7 +81,7 @@
   "connection.state_available": "Available",
   "connection.state_missing": "Not installed",
   "connection.state_planned": "Coming soon",
-  "connection.account_label": "Account label",
+  "connection.account_label": "Display name",
   "connection.account_label_hint": "Optional short name",
   "connection.add_account": "Add Claude account",
   "connection.cli_in_use": "CLI is already used by another Claude account",

@@ -81,7 +81,7 @@
   "connection.state_available": "사용 가능",
   "connection.state_missing": "미설치",
   "connection.state_planned": "준비 중",
-  "connection.account_label": "계정 라벨",
+  "connection.account_label": "표시명",
   "connection.account_label_hint": "짧은 이름 (선택)",
   "connection.add_account": "Claude 계정 추가",
   "connection.cli_in_use": "CLI는 이미 다른 Claude 계정에서 사용 중입니다",

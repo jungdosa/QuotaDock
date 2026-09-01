@@ -294,6 +294,7 @@ func (v *View) SetConfig(config settings.Config) {
 	oldLanguage := v.config.Language
 	oldTheme := v.config.Theme
 	oldWarningsEnabled := v.config.WarningsEnabled
+	oldShowClaude := v.config.ShowClaude
 	oldShowClaudeAuth := v.config.ShowClaudeAuth
 	current := v.screen
 
@@ -304,7 +305,7 @@ func (v *View) SetConfig(config settings.Config) {
 	if v.Actions.ConfigChanged != nil {
 		v.Actions.ConfigChanged(v.config)
 	}
-	if (oldLanguage != v.config.Language || oldTheme != v.config.Theme || oldWarningsEnabled != v.config.WarningsEnabled || oldShowClaudeAuth != v.config.ShowClaudeAuth) && v.Root != nil {
+	if (oldLanguage != v.config.Language || oldTheme != v.config.Theme || oldWarningsEnabled != v.config.WarningsEnabled || oldShowClaude != v.config.ShowClaude || oldShowClaudeAuth != v.config.ShowClaudeAuth) && v.Root != nil {
 		v.rebuildScreens(current)
 		v.resizeCurrentWidget()
 		return

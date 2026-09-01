@@ -233,6 +233,8 @@ func TestSettingsSoftwareRenderCaptures(t *testing.T) {
 			config.Theme = entry.theme
 			config.Language = settings.Language(i18n.Korean)
 			config.WarningsEnabled = entry.warnings
+			config.ShowClaudeAuth = true
+			config.AccountLabels = map[string]string{"claude": "업무", "claude-auth": "개인"}
 			view := NewView(window.Canvas(), catalog, i18n.Korean, config, Actions{DemoMode: true})
 			window.SetContent(view.Root)
 			view.SetState(DemoViewState())

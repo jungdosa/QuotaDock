@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"fyne.io/fyne/v2"
 	"github.com/jungdosa/QuotaDock/internal/i18n"
 	"github.com/jungdosa/QuotaDock/internal/model"
 	"github.com/jungdosa/QuotaDock/internal/settings"
@@ -97,6 +98,100 @@ func TestAccountLabelEntriesPersistUserAliasesOnly(t *testing.T) {
 	if view.config.AccountLabels["claude"] != "Work" || view.config.AccountLabels["claude-auth"] != "Personal" {
 		t.Fatalf("account labels were not stored: %v", view.config.AccountLabels)
 	}
+	view.SetState(dualClaudeTestState())
+	lanes := view.visibleLanes()
+	if len(lanes) < 2 || lanes[0].Name != "Work" || lanes[1].Name != "Personal" {
+		t.Fatalf("stored account labels were not applied to dual Claude lanes: %+v", lanes)
+	}
+}
+
+func TestAccountLabelEntriesFollowDualClaudeVisibilityImmediately(t *testing.T) {
+	view, window := newTestView(t)
+	defer window.Close()
+	view.Show(SettingsScreen)
+
+	root := connectionRowForTest(t, view, model.ProviderClaude)
+	if root.labelEntry != nil || root.labelText != nil {
+		t.Fatal("single Claude account rendered a display-name control")
+	}
+
+	config := view.config
+	config.ShowClaudeAuth = true
+	view.SetConfig(config)
+	root = connectionRowForTest(t, view, model.ProviderClaude)
+	auth := connectionRowForTest(t, view, model.ProviderClaudeAuth)
+	for _, row := range []*connectionView{root, auth} {
+		if row.labelEntry == nil || row.labelText == nil || row.labelRow == nil {
+			t.Fatalf("dual Claude row %s is missing its display-name control", row.id)
+		}
+		if row.labelText.Text != view.text(i18n.KeyConnectionAccountLabel) {
+			t.Fatalf("dual Claude row %s label=%q", row.id, row.labelText.Text)
+		}
+		if row.labelEntry.PlaceHolder != view.text(i18n.KeyConnectionAccountLabelHint) {
+			t.Fatalf("dual Claude row %s placeholder=%q", row.id, row.labelEntry.PlaceHolder)
+		}
+	}
+
+	config = view.config
+	config.ShowClaudeAuth = false
+	view.SetConfig(config)
+	if row := connectionRowForTest(t, view, model.ProviderClaude); row.labelEntry != nil {
+		t.Fatal("display-name control remained after Claude Auth was hidden")
+	}
+
+	config = view.config
+	config.ShowClaude = false
+	config.ShowClaudeAuth = true
+	view.SetConfig(config)
+	root = connectionRowForTest(t, view, model.ProviderClaude)
+	auth = connectionRowForTest(t, view, model.ProviderClaudeAuth)
+	if root.labelEntry != nil || auth.labelEntry != nil || root.name.Text != "Claude" || auth.name.Text != "Claude" {
+		t.Fatalf("single visible Claude account retained dual controls/names: root=%q auth=%q", root.name.Text, auth.name.Text)
+	}
+}
+
+func TestAccountLabelEntryFillsRemainingConnectionRowWithoutOverlap(t *testing.T) {
+	view, window := newTestView(t)
+	defer window.Close()
+	config := view.config
+	config.Language = settings.Language(i18n.Korean)
+	config.ShowClaudeAuth = true
+	view.SetConfig(config)
+	view.Show(SettingsScreen)
+	window.Resize(view.MinimumSize(SettingsScreen))
+
+	root := connectionRowForTest(t, view, model.ProviderClaude)
+	detailPosition, detailFound := objectPosition(view.Settings, root.detail, fyne.NewPos(0, 0))
+	labelPosition, labelFound := objectPosition(view.Settings, root.labelText, fyne.NewPos(0, 0))
+	entryPosition, entryFound := objectPosition(view.Settings, root.labelEntry, fyne.NewPos(0, 0))
+	if !detailFound || !labelFound || !entryFound {
+		t.Fatal("display-name row geometry was not found in settings")
+	}
+	if detailPosition.X+root.detail.Size().Width > labelPosition.X || labelPosition.X+root.labelText.Size().Width > entryPosition.X {
+		t.Fatalf("display-name row overlaps: detail=%v/%v label=%v/%v entry=%v/%v", detailPosition, root.detail.Size(), labelPosition, root.labelText.Size(), entryPosition, root.labelEntry.Size())
+	}
+	if root.labelEntry.Size().Width <= 170 {
+		t.Fatalf("display-name entry width=%.1f, want remaining width above legacy 170px", root.labelEntry.Size().Width)
+	}
+	expandedWidth := root.labelEntry.Size().Width
+	if right := entryPosition.X + root.labelEntry.Size().Width; right > view.Settings.Size().Width {
+		t.Fatalf("display-name entry right edge %.1f exceeds settings width %.1f", right, view.Settings.Size().Width)
+	}
+
+	capture := window.Canvas().Capture()
+	if capture.Bounds().Dx() == 0 || capture.Bounds().Dy() == 0 {
+		t.Fatal("settings render capture is empty")
+	}
+
+	root.labelRow.Resize(fyne.NewSize(240, root.labelRow.MinSize().Height))
+	root.labelRow.Layout.Layout(root.labelRow.Objects, root.labelRow.Size())
+	narrowLabelPosition, narrowLabelFound := objectPosition(root.labelRow, root.labelText, fyne.NewPos(0, 0))
+	narrowEntryPosition, narrowEntryFound := objectPosition(root.labelRow, root.labelEntry, fyne.NewPos(0, 0))
+	if !narrowLabelFound || !narrowEntryFound || narrowLabelPosition.X+root.labelText.Size().Width > narrowEntryPosition.X || narrowEntryPosition.X+root.labelEntry.Size().Width > root.labelRow.Size().Width {
+		t.Fatalf("narrow display-name row overlaps or clips: label=%v/%v entry=%v/%v row=%v", narrowLabelPosition, root.labelText.Size(), narrowEntryPosition, root.labelEntry.Size(), root.labelRow.Size())
+	}
+
+	t.Logf("settings capture=%dx%d, display-name entry width=%.1f", capture.Bounds().Dx(), capture.Bounds().Dy(), expandedWidth)
 }
 
 func connectionRowForTest(t *testing.T, view *View, id model.ProviderID) *connectionView {

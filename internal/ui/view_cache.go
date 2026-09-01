@@ -48,17 +48,24 @@ type normalUsageView struct {
 }
 
 type compactBodyView struct {
-	signature    string
-	labelWidth   float32
-	columnHeader *fyne.Container
-	usageHeader  *canvas.Text
-	resetHeader  *canvas.Text
-	statuses     []*canvas.Text
-	rows         []compactUsageView
-	dividers     []*canvas.Rectangle
+	signature      string
+	labelWidth     float32
+	columnHeader   *fyne.Container
+	usageHeader    *canvas.Text
+	resetHeader    *canvas.Text
+	accountHeaders []compactAccountHeaderView
+	statuses       []*canvas.Text
+	rows           []compactUsageView
+	dividers       []*canvas.Rectangle
+}
+
+type compactAccountHeaderView struct {
+	row   *fyne.Container
+	label *canvas.Text
 }
 
 type compactUsageView struct {
+	row         *fyne.Container
 	background  *canvas.Rectangle
 	icon        *canvas.Image
 	label       *canvas.Text
@@ -118,7 +125,9 @@ type connectionView struct {
 	reconnect  *SmallButton
 	helpButton *SmallButton
 	addButton  *SmallButton
+	labelText  *canvas.Text
 	labelEntry *widget.Entry
+	labelRow   *fyne.Container
 	actionRow  *fyne.Container
 }
 
@@ -149,15 +158,15 @@ type connectionPanelView struct {
 }
 
 const (
-	claudeInstallURL       = "https://code.claude.com/docs/en/quickstart"
-	codexInstallURL        = "https://developers.openai.com/codex/cli/"
-	claudeOAuthTokenEnv    = "CLAUDE_CODE_OAUTH_TOKEN"
-	claudeInstallCommand   = "npm install -g @anthropic-ai/claude-code"
-	codexInstallCommand    = "npm install -g @openai/codex"
-	claudeSearchPaths      = `PATH · %USERPROFILE%\.local\bin · %LOCALAPPDATA%\Programs\Claude`
-	codexSearchPaths       = `PATH · %LOCALAPPDATA%\Programs\OpenAI\Codex\bin`
-	grokInstallURL         = "https://docs.x.ai/docs/grok-build"
-	grokInstallCommand     = "winget install xAI.GrokBuild"
+	claudeInstallURL     = "https://code.claude.com/docs/en/quickstart"
+	codexInstallURL      = "https://developers.openai.com/codex/cli/"
+	claudeOAuthTokenEnv  = "CLAUDE_CODE_OAUTH_TOKEN"
+	claudeInstallCommand = "npm install -g @anthropic-ai/claude-code"
+	codexInstallCommand  = "npm install -g @openai/codex"
+	claudeSearchPaths    = `PATH · %USERPROFILE%\.local\bin · %LOCALAPPDATA%\Programs\Claude`
+	codexSearchPaths     = `PATH · %LOCALAPPDATA%\Programs\OpenAI\Codex\bin`
+	grokInstallURL       = "https://docs.x.ai/docs/grok-build"
+	grokInstallCommand   = "winget install xAI.GrokBuild"
 	// Grok is read from the CLI credential file rather than a located
 	// executable, so the search hint names the file the app actually reads.
 	grokSearchPaths        = `%USERPROFILE%\.grok\auth.json`
@@ -581,6 +590,7 @@ func (v *View) rebuildCompactBody(lanes []LaneState, signature string) {
 	labelWidth := v.compactLabelWidth(lanes)
 	cache := &compactBodyView{signature: signature, labelWidth: labelWidth}
 	objects := make([]fyne.CanvasObject, 0)
+	showClaudeAccountHeaders := compactShowsClaudeAccountHeaders(lanes)
 	columnHeader, usageHeader, resetHeader := v.makeCompactColumnHeader(labelWidth)
 	cache.columnHeader = columnHeader
 	cache.usageHeader = usageHeader
@@ -596,6 +606,11 @@ func (v *View) rebuildCompactBody(lanes []LaneState, signature string) {
 			cache.dividers = append(cache.dividers, line)
 			objects = append(objects, divider)
 		}
+		if showClaudeAccountHeaders && isClaudeAccountProvider(lane.Provider) {
+			header := v.makeCompactAccountHeader(lane.Name)
+			cache.accountHeaders = append(cache.accountHeaders, header)
+			objects = append(objects, header.row)
+		}
 		for _, row := range lane.Rows {
 			object, handles := v.makeCompactUsageRow(lane, row, true, labelWidth, now)
 			cache.rows = append(cache.rows, handles)
@@ -610,6 +625,29 @@ func (v *View) rebuildCompactBody(lanes []LaneState, signature string) {
 	v.compactBody.Objects = objects
 	v.compactCache = cache
 	v.compactBody.Refresh()
+}
+
+func compactShowsClaudeAccountHeaders(lanes []LaneState) bool {
+	accounts := 0
+	for _, lane := range lanes {
+		if isClaudeAccountProvider(lane.Provider) {
+			accounts++
+		}
+	}
+	return accounts >= 2
+}
+
+func isClaudeAccountProvider(id model.ProviderID) bool {
+	return id == model.ProviderClaude || id == model.ProviderClaudeAuth
+}
+
+func (v *View) makeCompactAccountHeader(name string) compactAccountHeaderView {
+	label := textLabel(name, CompactResetTextSize, v.colors.Secondary, false, false)
+	row := container.New(
+		layout.NewCustomPaddedLayout(2, 1, CompactIconWidth+CompactColumnGap, 0),
+		label,
+	)
+	return compactAccountHeaderView{row: row, label: label}
 }
 
 func (v *View) makeCompactColumnHeader(labelWidth float32) (*fyne.Container, *canvas.Text, *canvas.Text) {
@@ -674,8 +712,15 @@ func (v *View) makeProviderGroupDivider() (fyne.CanvasObject, *canvas.Rectangle)
 
 func (v *View) compactBodySignature(lanes []LaneState) string {
 	var signature strings.Builder
+	showClaudeAccountHeaders := compactShowsClaudeAccountHeaders(lanes)
+	fmt.Fprintf(&signature, "claude-account-headers=%t|", showClaudeAccountHeaders)
 	for _, lane := range lanes {
 		fmt.Fprintf(&signature, "lane:%q:rows=%d|", lane.Provider, len(lane.Rows))
+		if showClaudeAccountHeaders && isClaudeAccountProvider(lane.Provider) {
+			// visibleLanes assigns this name with claudeAccountDisplayName, the
+			// same source used by normal-mode lane headers.
+			fmt.Fprintf(&signature, "claude-account:%q:name=%q|", lane.Provider, lane.Name)
+		}
 		for _, row := range lane.Rows {
 			fmt.Fprintf(&signature, "row:%q:%q:%d:icon=%q", row.Label, row.DisplayLabel, row.WindowMinutes, providerIconKind(lane, row))
 			signature.WriteByte('|')
@@ -742,6 +787,7 @@ func (v *View) makeCompactUsageRow(lane LaneState, row UsageRowState, showIcon b
 	background.CornerRadius = 4
 	object := container.NewStack(background, content)
 	return object, compactUsageView{
+		row:         object,
 		background:  background,
 		icon:        iconImage,
 		label:       label,
@@ -1157,20 +1203,29 @@ func (v *View) buildConnectionRows() {
 		background.StrokeWidth = 1
 		contentObjects := []fyne.CanvasObject{header}
 		var detailObject fyne.CanvasObject = detail
+		var labelText *canvas.Text
 		var labelEntry *widget.Entry
-		if id == model.ProviderClaude || id == model.ProviderClaudeAuth {
+		var labelRow *fyne.Container
+		if v.config.ShowClaude && v.config.ShowClaudeAuth && (id == model.ProviderClaude || id == model.ProviderClaudeAuth) {
+			labelText = textLabel(v.text(i18n.KeyConnectionAccountLabel), SettingsTextSize, v.colors.Label, false, false)
 			labelEntry = widget.NewEntry()
-			labelEntry.SetPlaceHolder(v.text(i18n.KeyConnectionAccountLabel) + " · " + v.text(i18n.KeyConnectionAccountLabelHint))
+			labelEntry.SetPlaceHolder(v.text(i18n.KeyConnectionAccountLabelHint))
 			labelEntry.SetText(v.config.AccountLabels[string(id)])
 			labelEntry.OnChanged = func(value string) { v.setAccountLabel(id, value) }
-			labelControl := container.NewGridWrap(fyne.NewSize(170, 28), labelEntry)
-			detailObject = container.NewBorder(nil, nil, detail, nil, labelControl)
+			labelRow = container.NewBorder(
+				nil,
+				nil,
+				container.New(layout.NewCustomPaddedLayout(0, 0, 10, 8), labelText),
+				nil,
+				labelEntry,
+			)
+			detailObject = container.NewBorder(nil, nil, detail, nil, labelRow)
 		}
 		contentObjects = append(contentObjects, detailObject, panel)
 		content := container.NewVBox(contentObjects...)
 		card := container.NewStack(background, container.NewBorder(nil, nil, accent, nil, container.New(layout.NewCustomPaddedLayout(4, 4, 7, 7), content)))
 		objects = append(objects, card)
-		v.connectionCache = append(v.connectionCache, &connectionView{id: id, name: name, status: status, dot: dot, detail: detail, methods: methodViews, methodRow: methodRow, panel: panel, testButton: testButton, reconnect: reconnect, helpButton: helpButton, addButton: addButton, labelEntry: labelEntry, actionRow: actionRow})
+		v.connectionCache = append(v.connectionCache, &connectionView{id: id, name: name, status: status, dot: dot, detail: detail, methods: methodViews, methodRow: methodRow, panel: panel, testButton: testButton, reconnect: reconnect, helpButton: helpButton, addButton: addButton, labelText: labelText, labelEntry: labelEntry, labelRow: labelRow, actionRow: actionRow})
 	}
 	v.connectionsBody.Objects = objects
 	v.connectionsBody.Refresh()
@@ -1275,7 +1330,7 @@ func (v *View) setAccountLabel(id model.ProviderID, value string) {
 
 func (v *View) connectionAccountName(id model.ProviderID) string {
 	if id == model.ProviderClaude || id == model.ProviderClaudeAuth {
-		return claudeAccountDisplayName(v.config, id, v.config.ShowClaudeAuth)
+		return claudeAccountDisplayName(v.config, id, v.config.ShowClaude && v.config.ShowClaudeAuth)
 	}
 	switch id {
 	case model.ProviderCodex:

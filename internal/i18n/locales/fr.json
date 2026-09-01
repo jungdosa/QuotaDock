@@ -81,7 +81,7 @@
   "connection.state_available": "Disponible",
   "connection.state_missing": "Non installé",
   "connection.state_planned": "Bientôt disponible",
-  "connection.account_label": "Libellé du compte",
+  "connection.account_label": "Nom d’affichage",
   "connection.account_label_hint": "Nom court (facultatif)",
   "connection.add_account": "Ajouter un compte Claude",
   "connection.cli_in_use": "La CLI est déjà utilisée par un autre compte Claude",
