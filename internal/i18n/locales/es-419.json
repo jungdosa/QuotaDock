@@ -141,7 +141,7 @@
   "help.title": "Guía de visualización de uso",
   "help.intro": "Cada servicio se conecta de forma independiente: si uno falla, el uso de los demás se sigue mostrando.",
   "help.claude_title": "Claude",
-  "help.claude": "Elige Iniciar sesión en Conexión Claude para abrir una ventana autorizada para iniciar sesión en Claude. Después, el uso se lee mediante la sesión web: nunca escribes tu contraseña ni tu token directamente en la aplicación.  Si eliges Otro, se lee un token de la variable de entorno CLAUDE_CODE_OAUTH_TOKEN: ejecuta claude setup-token, guarda el resultado en esa variable y reinicia QuotaDock.",
+  "help.claude": "Elige Iniciar sesión en Conexión Claude para abrir una ventana autorizada para iniciar sesión en Claude. Después, el uso se lee mediante la sesión web: nunca escribes tu contraseña ni tu token directamente en la aplicación. Si eliges Otro, se lee un token de la variable de entorno CLAUDE_CODE_OAUTH_TOKEN: ejecuta claude setup-token, guarda el resultado en esa variable y reinicia QuotaDock.",
   "help.claude_retry": "Si la sesión caduca y aparece «Inicio de sesión necesario», vuelve a iniciar sesión en Claude.",
   "help.codex_title": "Codex",
   "help.codex": "La Codex CLI oficial debe estar instalada y debes haber iniciado sesión en ella. La aplicación detecta automáticamente la CLI instalada y su app-server local, y nunca pide tu token de autenticación.",

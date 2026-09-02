@@ -141,7 +141,7 @@
   "help.title": "使用量表示ガイド",
   "help.intro": "各サービスは独立して接続されます。1 つが失敗しても、他の使用量は引き続き表示されます。",
   "help.claude_title": "Claude",
-  "help.claude": "Claude のログインを選ぶと、許可された Claude ログインウィンドウが開きます。ログイン後は Web セッション経由で使用量を取得するため、パスワードやトークンをアプリに直接入力する必要はありません。  「その他」を選ぶと、代わりに環境変数 CLAUDE_CODE_OAUTH_TOKEN のトークンを読み取ります。claude setup-token を実行して得た値をその変数に設定し、QuotaDock を再起動してください。",
+  "help.claude": "Claude のログインを選ぶと、許可された Claude ログインウィンドウが開きます。ログイン後は Web セッション経由で使用量を取得するため、パスワードやトークンをアプリに直接入力する必要はありません。「その他」を選ぶと、代わりに環境変数 CLAUDE_CODE_OAUTH_TOKEN のトークンを読み取ります。claude setup-token を実行して得た値をその変数に設定し、QuotaDock を再起動してください。",
   "help.claude_retry": "セッションの期限切れで「ログインが必要」と表示されたら、Claude に再ログインしてください。",
   "help.codex_title": "Codex",
   "help.codex": "公式 Codex CLI がインストールされ、ログイン済みである必要があります。アプリはインストール済みの CLI とローカル app-server を自動検出し、認証トークンを要求しません。",

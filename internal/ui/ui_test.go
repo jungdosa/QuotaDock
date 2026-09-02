@@ -1044,7 +1044,7 @@ func TestSettingsHeaderHelpAndProviderColorsMovedToMeters(t *testing.T) {
 	for _, text := range []string{
 		"Usage display guide",
 		"Each service connects independently. If one service fails, usage for the others continues to be displayed.",
-		"Selecting Claude sign-in opens an authorized Claude login window. After sign-in, usage is queried through the web session, so you never need to enter a password or token directly in the app.",
+		"Selecting Claude sign-in opens an authorized Claude login window. After sign-in, usage is queried through the web session, so you never need to enter a password or token directly in the app. Choosing Other reads a token from the CLAUDE_CODE_OAUTH_TOKEN environment variable instead: run claude setup-token, store the result in that variable, then restart QuotaDock.",
 		"If the session expires and 'Sign in required' appears, sign in to Claude again.",
 		"The official Codex CLI must be installed and signed in. The app automatically detects the installed CLI and local app-server and never asks for an authentication token.",
 		"Check codex --version in a terminal. If it is not detected, complete Codex CLI sign-in and reconnect.",

@@ -141,7 +141,7 @@
   "help.title": "Usage display guide",
   "help.intro": "Each service connects independently. If one service fails, usage for the others continues to be displayed.",
   "help.claude_title": "Claude",
-  "help.claude": "Selecting Claude sign-in opens an authorized Claude login window. After sign-in, usage is queried through the web session, so you never need to enter a password or token directly in the app.  Choosing Other reads a token from the CLAUDE_CODE_OAUTH_TOKEN environment variable instead: run claude setup-token, store the result in that variable, then restart QuotaDock.",
+  "help.claude": "Selecting Claude sign-in opens an authorized Claude login window. After sign-in, usage is queried through the web session, so you never need to enter a password or token directly in the app. Choosing Other reads a token from the CLAUDE_CODE_OAUTH_TOKEN environment variable instead: run claude setup-token, store the result in that variable, then restart QuotaDock.",
   "help.claude_retry": "If the session expires and 'Sign in required' appears, sign in to Claude again.",
   "help.codex_title": "Codex",
   "help.codex": "The official Codex CLI must be installed and signed in. The app automatically detects the installed CLI and local app-server and never asks for an authentication token.",

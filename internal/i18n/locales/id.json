@@ -141,7 +141,7 @@
   "help.title": "Panduan tampilan pemakaian",
   "help.intro": "Setiap layanan terhubung secara independen; jika satu gagal, pemakaian lainnya tetap tampil.",
   "help.claude_title": "Claude",
-  "help.claude": "Pilih Masuk di bagian Koneksi Claude untuk membuka jendela masuk Claude yang diizinkan. Setelah masuk, pemakaian dibaca lewat sesi web — Anda tidak pernah memasukkan kata sandi atau token langsung di aplikasi.  Memilih Lainnya akan membaca token dari variabel lingkungan CLAUDE_CODE_OAUTH_TOKEN: jalankan claude setup-token, simpan hasilnya di variabel itu, lalu mulai ulang QuotaDock.",
+  "help.claude": "Pilih Masuk di bagian Koneksi Claude untuk membuka jendela masuk Claude yang diizinkan. Setelah masuk, pemakaian dibaca lewat sesi web — Anda tidak pernah memasukkan kata sandi atau token langsung di aplikasi. Memilih Lainnya akan membaca token dari variabel lingkungan CLAUDE_CODE_OAUTH_TOKEN: jalankan claude setup-token, simpan hasilnya di variabel itu, lalu mulai ulang QuotaDock.",
   "help.claude_retry": "Jika sesi berakhir dan muncul \"Perlu masuk\", masuk lagi ke Claude.",
   "help.codex_title": "Codex",
   "help.codex": "Codex CLI resmi harus terpasang dan sudah masuk. Aplikasi otomatis mendeteksi CLI terpasang beserta app-server lokalnya dan tidak pernah meminta token autentikasi Anda.",

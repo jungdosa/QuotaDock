@@ -141,7 +141,7 @@
   "help.title": "Guida alla visualizzazione",
   "help.intro": "Ogni servizio si connette in modo indipendente: se uno fallisce, gli altri continuano a essere mostrati.",
   "help.claude_title": "Claude",
-  "help.claude": "Scegli Accedi in Connessione Claude per aprire una finestra autorizzata per accedere a Claude. Dopo l'accesso, l'utilizzo viene letto tramite la sessione web: non inserisci mai password o token direttamente nell'app.  Scegliendo Altro viene letto invece un token dalla variabile d'ambiente CLAUDE_CODE_OAUTH_TOKEN: esegui claude setup-token, salva il risultato in quella variabile e riavvia QuotaDock.",
+  "help.claude": "Scegli Accedi in Connessione Claude per aprire una finestra autorizzata per accedere a Claude. Dopo l'accesso, l'utilizzo viene letto tramite la sessione web: non inserisci mai password o token direttamente nell'app. Scegliendo Altro viene letto invece un token dalla variabile d'ambiente CLAUDE_CODE_OAUTH_TOKEN: esegui claude setup-token, salva il risultato in quella variabile e riavvia QuotaDock.",
   "help.claude_retry": "Se la sessione scade e compare \"Accesso richiesto\", accedi di nuovo a Claude.",
   "help.codex_title": "Codex",
   "help.codex": "La Codex CLI ufficiale deve essere installata e devi aver effettuato l'accesso. L'app rileva automaticamente la CLI installata e il relativo app-server locale e non chiede mai il tuo token di autenticazione.",
