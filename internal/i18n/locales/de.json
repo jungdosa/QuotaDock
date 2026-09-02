@@ -141,7 +141,7 @@
   "help.title": "Hilfe zur Nutzungsanzeige",
   "help.intro": "Jeder Dienst verbindet sich unabhängig – fällt einer aus, werden die übrigen Nutzungsdaten weiter angezeigt.",
   "help.claude_title": "Claude",
-  "help.claude": "Wählen Sie unter Claude-Verbindung „Anmelden“, um ein freigegebenes Claude-Anmeldefenster zu öffnen. Danach wird die Nutzung über die Web-Sitzung gelesen – Passwort oder Token geben Sie nie direkt in der App ein.",
+  "help.claude": "Wählen Sie unter Claude-Verbindung „Anmelden“, um ein freigegebenes Claude-Anmeldefenster zu öffnen. Danach wird die Nutzung über die Web-Sitzung gelesen – Passwort oder Token geben Sie nie direkt in der App ein.  Wählen Sie „Sonstige“, wird stattdessen ein Token aus der Umgebungsvariable CLAUDE_CODE_OAUTH_TOKEN gelesen: Führen Sie claude setup-token aus, speichern Sie das Ergebnis in dieser Variable und starten Sie QuotaDock neu.",
   "help.claude_retry": "Wenn die Sitzung abläuft und „Anmeldung nötig“ erscheint, melden Sie sich erneut bei Claude an.",
   "help.codex_title": "Codex",
   "help.codex": "Das offizielle Codex CLI muss installiert und angemeldet sein. Die App erkennt das installierte CLI und dessen lokalen app-server automatisch und fragt nie nach Ihrem Authentifizierungstoken.",

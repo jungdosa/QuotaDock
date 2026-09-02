@@ -141,7 +141,7 @@
   "help.title": "用量显示指南",
   "help.intro": "各服务相互独立连接。即使其中一个失败，其余用量仍会继续显示。",
   "help.claude_title": "Claude",
-  "help.claude": "选择 Claude 登录后会打开允许的 Claude 登录窗口。登录完成后通过网页会话查询用量，无需在应用中直接输入密码或令牌。",
+  "help.claude": "选择 Claude 登录后会打开允许的 Claude 登录窗口。登录完成后通过网页会话查询用量，无需在应用中直接输入密码或令牌。  选择“其他”时改为读取环境变量 CLAUDE_CODE_OAUTH_TOKEN 中的令牌：运行 claude setup-token，把得到的值存入该变量，然后重新启动 QuotaDock。",
   "help.claude_retry": "若会话过期并显示“需要登录”，请重新登录 Claude。",
   "help.codex_title": "Codex",
   "help.codex": "需要安装官方 Codex CLI 并完成登录。应用会自动检测已安装的 CLI 及其本地 app-server，不会索取认证令牌。",

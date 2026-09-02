@@ -141,7 +141,7 @@
   "help.title": "Guide d'affichage de l'utilisation",
   "help.intro": "Chaque service se connecte indépendamment : si l'un échoue, les autres continuent de s'afficher.",
   "help.claude_title": "Claude",
-  "help.claude": "Choisissez « Se connecter » sous Connexion Claude pour ouvrir une fenêtre de connexion Claude autorisée. Ensuite, l'utilisation est lue via la session web : vous ne saisissez jamais de mot de passe ni de jeton dans l'application.",
+  "help.claude": "Choisissez « Se connecter » sous Connexion Claude pour ouvrir une fenêtre de connexion Claude autorisée. Ensuite, l'utilisation est lue via la session web : vous ne saisissez jamais de mot de passe ni de jeton dans l'application.  Avec « Autre », un jeton est lu dans la variable d'environnement CLAUDE_CODE_OAUTH_TOKEN : exécutez claude setup-token, placez le résultat dans cette variable, puis redémarrez QuotaDock.",
   "help.claude_retry": "Si la session expire et que « Connexion requise » s'affiche, reconnectez-vous à Claude.",
   "help.codex_title": "Codex",
   "help.codex": "La Codex CLI officielle doit être installée et vous devez y être connecté. L'application détecte automatiquement la CLI installée et son app-server local, sans jamais demander votre jeton d'authentification.",

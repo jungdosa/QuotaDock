@@ -141,7 +141,7 @@
   "help.title": "用量顯示說明",
   "help.intro": "各服務會獨立連線。即使其中一個失敗，其餘用量仍會繼續顯示。",
   "help.claude_title": "Claude",
-  "help.claude": "選擇 Claude 登入後會開啟允許的 Claude 登入視窗。登入完成後透過網頁工作階段查詢用量，不必在軟體中直接輸入密碼或權杖。",
+  "help.claude": "選擇 Claude 登入後會開啟允許的 Claude 登入視窗。登入完成後透過網頁工作階段查詢用量，不必在軟體中直接輸入密碼或權杖。  選擇「其他」時改為讀取環境變數 CLAUDE_CODE_OAUTH_TOKEN 中的權杖：執行 claude setup-token，把得到的值存入該變數，然後重新啟動 QuotaDock。",
   "help.claude_retry": "若工作階段逾期並顯示「需要登入」，請重新登入 Claude。",
   "help.codex_title": "Codex",
   "help.codex": "必須安裝官方 Codex CLI 並完成登入。軟體會自動偵測已安裝的 CLI 與本機 app-server，不會要求認證權杖。",

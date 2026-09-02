@@ -126,6 +126,29 @@ If a row reports a missing CLI, open **Settings → Connections** and click that
 `CLI` button. Install guidance expands inside the card — the command to run, how to sign in,
 and where QuotaDock looks. Press `Rescan` when you are done; no restart needed.
 
+### Connecting Claude three ways
+
+The Claude card offers three connection methods. Pick one per account:
+
+| Method | What it reads | When to use it |
+|---|---|---|
+| `CLI` | The credential Claude Code already keeps on this PC | You use Claude Code here. One account only — the CLI holds one login. |
+| `Auth` | A Claude login made inside QuotaDock's own browser window | A second account, or a PC without Claude Code. |
+| `Other` | The `CLAUDE_CODE_OAUTH_TOKEN` environment variable | A long-lived token you manage yourself, for example on a machine you sign in to over SSH. |
+
+`Other` has no box to paste into — by design, QuotaDock never asks you to type a token.
+To use it:
+
+1. In a terminal, run `claude setup-token` and follow the prompt. It prints a long-lived token
+   (a Claude subscription is required).
+2. Set it as a **user environment variable** named `CLAUDE_CODE_OAUTH_TOKEN`
+   (Windows: *Settings → System → About → Advanced system settings → Environment Variables*).
+3. Restart QuotaDock — environment variables are read when a program starts — then click
+   `Other` on the Claude card. The card reports the variable as configured.
+
+The variable is read by any program you run, so treat it like a password: don't put it in
+scripts you share, and revoke it from your Anthropic account if it leaks.
+
 Day to day:
 
 - The toolbar button cycles `normal → compact → nano`; one click returns nano to compact.
