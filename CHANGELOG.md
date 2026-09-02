@@ -7,6 +7,40 @@ plus checksums for its binaries.
 Versions follow [Semantic Versioning](https://semver.org/). The project reaches 1.0.0 once
 Windows feature verification is finished.
 
+## [Unreleased]
+
+### Added
+
+- Up to five Claude accounts side by side. The last Claude card in Settings → Connections
+  carries `+` to add an account and `−` to remove the last one; each account has its own
+  display name and colour, and a third account onward gets its own browser profile.
+- A display name per Claude account, shown in every mode and above each group in compact.
+- Drag a provider group up or down in the normal or compact window to reorder it; the order
+  is shared by every mode, the tray tooltip and the connection cards.
+- Nano can stand upright: a title-bar toggle stacks the cards down the window with the
+  actions in a strip on the right, for parking the widget against the side of a screen.
+- The provider name in the normal window now leads with its brand mark.
+
+### Changed
+
+- The normal window is tighter: rows sit closer, and the reset column is measured from the
+  widest reset time the format can produce instead of a fixed width, which gives the meters
+  the room back.
+- A lane rides out a failed refresh on its last good reading for up to three refreshes
+  before showing the failure, so a single missed minute no longer blanks it; failures that
+  need the user, such as an expired sign-in, show at once.
+- The second Claude account defaults to slate.
+- The first-run section of every README explains the three Claude connection methods,
+  including how to use the `CLAUDE_CODE_OAUTH_TOKEN` variable.
+
+### Fixed
+
+- The browser-backed Claude account timed out on roughly one refresh in three. Its two
+  requests opened two browsers on one profile, and the second attached to the host the first
+  was still shutting down; both now ride one browser.
+- The window shrinks at once when nano changes shape, instead of keeping the old frame for a
+  moment; a widget saved in nano no longer opens at the normal size first.
+
 ## [0.7.38] — 2026-08-29
 
 ### Fixed
