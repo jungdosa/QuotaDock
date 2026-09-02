@@ -1131,7 +1131,9 @@ func (v *View) buildConnectionRows() {
 	descriptors := make([]model.ProviderID, 0, len(order))
 	for _, entry := range order {
 		id := model.ProviderID(entry)
-		if id == model.ProviderClaudeAuth && !v.config.ShowClaudeAuth {
+		// Claude accounts past the configured count have no card yet; the
+		// index is zero for every other provider, so they are never skipped.
+		if model.ClaudeAccountIndex(id) > v.config.ClaudeAccounts {
 			continue
 		}
 		descriptors = append(descriptors, id)

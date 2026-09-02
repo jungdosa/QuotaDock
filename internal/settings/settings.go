@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	CurrentSchemaVersion       = 6
+	CurrentSchemaVersion       = 7
 	MaxFileSize          int64 = 256 << 10
 )
 
@@ -97,9 +97,14 @@ type Config struct {
 	LaneOrder      []string `json:"laneOrder,omitempty"`
 	ShowClaude     bool     `json:"showClaude"`
 	ShowClaudeAuth bool     `json:"showClaudeAuth"`
-	ShowCodex      bool     `json:"showCodex"`
-	ShowAGGemini   bool     `json:"showAGGemini"`
-	ShowAGClaude   bool     `json:"showAGClaude"`
+	// ClaudeAccounts is how many Claude accounts are shown, one to five. A file
+	// from before this key has zero here and is read from ShowClaudeAuth, and
+	// ShowClaudeAuth is written back as "at least two" so a build that only
+	// knows two accounts still sees the second one.
+	ClaudeAccounts int  `json:"claudeAccounts,omitempty"`
+	ShowCodex      bool `json:"showCodex"`
+	ShowAGGemini   bool `json:"showAGGemini"`
+	ShowAGClaude   bool `json:"showAGClaude"`
 	// ShowGrok defaults to off: the lane would only report "sign in" noise
 	// for users without the Grok CLI, and existing screens stay unchanged.
 	ShowGrok bool `json:"showGrok"`
@@ -141,13 +146,13 @@ type Config struct {
 // (An earlier draft banned warm provider hues; that reservation was withdrawn
 // when defaults were matched to the logos.)
 func Default() Config {
-	return Config{SchemaVersion: CurrentSchemaVersion, Language: LanguageSystem, DateTimeFormat: Format12HourDate, Theme: ThemeLight, UsageMode: UsageUsed, RefreshSeconds: 300, WarningsEnabled: true, WarningPercent: 80, DangerPercent: 90, WarningColor: "amber", DangerColor: "red", ProviderColors: map[string]string{"claude": "orange", "claude-auth": "slate", "codex": "gray", "antigravity": "slate", "antigravity-gemini": "violet", "grok": "sky"}, LaneOrder: DefaultLaneOrder(), ShowClaude: true, ShowClaudeAuth: false, ShowCodex: true, ShowAGGemini: true, ShowAGClaude: true, ShowGrok: false, ShowClaudeCredits: true, ShowCodexCredits: true, ShowInTaskbar: true, PromoteTrayIcon: true, DisplayMode: ModeNormal}
+	return Config{SchemaVersion: CurrentSchemaVersion, Language: LanguageSystem, DateTimeFormat: Format12HourDate, Theme: ThemeLight, UsageMode: UsageUsed, RefreshSeconds: 300, WarningsEnabled: true, WarningPercent: 80, DangerPercent: 90, WarningColor: "amber", DangerColor: "red", ProviderColors: map[string]string{"claude": "orange", "claude-auth": "slate", "claude-3": "teal", "claude-4": "indigo", "claude-5": "purple", "codex": "gray", "antigravity": "slate", "antigravity-gemini": "violet", "grok": "sky"}, LaneOrder: DefaultLaneOrder(), ShowClaude: true, ShowClaudeAuth: false, ClaudeAccounts: 1, ShowCodex: true, ShowAGGemini: true, ShowAGClaude: true, ShowGrok: false, ShowClaudeCredits: true, ShowCodexCredits: true, ShowInTaskbar: true, PromoteTrayIcon: true, DisplayMode: ModeNormal}
 }
 
 const MaxAccountLabelRunes = 20
 
 var accountLabelProviderIDs = map[string]struct{}{
-	"claude": {}, "claude-auth": {},
+	"claude": {}, "claude-auth": {}, "claude-3": {}, "claude-4": {}, "claude-5": {},
 }
 
 // NormalizeAccountLabel keeps user aliases short and single-line. It never
@@ -205,7 +210,7 @@ var connectionMethodIDs = map[string]struct{}{
 }
 
 var connectionProviderIDs = map[string]struct{}{
-	"claude": {}, "claude-auth": {}, "codex": {}, "antigravity": {}, "grok": {},
+	"claude": {}, "claude-auth": {}, "claude-3": {}, "claude-4": {}, "claude-5": {}, "codex": {}, "antigravity": {}, "grok": {},
 }
 
 // IsConnectionMethodID reports whether a stored method identifier is one this
@@ -215,12 +220,24 @@ func IsConnectionMethodID(value string) bool {
 	return ok
 }
 
+// MaxClaudeAccounts is the most Claude accounts one window shows. The count
+// is the only thing that changes between three and five; every account past
+// the second is another entry in the same lists.
+const MaxClaudeAccounts = 5
+
+// ClaudeAccountIDs lists the provider ids of the Claude accounts in order.
+// The first two keep the names they always had, because every file written
+// so far keys the second account's label, colour and sign-in route on them.
+func ClaudeAccountIDs() []string {
+	return []string{"claude", "claude-auth", "claude-3", "claude-4", "claude-5"}
+}
+
 // DefaultLaneOrder is the order QuotaDock has always drawn its providers in,
 // and the fallback that completes any partial list. Antigravity appears once:
 // its Gemini and Claude readings are one provider group that moves together,
 // even though the nano screen draws them as two cells.
 func DefaultLaneOrder() []string {
-	return []string{"claude", "claude-auth", "codex", "antigravity", "grok"}
+	return []string{"claude", "claude-auth", "claude-3", "claude-4", "claude-5", "codex", "antigravity", "grok"}
 }
 
 var laneOrderIDs = func() map[string]struct{} {
@@ -249,11 +266,42 @@ func NormalizeLaneOrder(order []string) []string {
 		out = append(out, id)
 	}
 	for _, id := range DefaultLaneOrder() {
-		if _, placed := seen[id]; !placed {
-			out = append(out, id)
+		if _, placed := seen[id]; placed {
+			continue
 		}
+		// A Claude account the file does not name yet goes in beside the
+		// Claude accounts it does name, not at the end of the list. A user who
+		// arranged two accounts and then added a third would otherwise find it
+		// below Grok, away from the group it belongs to.
+		if isClaudeAccountID(id) {
+			if at := lastClaudeAccount(out); at >= 0 {
+				out = append(out[:at+1], append([]string{id}, out[at+1:]...)...)
+				continue
+			}
+		}
+		out = append(out, id)
 	}
 	return out
+}
+
+func isClaudeAccountID(id string) bool {
+	for _, account := range ClaudeAccountIDs() {
+		if id == account {
+			return true
+		}
+	}
+	return false
+}
+
+// lastClaudeAccount is the index of the last Claude account in order, or -1.
+func lastClaudeAccount(order []string) int {
+	at := -1
+	for index, id := range order {
+		if isClaudeAccountID(id) {
+			at = index
+		}
+	}
+	return at
 }
 
 func (c Config) Validated() Config {
@@ -325,6 +373,27 @@ func (c Config) Validated() Config {
 	} else {
 		c.AccountLabels = nil
 	}
+	// The count says how many Claude accounts show, and the older two-account
+	// flag can move it between one and two — no further, since three or more
+	// can only have been set through the count. That reads a file from
+	// before the count correctly, and it keeps the one path that still sets the
+	// flag on its own — the button that adds a second account — from being
+	// undone by validation. The flag is then rewritten from the count so a
+	// build that only knows two accounts still sees the second one.
+	if c.ClaudeAccounts < 1 {
+		c.ClaudeAccounts = 1
+	}
+	switch {
+	case c.ShowClaudeAuth && c.ClaudeAccounts < 2:
+		c.ClaudeAccounts = 2
+	case !c.ShowClaudeAuth && c.ClaudeAccounts == 2:
+		// The flag turned off with exactly two accounts is the second account
+		// being switched off through the older control; three or more can
+		// only have come from the count, which then stands.
+		c.ClaudeAccounts = 1
+	}
+	c.ClaudeAccounts = min(MaxClaudeAccounts, c.ClaudeAccounts)
+	c.ShowClaudeAuth = c.ClaudeAccounts >= 2
 	c.LaneOrder = NormalizeLaneOrder(c.LaneOrder)
 	// Drop entries this build cannot honor instead of rejecting the file: a
 	// method removed in a later version, or a provider that no longer exists,

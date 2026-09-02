@@ -28,10 +28,42 @@ type ProviderID string
 const (
 	ProviderClaude      ProviderID = "claude"
 	ProviderClaudeAuth  ProviderID = "claude-auth"
+	ProviderClaude3     ProviderID = "claude-3"
+	ProviderClaude4     ProviderID = "claude-4"
+	ProviderClaude5     ProviderID = "claude-5"
 	ProviderCodex       ProviderID = "codex"
 	ProviderAntigravity ProviderID = "antigravity"
 	ProviderGrok        ProviderID = "grok"
 )
+
+// ClaudeAccountIDs lists the Claude accounts in display order. The first two
+// keep the names they have always had, because every settings file written
+// so far keys the second account's label, colour and sign-in route on them;
+// the rest are numbered.
+func ClaudeAccountIDs() []ProviderID {
+	return []ProviderID{ProviderClaude, ProviderClaudeAuth, ProviderClaude3, ProviderClaude4, ProviderClaude5}
+}
+
+// IsClaudeAccount reports whether id names any of the Claude accounts.
+func IsClaudeAccount(id ProviderID) bool {
+	for _, account := range ClaudeAccountIDs() {
+		if id == account {
+			return true
+		}
+	}
+	return false
+}
+
+// ClaudeAccountIndex is the account's position, starting at one, or zero for
+// anything that is not a Claude account.
+func ClaudeAccountIndex(id ProviderID) int {
+	for index, account := range ClaudeAccountIDs() {
+		if id == account {
+			return index + 1
+		}
+	}
+	return 0
+}
 
 type ConnectionStatus string
 
@@ -205,6 +237,11 @@ var planAllowlists = map[ProviderID]map[string]Plan{
 
 func NormalizePlan(provider ProviderID, raw string) Plan {
 	key := strings.ToUpper(strings.Join(strings.Fields(strings.NewReplacer("_", " ", "-", " ").Replace(raw)), " "))
+	// Every Claude account reads the same plans; the table is keyed on the
+	// first account and the rest are folded onto it.
+	if IsClaudeAccount(provider) {
+		provider = ProviderClaude
+	}
 	if plan, ok := planAllowlists[provider][key]; ok {
 		return plan
 	}

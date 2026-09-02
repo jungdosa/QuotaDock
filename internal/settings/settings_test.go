@@ -328,7 +328,7 @@ func TestConfigWithoutLaneOrderKeepsTheShippedOrder(t *testing.T) {
 // never rearrange it.
 func TestLaneOrderKeepsTheUserArrangement(t *testing.T) {
 	config := Config{LaneOrder: []string{"codex", "grok", "claude"}}.Validated()
-	want := []string{"codex", "grok", "claude", "claude-auth", "antigravity"}
+	want := []string{"codex", "grok", "claude", "claude-auth", "claude-3", "claude-4", "claude-5", "antigravity"}
 	if !slices.Equal(config.LaneOrder, want) {
 		t.Fatalf("lane order = %v, want %v", config.LaneOrder, want)
 	}
@@ -339,7 +339,7 @@ func TestLaneOrderKeepsTheUserArrangement(t *testing.T) {
 // than hide a provider or draw one twice.
 func TestLaneOrderDropsUnknownAndRepeatedNames(t *testing.T) {
 	config := Config{LaneOrder: []string{"grok", "gemini-cli", "grok", "", "codex"}}.Validated()
-	want := []string{"grok", "codex", "claude", "claude-auth", "antigravity"}
+	want := []string{"grok", "codex", "claude", "claude-auth", "claude-3", "claude-4", "claude-5", "antigravity"}
 	if !slices.Equal(config.LaneOrder, want) {
 		t.Fatalf("lane order = %v, want %v", config.LaneOrder, want)
 	}
