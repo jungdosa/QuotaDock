@@ -223,7 +223,16 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	var restoreWidgetPosition platform.Rect
 	var restoreWidgetPositionOnResize bool
 	resizeWindow := func(size fyne.Size) {
+		// A fixed-size window has its OS size limits pinned to its current
+		// size, and Fyne's Resize asks GLFW for the new size without lifting
+		// them first — so a request to shrink is clamped to the old frame until
+		// the next layout pass re-pins the limits. For that interval the window
+		// kept its old outline with nothing drawn inside it. Unpinning around
+		// the resize lets the new size take at once; the calls queue on the
+		// main thread in order, so the window is never resizable in between.
+		w.SetFixedSize(false)
 		w.Resize(size)
+		w.SetFixedSize(true)
 		shell.refreshCorners()
 		positionToRestore := restoreWidgetPosition
 		shouldRestorePosition := restoreWidgetPositionOnResize
