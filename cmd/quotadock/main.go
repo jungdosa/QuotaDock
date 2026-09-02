@@ -257,6 +257,17 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 			fyne.Do(func() {
 				w.Resize(size)
 				applyPosition()
+				// What the window actually settled at, against what was asked
+				// for and what the content needs. A gap between the three is the
+				// OS frame disagreeing with the layout, which no unit test can
+				// see: the test driver has no frame.
+				canvas := w.Canvas().Size()
+				minimum := w.Content().MinSize()
+				slog.Info("window.resize",
+					"requested_w", size.Width, "requested_h", size.Height,
+					"canvas_w", canvas.Width, "canvas_h", canvas.Height,
+					"min_w", minimum.Width, "min_h", minimum.Height,
+				)
 			})
 		})
 	}

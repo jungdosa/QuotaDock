@@ -135,10 +135,13 @@ type Config struct {
 
 // Default provider hues follow the official brand-logo icons so the icon and
 // its resting meter read as one colour: Claude orange, Codex gray, AG Gemini
-// violet, AG Claude slate. (An earlier draft banned warm provider hues;
-// that reservation was withdrawn when defaults were matched to the logos.)
+// violet, AG Claude slate. A second Claude account also defaults to slate:
+// it shares the Claude mark, and the first pick on a real second account was
+// the muted tone that keeps it from competing with the primary lane's orange.
+// (An earlier draft banned warm provider hues; that reservation was withdrawn
+// when defaults were matched to the logos.)
 func Default() Config {
-	return Config{SchemaVersion: CurrentSchemaVersion, Language: LanguageSystem, DateTimeFormat: Format12HourDate, Theme: ThemeLight, UsageMode: UsageUsed, RefreshSeconds: 300, WarningsEnabled: true, WarningPercent: 80, DangerPercent: 90, WarningColor: "amber", DangerColor: "red", ProviderColors: map[string]string{"claude": "orange", "claude-auth": "white", "codex": "gray", "antigravity": "slate", "antigravity-gemini": "violet", "grok": "sky"}, LaneOrder: DefaultLaneOrder(), ShowClaude: true, ShowClaudeAuth: false, ShowCodex: true, ShowAGGemini: true, ShowAGClaude: true, ShowGrok: false, ShowClaudeCredits: true, ShowCodexCredits: true, ShowInTaskbar: true, PromoteTrayIcon: true, DisplayMode: ModeNormal}
+	return Config{SchemaVersion: CurrentSchemaVersion, Language: LanguageSystem, DateTimeFormat: Format12HourDate, Theme: ThemeLight, UsageMode: UsageUsed, RefreshSeconds: 300, WarningsEnabled: true, WarningPercent: 80, DangerPercent: 90, WarningColor: "amber", DangerColor: "red", ProviderColors: map[string]string{"claude": "orange", "claude-auth": "slate", "codex": "gray", "antigravity": "slate", "antigravity-gemini": "violet", "grok": "sky"}, LaneOrder: DefaultLaneOrder(), ShowClaude: true, ShowClaudeAuth: false, ShowCodex: true, ShowAGGemini: true, ShowAGClaude: true, ShowGrok: false, ShowClaudeCredits: true, ShowCodexCredits: true, ShowInTaskbar: true, PromoteTrayIcon: true, DisplayMode: ModeNormal}
 }
 
 const MaxAccountLabelRunes = 20

@@ -49,6 +49,7 @@ var appEvents = []string{
 	"webauth.fetch",
 	"display.change",
 	"window.fit",
+	"window.resize",
 	"window.yield",
 	"render.paint",
 	"render.blank",

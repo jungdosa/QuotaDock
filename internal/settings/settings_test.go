@@ -115,7 +115,7 @@ func TestClaudeAuthLaneIsOptInAndPersists(t *testing.T) {
 	if Default().ShowClaudeAuth {
 		t.Fatal("the second Claude account must remain opt-in for existing users")
 	}
-	if got := Default().ProviderColors["claude-auth"]; got != "white" {
+	if got := Default().ProviderColors["claude-auth"]; got != "slate" {
 		t.Fatalf("Claude Auth default color = %q, want white", got)
 	}
 	config, err := Decode(strings.NewReader(`{"schemaVersion":5,"showClaudeAuth":true}`))
@@ -154,7 +154,7 @@ func TestVersionFourConfigKeepsAccountCustomizationOptIn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if config.ShowClaudeAuth || len(config.AccountLabels) != 0 || config.ProviderColors["claude-auth"] != "white" {
+	if config.ShowClaudeAuth || len(config.AccountLabels) != 0 || config.ProviderColors["claude-auth"] != "slate" {
 		t.Fatalf("v4 migration changed account visibility or missed defaults: %+v", config)
 	}
 }
