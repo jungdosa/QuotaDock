@@ -141,21 +141,3 @@ func TestTheToggleShowsTheLayoutItMovesTo(t *testing.T) {
 		t.Fatal("both layouts describe the toggle the same way")
 	}
 }
-
-// A name that cannot be rotated is stacked, so the strip has to end up no wider
-// than the letters it holds. A single wide object here would push the whole
-// window out.
-func TestTheStackedNameFitsTheStrip(t *testing.T) {
-	view := nanoView(t, true)
-	name := view.verticalTitleName().(*fyne.Container)
-	if len(name.Objects) < 2 {
-		t.Fatalf("the name stacked into %d objects, want one per letter", len(name.Objects))
-	}
-	size := name.MinSize()
-	if size.Width > NanoBarWidth {
-		t.Fatalf("the stacked name is %.0f wide against a %.0f strip", size.Width, NanoBarWidth)
-	}
-	if size.Height <= size.Width {
-		t.Fatalf("the stacked name is %v, want it running down rather than across", size)
-	}
-}

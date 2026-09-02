@@ -22,12 +22,6 @@ const (
 	// the same 24 they occupy across the horizontal bar.
 	NanoBarButtonSize float32 = 24
 	NanoBarButtonGap  float32 = 2
-	// NanoBarLetterHeight is the line the stacked app name gives each character.
-	// It is tighter than the character's own measured height: at full leading
-	// the name read as a list of letters rather than one word running down.
-	NanoBarLetterHeight float32 = 11
-	// NanoBarNameGap separates the actions from the name below them.
-	NanoBarNameGap float32 = 10
 	// NanoCardGap separates stacked cards. It is the gap the flat layout leaves
 	// between cards across, turned to run down.
 	NanoCardGap float32 = 6
@@ -88,28 +82,6 @@ func nanoCardWidth(cells int) float32 {
 	return (body - float32(cells-1)*theme.Padding()) / float32(cells)
 }
 
-// VerticalTextLayout stacks single characters down a column, each centred in
-// the width it is given. Fyne cannot rotate a canvas.Text, so a name that has
-// to run down a strip the width of a button is stacked instead of turned.
-type VerticalTextLayout struct{ LineHeight float32 }
-
-func (l *VerticalTextLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
-	y := float32(0)
-	for _, object := range objects {
-		object.Resize(fyne.NewSize(size.Width, l.LineHeight))
-		object.Move(fyne.NewPos(0, y))
-		y += l.LineHeight
-	}
-}
-
-func (l *VerticalTextLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
-	width := float32(0)
-	for _, object := range objects {
-		width = max(width, object.MinSize().Width)
-	}
-	return fyne.NewSize(width, l.LineHeight*float32(len(objects)))
-}
-
 // NanoBarButtonsLayout runs the title actions down the strip, each one a square
 // centred in the strip's width.
 type NanoBarButtonsLayout struct {
@@ -163,39 +135,20 @@ func (v *View) toggleNanoOrientation() {
 	v.SetConfig(config)
 }
 
-// verticalTitleName stacks the application name down the strip. The version is
-// dropped here rather than stacked after it: seven more characters would push
-// the strip past the height of the readout it labels, and the version is on
-// every other screen already.
-func (v *View) verticalTitleName() fyne.CanvasObject {
-	name := v.text(i18n.KeyAppTitle)
-	letters := make([]fyne.CanvasObject, 0, len(name))
-	for _, letter := range name {
-		if letter == ' ' {
-			continue
-		}
-		text := textLabel(string(letter), TitleVersionTextSize, v.colors.Secondary, false, false)
-		text.Alignment = fyne.TextAlignCenter
-		letters = append(letters, text)
-	}
-	return container.New(&VerticalTextLayout{LineHeight: NanoBarLetterHeight}, letters...)
-}
-
 // windowTitleVertical is the title bar stood on its end for vertical nano: the
-// same actions in the same order running down the right edge, with the app name
-// beneath them. The strip is a drag handle over its whole length, the way the
-// horizontal bar is.
+// same actions in the same order running down the right edge. The strip is a
+// drag handle over its whole length, the way the horizontal bar is.
 func (v *View) windowTitleVertical() *fyne.Container {
 	buttons := v.titleButtons(settings.ModeNano)
 	objects := make([]fyne.CanvasObject, 0, len(buttons))
 	for _, button := range buttons {
 		objects = append(objects, v.bindTitleButton(button))
 	}
-	actions := container.New(&NanoBarButtonsLayout{Size: NanoBarButtonSize, Gap: NanoBarButtonGap}, objects...)
-	content := container.NewVBox(
-		actions,
-		container.New(layout.NewCustomPaddedLayout(NanoBarNameGap, 0, 0, 0), v.verticalTitleName()),
-	)
+	// The strip carries the actions and nothing else. An earlier draft stacked
+	// the app name beneath them one letter per line; nine stacked letters made
+	// the strip half again as tall as the readout it labels, and the name is on
+	// every other screen already.
+	content := container.New(&NanoBarButtonsLayout{Size: NanoBarButtonSize, Gap: NanoBarButtonGap}, objects...)
 	// The gradient runs across the strip rather than down it, so the bar keeps
 	// the same light-to-dark direction it has when it lies flat.
 	gradient := canvas.NewLinearGradient(v.colors.TitleTop, v.colors.TitleBottom, 90)

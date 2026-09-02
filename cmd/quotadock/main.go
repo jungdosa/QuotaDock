@@ -237,7 +237,19 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 			shell.fitToScreen()
 		}
 		applyPosition()
-		diagnostics.AfterFunc(100*time.Millisecond, "window_position", func() { fyne.Do(applyPosition) })
+		// The window is fixed-size, so Fyne pins the OS size limits to the
+		// content's minimum — and it moves those limits on its next layout pass,
+		// not at the moment the content changes. A resize that shrinks the window
+		// right after a rebuild is clamped by the limits the old content left
+		// behind: standing nano back up flat kept the upright height, and standing
+		// it up kept most of the flat width. Asking again once the pass has run
+		// lets the smaller size take.
+		diagnostics.AfterFunc(100*time.Millisecond, "window_position", func() {
+			fyne.Do(func() {
+				w.Resize(size)
+				applyPosition()
+			})
+		})
 	}
 	applyScreen := func(screen ui.Screen) {
 		current := view.Screen()
