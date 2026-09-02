@@ -141,3 +141,21 @@ func TestTheToggleShowsTheLayoutItMovesTo(t *testing.T) {
 		t.Fatal("both layouts describe the toggle the same way")
 	}
 }
+
+// The strip has to reach the bottom of the window. Its actions come to less
+// than a handful of stacked cards, and on the real frame the only spare space
+// in the upright window was the band of bare background beneath its last
+// button, where a wrapper had pinned the strip to the height of its actions.
+func TestTheVerticalStripRunsTheFullHeightOfTheWindow(t *testing.T) {
+	view := nanoView(t, true)
+	if view.nanoBar == nil {
+		t.Fatal("upright nano has no title strip")
+	}
+	body := view.nanoBody.Size().Height + 2*3
+	if strip := view.nanoBar.Size().Height; strip < body {
+		t.Fatalf("the strip is %.1f tall against a %.1f readout, leaving %.1f of bare window beneath its actions", strip, body, body-strip)
+	}
+	if width := view.nanoBar.Size().Width; width != NanoBarWidth {
+		t.Fatalf("the strip is %.1f wide, want %.1f", width, NanoBarWidth)
+	}
+}

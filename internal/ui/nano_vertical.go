@@ -82,6 +82,26 @@ func nanoCardWidth(cells int) float32 {
 	return (body - float32(cells-1)*theme.Padding()) / float32(cells)
 }
 
+// NanoBarLayout pins the strip to one width and lets it take whatever height
+// it is given, so its background runs to the bottom of the window even when
+// the cards beside it stack taller than its actions do.
+type NanoBarLayout struct{ Width float32 }
+
+func (l *NanoBarLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	for _, object := range objects {
+		object.Move(fyne.NewPos(0, 0))
+		object.Resize(fyne.NewSize(l.Width, size.Height))
+	}
+}
+
+func (l *NanoBarLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	height := float32(0)
+	for _, object := range objects {
+		height = max(height, object.MinSize().Height)
+	}
+	return fyne.NewSize(l.Width, height)
+}
+
 // NanoBarButtonsLayout runs the title actions down the strip, each one a square
 // centred in the strip's width.
 type NanoBarButtonsLayout struct {

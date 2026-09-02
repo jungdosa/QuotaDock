@@ -870,7 +870,12 @@ func (v *View) buildNano() *fyne.Container {
 		// other, so the readout parks against the side of a screen instead of
 		// along the top of one.
 		v.nanoBar = v.windowTitleVertical()
-		strip := container.NewGridWrap(fyne.NewSize(NanoBarWidth, v.nanoBar.MinSize().Height), v.nanoBar)
+		// The strip is held to its width only. The border layout hands the
+		// right edge the whole window height, and a wrapper that also fixed
+		// the height left a bare band of window background beneath the last
+		// button whenever the cards ran taller than the actions — measured on
+		// the real frame as the only spare space in the upright window.
+		strip := container.New(&NanoBarLayout{Width: NanoBarWidth}, v.nanoBar)
 		return v.roundedScreen(v.colors.Background, container.NewBorder(nil, nil, nil, strip, body))
 	}
 	v.nanoBar = nil
