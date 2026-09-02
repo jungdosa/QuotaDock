@@ -85,6 +85,7 @@
   "connection.account_label": "表示名",
   "connection.account_label_hint": "短い名前（任意）",
   "connection.add_account": "Claude アカウントを追加",
+  "connection.remove_account": "最後の Claude アカウントを削除",
   "connection.cli_in_use": "CLI は別の Claude アカウントで使用中です",
   "connection.sign_in": "サインイン",
   "connection.auth_web_hint": "アプリ内のウィンドウで Anthropic 公式サインインページを開きます。パスワードは Anthropic に直接送信され、QuotaDock は読み取れません。セッションはこのアプリ内にのみ保存されます。",

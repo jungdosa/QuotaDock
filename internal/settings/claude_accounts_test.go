@@ -45,11 +45,12 @@ func TestAccountCountRewritesTheOlderFlag(t *testing.T) {
 	if raised.ClaudeAccounts != 2 || !raised.ShowClaudeAuth {
 		t.Fatalf("a raised flag validated to %d / flag %v", raised.ClaudeAccounts, raised.ShowClaudeAuth)
 	}
-	// And the flag alone can take it back down to one, which is the path the
-	// control that switches the second account off still takes.
-	lowered := Config{ClaudeAccounts: 2, ShowClaudeAuth: false}.Validated()
-	if lowered.ClaudeAccounts != 1 || lowered.ShowClaudeAuth {
-		t.Fatalf("a lowered flag validated to %d / flag %v", lowered.ClaudeAccounts, lowered.ShowClaudeAuth)
+	// But the flag never lowers it: a count of two stands even with the flag
+	// off, so setting the count alone means what it says. Lowering is done by
+	// the controls, which set the count.
+	kept := Config{ClaudeAccounts: 2, ShowClaudeAuth: false}.Validated()
+	if kept.ClaudeAccounts != 2 || !kept.ShowClaudeAuth {
+		t.Fatalf("a count of two with the flag off validated to %d / flag %v", kept.ClaudeAccounts, kept.ShowClaudeAuth)
 	}
 }
 

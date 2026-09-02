@@ -134,6 +134,7 @@ func TestAccountLabelEntriesFollowDualClaudeVisibilityImmediately(t *testing.T) 
 
 	config = view.config
 	config.ShowClaudeAuth = false
+	config.ClaudeAccounts = 1
 	view.SetConfig(config)
 	if row := connectionRowForTest(t, view, model.ProviderClaude); row.labelEntry != nil {
 		t.Fatal("display-name control remained after Claude Auth was hidden")

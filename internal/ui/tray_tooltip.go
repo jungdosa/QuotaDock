@@ -22,28 +22,25 @@ const (
 // cannot enter the tooltip.
 func BuildTrayTooltip(state ViewState, config settings.Config, systemLanguage i18n.Language, now time.Time) string {
 	config = config.Validated()
-	rootVisible := false
-	authVisible := false
+	byProvider := make(map[model.ProviderID]LaneState, len(state.Lanes))
 	for _, lane := range state.Lanes {
-		switch lane.Provider {
-		case model.ProviderClaude:
-			rootVisible = config.ShowClaude && !(config.ShowClaudeAuth && lane.Source == model.SourceWebSignIn)
-		case model.ProviderClaudeAuth:
-			authVisible = config.ShowClaudeAuth
-		}
+		byProvider[lane.Provider] = lane
 	}
-	dualClaude := rootVisible && authVisible
+	shown, several := claudeAccountsShown(byProvider, config)
 	lines := make([]string, 0, len(state.Lanes))
 	for _, lane := range trayTooltipLanes(state, config) {
 		if lane.Status != model.StatusConnected {
+			continue
+		}
+		if model.IsClaudeAccount(lane.Provider) && !shown[lane.Provider] {
 			continue
 		}
 		row, ok := highestVisibleUsageRow(lane, config)
 		if !ok {
 			continue
 		}
-		if lane.Provider == model.ProviderClaude || lane.Provider == model.ProviderClaudeAuth {
-			lane.Name = claudeAccountDisplayName(config, lane.Provider, dualClaude)
+		if model.IsClaudeAccount(lane.Provider) {
+			lane.Name = claudeAccountDisplayName(config, lane.Provider, several)
 		}
 		until, _ := resetStrings(row, now, config, systemLanguage)
 		countdown := strings.ReplaceAll(until, " ", "")
@@ -78,12 +75,11 @@ func trayTooltipLanes(state ViewState, config settings.Config) []LaneState {
 
 func highestVisibleUsageRow(lane LaneState, config settings.Config) (UsageRowState, bool) {
 	switch lane.Provider {
-	case model.ProviderClaude:
-		if !config.ShowClaude || config.ShowClaudeAuth && lane.Source == model.SourceWebSignIn {
-			return UsageRowState{}, false
-		}
-	case model.ProviderClaudeAuth:
-		if !config.ShowClaudeAuth {
+	case model.ProviderClaude, model.ProviderClaudeAuth, model.ProviderClaude3, model.ProviderClaude4, model.ProviderClaude5:
+		// Which Claude accounts show is decided once, by claudeAccountsShown;
+		// the caller has already applied it, so every account that reaches
+		// here is drawn.
+		if !config.ShowClaude {
 			return UsageRowState{}, false
 		}
 	case model.ProviderCodex:

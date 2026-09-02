@@ -85,6 +85,7 @@
   "connection.account_label": "표시명",
   "connection.account_label_hint": "짧은 이름 (선택)",
   "connection.add_account": "Claude 계정 추가",
+  "connection.remove_account": "마지막 Claude 계정 제거",
   "connection.cli_in_use": "CLI는 이미 다른 Claude 계정에서 사용 중입니다",
   "connection.sign_in": "로그인",
   "connection.auth_web_hint": "앱 안의 창에서 Anthropic 공식 로그인 페이지를 엽니다. 비밀번호는 Anthropic으로 바로 전송되며 QuotaDock은 읽을 수 없습니다. 세션은 이 앱에만 보관됩니다.",

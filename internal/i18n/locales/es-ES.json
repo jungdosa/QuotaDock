@@ -85,6 +85,7 @@
   "connection.account_label": "Nombre para mostrar",
   "connection.account_label_hint": "Nombre corto (opcional)",
   "connection.add_account": "Añadir cuenta de Claude",
+  "connection.remove_account": "Quitar la última cuenta de Claude",
   "connection.cli_in_use": "La CLI ya está en uso por otra cuenta de Claude",
   "connection.sign_in": "Iniciar sesión",
   "connection.auth_web_hint": "Abre la página de inicio de sesión oficial de Anthropic en una ventana dentro de la aplicación. Tu contraseña va directa a Anthropic; QuotaDock no puede leerla. La sesión se guarda solo para esta aplicación.",

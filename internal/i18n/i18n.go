@@ -167,6 +167,7 @@ const (
 	KeyConnectionAccountLabel      = "connection.account_label"
 	KeyConnectionAccountLabelHint  = "connection.account_label_hint"
 	KeyConnectionAddAccount        = "connection.add_account"
+	KeyConnectionRemoveAccount   = "connection.remove_account"
 	KeyConnectionCLIInUse          = "connection.cli_in_use"
 	KeyConnectionSignIn            = "connection.sign_in"
 	KeyConnectionAuthWebHint       = "connection.auth_web_hint"
@@ -370,6 +371,7 @@ var RequiredKeys = []string{
 	KeyConnectionAccountLabel,
 	KeyConnectionAccountLabelHint,
 	KeyConnectionAddAccount,
+	KeyConnectionRemoveAccount,
 	KeyConnectionCLIInUse,
 	KeyConnectionSignIn,
 	KeyConnectionAuthWebHint,

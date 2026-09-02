@@ -85,6 +85,7 @@
   "connection.account_label": "显示名称",
   "connection.account_label_hint": "简短名称（可选）",
   "connection.add_account": "添加 Claude 账户",
+  "connection.remove_account": "移除最后一个 Claude 账号",
   "connection.cli_in_use": "CLI 已被另一个 Claude 账户使用",
   "connection.sign_in": "登录",
   "connection.auth_web_hint": "在应用内的窗口中打开 Anthropic 官方登录页面。密码直接发送给 Anthropic，QuotaDock 无法读取。会话仅保存在本应用中。",

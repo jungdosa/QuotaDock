@@ -373,6 +373,7 @@ func (v *View) SetConfig(config settings.Config) {
 	oldWarningsEnabled := v.config.WarningsEnabled
 	oldShowClaude := v.config.ShowClaude
 	oldShowClaudeAuth := v.config.ShowClaudeAuth
+	oldClaudeAccounts := v.config.ClaudeAccounts
 	oldNanoVertical := v.config.NanoVertical
 	current := v.screen
 
@@ -386,7 +387,7 @@ func (v *View) SetConfig(config settings.Config) {
 	// Nano's orientation moves the title bar from the top edge to the right one,
 	// which is a different frame rather than a different arrangement inside the
 	// same one, so it rebuilds like a theme or language change does.
-	if (oldLanguage != v.config.Language || oldTheme != v.config.Theme || oldWarningsEnabled != v.config.WarningsEnabled || oldShowClaude != v.config.ShowClaude || oldShowClaudeAuth != v.config.ShowClaudeAuth || oldNanoVertical != v.config.NanoVertical) && v.Root != nil {
+	if (oldLanguage != v.config.Language || oldTheme != v.config.Theme || oldWarningsEnabled != v.config.WarningsEnabled || oldShowClaude != v.config.ShowClaude || oldShowClaudeAuth != v.config.ShowClaudeAuth || oldClaudeAccounts != v.config.ClaudeAccounts || oldNanoVertical != v.config.NanoVertical) && v.Root != nil {
 		v.rebuildScreens(current)
 		v.resizeCurrentWidget()
 		return
@@ -933,15 +934,44 @@ func (v *View) laneOrder() []string {
 // claudeLaneVisibility answers which of the two Claude lanes are drawn, and
 // whether both are, which is what decides between the plain "Claude" label and
 // the per-account names.
-func (v *View) claudeLaneVisibility(lanes map[model.ProviderID]LaneState) (root, auth, dual bool) {
-	rootLane, hasRootLane := lanes[model.ProviderClaude]
-	_, hasAuthLane := lanes[model.ProviderClaudeAuth]
-	// When the CLI is absent, the legacy Claude lane falls back to this same
-	// browser account. Hide that duplicate if the explicit Auth lane is
-	// enabled; with a working CLI, label both sources clearly.
-	root = hasRootLane && v.config.ShowClaude && !(v.config.ShowClaudeAuth && rootLane.Source == model.SourceWebSignIn)
-	auth = hasAuthLane && v.config.ShowClaudeAuth
-	return root, auth, root && auth
+// claudeAccountsShown reports which Claude accounts are drawn and whether
+// more than one is, which is what decides between the plain "Claude" label
+// and the per-account names. An account is drawn when it exists, Claude is
+// shown, and it is within the configured count. The first account is the one
+// exception: when the CLI is absent it falls back to the same browser
+// sign-in the second account reads, so with a second account enabled that
+// duplicate is hidden rather than drawn twice.
+func claudeAccountsShown(lanes map[model.ProviderID]LaneState, config settings.Config) (shown map[model.ProviderID]bool, several bool) {
+	shown = make(map[model.ProviderID]bool, settings.MaxClaudeAccounts)
+	count := 0
+	for _, id := range model.ClaudeAccountIDs() {
+		lane, present := lanes[id]
+		if !present || !config.ShowClaude || model.ClaudeAccountIndex(id) > claudeAccountCount(config) {
+			continue
+		}
+		if id == model.ProviderClaude && claudeAccountCount(config) >= 2 && lane.Source == model.SourceWebSignIn {
+			continue
+		}
+		shown[id] = true
+		count++
+	}
+	return shown, count >= 2
+}
+
+func (v *View) claudeAccountsShown(lanes map[model.ProviderID]LaneState) (map[model.ProviderID]bool, bool) {
+	return claudeAccountsShown(lanes, v.config)
+}
+
+// claudeAccountCount is how many Claude accounts a config asks for, read the
+// way validation resolves it: the count, raised to two by the older flag. The
+// screens read it through here rather than from the field so a config that
+// has set the flag but not yet been validated still shows its second account.
+func claudeAccountCount(config settings.Config) int {
+	count := max(1, config.ClaudeAccounts)
+	if config.ShowClaudeAuth && count < 2 {
+		count = 2
+	}
+	return min(settings.MaxClaudeAccounts, count)
 }
 
 // antigravityRowsFor keeps only the readings whose half of the Antigravity
@@ -975,7 +1005,7 @@ func (v *View) visibleLanes() []LaneState {
 	for _, lane := range v.state.Lanes {
 		lanes[lane.Provider] = lane
 	}
-	rootVisible, authVisible, dualClaude := v.claudeLaneVisibility(lanes)
+	shown, several := v.claudeAccountsShown(lanes)
 	out := []LaneState{}
 	for _, entry := range v.laneOrder() {
 		id := model.ProviderID(entry)
@@ -983,17 +1013,15 @@ func (v *View) visibleLanes() []LaneState {
 		if !present {
 			continue
 		}
+		if model.IsClaudeAccount(id) {
+			if !shown[id] {
+				continue
+			}
+			lane.Name = claudeAccountDisplayName(v.config, id, several)
+			out = append(out, lane)
+			continue
+		}
 		switch id {
-		case model.ProviderClaude:
-			if !rootVisible {
-				continue
-			}
-			lane.Name = claudeAccountDisplayName(v.config, model.ProviderClaude, dualClaude)
-		case model.ProviderClaudeAuth:
-			if !authVisible {
-				continue
-			}
-			lane.Name = claudeAccountDisplayName(v.config, model.ProviderClaudeAuth, dualClaude)
 		case model.ProviderAntigravity:
 			if !v.laneVisible(id) {
 				continue
@@ -1016,8 +1044,13 @@ func claudeAccountDisplayName(config settings.Config, id model.ProviderID, dual 
 	if label := config.AccountLabels[string(id)]; label != "" {
 		return label
 	}
-	if id == model.ProviderClaudeAuth {
+	// The first two keep the names they have always had; later accounts are
+	// numbered until the user names them.
+	switch index := model.ClaudeAccountIndex(id); {
+	case id == model.ProviderClaudeAuth:
 		return "Claude Auth"
+	case index >= 3:
+		return fmt.Sprintf("Claude %d", index)
 	}
 	return "Claude CLI"
 }
@@ -1081,11 +1114,8 @@ func providerColorID(id model.ProviderID, row UsageRowState, c settings.Config) 
 	return c.ProviderColors[providerColorKey(id, row)]
 }
 func providerColorKey(id model.ProviderID, row UsageRowState) string {
-	if id == model.ProviderClaude {
-		return "claude"
-	}
-	if id == model.ProviderClaudeAuth {
-		return "claude-auth"
+	if model.IsClaudeAccount(id) {
+		return string(id)
 	}
 	if id == model.ProviderCodex {
 		return "codex"
@@ -1195,7 +1225,7 @@ func laneIconKind(lane LaneState) ProviderIconKind {
 
 func providerIconKind(lane LaneState, row UsageRowState) ProviderIconKind {
 	switch lane.Provider {
-	case model.ProviderClaude, model.ProviderClaudeAuth:
+	case model.ProviderClaude, model.ProviderClaudeAuth, model.ProviderClaude3, model.ProviderClaude4, model.ProviderClaude5:
 		return ProviderIconClaude
 	case model.ProviderCodex:
 		return ProviderIconCodex
@@ -1294,7 +1324,7 @@ func compactRowColumns(labelWidth float32) []float32 {
 	return []float32{budget.Icon, budget.Label, 0, budget.Percent, budget.Reset}
 }
 func koreanUsageLabel(lane LaneState, row UsageRowState) string {
-	if (lane.Provider == model.ProviderClaude || lane.Provider == model.ProviderClaudeAuth) && strings.Contains(strings.ToLower(row.Label), "fable") {
+	if model.IsClaudeAccount(lane.Provider) && strings.Contains(strings.ToLower(row.Label), "fable") {
 		return "Fable 주간"
 	}
 	if lane.Provider == model.ProviderAntigravity {
@@ -1345,7 +1375,7 @@ func koreanUsagePeriodLabel(minutes int) string {
 	}
 }
 func englishUsageLabel(lane LaneState, row UsageRowState) string {
-	if (lane.Provider == model.ProviderClaude || lane.Provider == model.ProviderClaudeAuth) && strings.Contains(strings.ToLower(row.Label), "fable") {
+	if model.IsClaudeAccount(lane.Provider) && strings.Contains(strings.ToLower(row.Label), "fable") {
 		return "Fable Weekly"
 	}
 	if lane.Provider == model.ProviderAntigravity {
@@ -1775,7 +1805,16 @@ func (v *View) usageSettings() fyne.CanvasObject {
 		),
 		settingsPair(
 			v.halfToggleRow(i18n.KeyShowGrok, v.config.ShowGrok, v.settingLabelWidth(), func(c *settings.Config, b bool) { c.ShowGrok = b }),
-			v.halfToggleRow(i18n.KeyShowClaudeAuth, v.config.ShowClaudeAuth, v.settingLabelWidth(), func(c *settings.Config, b bool) { c.ShowClaudeAuth = b }),
+			v.halfToggleRow(i18n.KeyShowClaudeAuth, v.config.ShowClaudeAuth, v.settingLabelWidth(), func(c *settings.Config, b bool) {
+				// The toggle shows or hides every account past the first, so off
+				// drops to one account and on brings back at least the second.
+				c.ShowClaudeAuth = b
+				if !b {
+					c.ClaudeAccounts = 1
+				} else if c.ClaudeAccounts < 2 {
+					c.ClaudeAccounts = 2
+				}
+			}),
 		),
 		settingsPair(
 			v.settingRowSized(v.text(i18n.KeyUsageMode), mode, v.settingLabelWidth(), halfSettingGap, 0),

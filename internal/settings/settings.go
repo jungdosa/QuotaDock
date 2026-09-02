@@ -373,9 +373,9 @@ func (c Config) Validated() Config {
 	} else {
 		c.AccountLabels = nil
 	}
-	// The count says how many Claude accounts show, and the older two-account
-	// flag can move it between one and two — no further, since three or more
-	// can only have been set through the count. That reads a file from
+	// The count says how many Claude accounts show. The older two-account flag
+	// can only raise it to two, which is how a file from before the count is
+	// read; every control that lowers the count sets the count itself. That reads a file from
 	// before the count correctly, and it keeps the one path that still sets the
 	// flag on its own — the button that adds a second account — from being
 	// undone by validation. The flag is then rewritten from the count so a
@@ -383,14 +383,8 @@ func (c Config) Validated() Config {
 	if c.ClaudeAccounts < 1 {
 		c.ClaudeAccounts = 1
 	}
-	switch {
-	case c.ShowClaudeAuth && c.ClaudeAccounts < 2:
+	if c.ShowClaudeAuth && c.ClaudeAccounts < 2 {
 		c.ClaudeAccounts = 2
-	case !c.ShowClaudeAuth && c.ClaudeAccounts == 2:
-		// The flag turned off with exactly two accounts is the second account
-		// being switched off through the older control; three or more can
-		// only have come from the count, which then stands.
-		c.ClaudeAccounts = 1
 	}
 	c.ClaudeAccounts = min(MaxClaudeAccounts, c.ClaudeAccounts)
 	c.ShowClaudeAuth = c.ClaudeAccounts >= 2
