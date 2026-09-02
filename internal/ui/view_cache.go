@@ -237,11 +237,13 @@ func (v *View) rebuildNormalBody(lanes []LaneState, now time.Time, signature str
 	objects := make([]fyne.CanvasObject, 0, len(lanes)*2)
 	for laneIndex, lane := range lanes {
 		// Separate provider groups with the same thin line compact mode uses,
-		// so the lane boundaries read the same way in every display mode.
+		// so the lane boundaries read the same way in every display mode. The
+		// window body alone gives the line extra room beneath it; compact keeps
+		// its rows tight.
 		if laneIndex > 0 {
 			divider, line := v.makeProviderGroupDivider()
 			cache.dividers = append(cache.dividers, line)
-			objects = append(objects, divider)
+			objects = append(objects, container.New(layout.NewCustomPaddedLayout(0, NormalDividerGapBelow, 0, 0), divider))
 		}
 		// The span starts at the header, not the divider: the divider belongs
 		// between two groups, and counting it into the one below would make the
@@ -1580,6 +1582,12 @@ func (v *View) connectionStatusText(lane LaneState) string {
 	}
 	switch lane.Status {
 	case model.StatusConnected:
+		// A lane riding out a failed refresh is still connected and still
+		// shows its rows, but the card says the numbers are the last good
+		// ones rather than claiming a fresh read that did not happen.
+		if lane.StaleFor > 0 {
+			return v.text(i18n.KeyConnectionStale)
+		}
 		return v.text(i18n.KeyConnected)
 	case model.StatusLoggedOut:
 		return v.text(i18n.KeyErrorNotLoggedIn)

@@ -87,6 +87,7 @@ const (
 	KeyLanguageSystem            = "settings.language_system"
 	KeyDateTime                  = "settings.datetime"
 	KeyConnected                 = "status.connected"
+	KeyConnectionStale           = "connection.stale"
 	KeyDisconnected              = "status.disconnected"
 	KeyConnect                   = "action.connect"
 	KeyReconnect                 = "action.reconnect"
@@ -346,6 +347,7 @@ var RequiredKeys = []string{
 	KeyLanguageSystem,
 	KeyDateTime,
 	KeyConnected,
+	KeyConnectionStale,
 	KeyDisconnected,
 	KeyConnect,
 	KeyReconnect,

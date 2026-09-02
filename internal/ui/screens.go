@@ -102,8 +102,14 @@ const (
 	// NormalBodyRowGap replaces the layout's own 6-point padding between rows.
 	// Thirteen of those gaps on a four-provider window came to more than a
 	// provider group's worth of height on their own.
-	NormalBodyRowGap  float32 = 2
-	NormalMeterHeight float32 = 10
+	NormalBodyRowGap float32 = 2
+	// NormalDividerGapBelow opens the space between a group divider and the
+	// header beneath it. With the rows pulled tight, the line sat as close to
+	// the next provider's name as to the last row above it, and the groups
+	// stopped reading as groups; the extra room goes below the line only, so
+	// each line still closes the group it follows.
+	NormalDividerGapBelow float32 = 5
+	NormalMeterHeight     float32 = 10
 	// The normal-mode reset bar is thicker than compact/nano's 2px: the
 	// row has the room, and 2px vanishes on high-DPI and dark themes.
 	NormalResetBarHeight float32 = 3
@@ -297,7 +303,12 @@ func NewView(c fyne.Canvas, catalog *i18n.Catalog, systemLanguage i18n.Language,
 	validated := config.Validated()
 	v := &View{Canvas: c, Catalog: catalog, SystemLanguage: systemLanguage, Actions: actions, config: validated, colors: currentBrandColors(validated.Theme), state: defaultViewState()}
 	v.build()
-	v.Show(NormalScreen)
+	// Start on the screen the settings ask for. Starting on the normal screen
+	// and switching afterwards asked the window for the normal size first, so
+	// a widget saved in nano came up at the wrong size for a frame before it
+	// snapped to the right one — logged as a 539-wide request preceding a
+	// 136-wide one on every nano launch.
+	v.Show(ScreenForDisplayMode(validated.DisplayMode))
 	return v
 }
 func (v *View) build() {

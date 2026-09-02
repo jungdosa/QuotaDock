@@ -44,7 +44,45 @@ type LaneState struct {
 	// (currently Codex only).
 	Credits *model.Credits
 	Rows    []UsageRowState
+	// StaleFor counts the refreshes in a row for which these rows are the last
+	// reading that succeeded rather than a fresh one. Zero means the rows are
+	// current. Error carries the code of the failure being ridden out.
+	StaleFor int
 }
+
+// StaleRefreshLimit is how many consecutive failed refreshes a lane keeps
+// showing its last good reading for before it shows the failure instead. A
+// single missed minute is almost always the network or the service taking
+// its time, and blanking the lane for it turned every blip into a visible
+// outage; a provider that stays down for this long is reported as down.
+const StaleRefreshLimit = 3
+
+// transientRefreshError reports whether a failure is the kind that passes on
+// its own. A sign-in that expired or a CLI that is missing needs the user, so
+// those show at once; a request that timed out, a service that did not answer
+// or answered with something unreadable, or a helper process that exited is
+// tried again next refresh before anyone is told.
+func transientRefreshError(code model.ErrorCode) bool {
+	switch code {
+	case model.ErrTimeout, model.ErrUnavailable, model.ErrInvalidResponse, model.ErrProcessExited:
+		return true
+	}
+	return false
+}
+
+// keepLastReading decides whether a lane whose refresh just failed should go
+// on showing the reading it had. It does so only while the failure is
+// transient, the lane really had a reading, and the limit is not yet reached.
+func keepLastReading(prior LaneState, code model.ErrorCode) (LaneState, bool) {
+	if !transientRefreshError(code) || prior.Status != model.StatusConnected || len(prior.Rows) == 0 {
+		return LaneState{}, false
+	}
+	if prior.StaleFor >= StaleRefreshLimit {
+		return LaneState{}, false
+	}
+	return prior, true
+}
+
 type ViewState struct {
 	Lanes       []LaneState
 	LastRefresh time.Time
@@ -116,6 +154,15 @@ func (c *Controller) Subscribe(fn func(ViewState)) {
 	fn(state)
 }
 func (c *Controller) Refresh(ctx context.Context) ViewState {
+	// The reading each lane showed before this refresh. A failure is judged
+	// against it rather than against the inspection that follows the failure,
+	// because a provider that just failed already reports itself as failed.
+	c.mu.RLock()
+	prior := make(map[model.ProviderID]LaneState, len(c.state.Lanes))
+	for _, lane := range c.state.Lanes {
+		prior[lane.Provider] = lane
+	}
+	c.mu.RUnlock()
 	outcomes := c.coordinator.RefreshAll(ctx)
 	next := defaultViewState()
 	next.LastRefresh = time.Now().UTC()
@@ -140,6 +187,17 @@ func (c *Controller) Refresh(ctx context.Context) ViewState {
 			if errors.As(outcome.Err, &safe) {
 				lane.Error = safe.Code
 				lane.ErrorKey = safe.Key
+			}
+			if kept, keep := keepLastReading(prior[lane.Provider], lane.Error); keep {
+				// The lane stays connected and keeps its rows; the error code
+				// rides along so the state log still records the failure and
+				// the connection card can say the reading is being held.
+				lane.Status = model.StatusConnected
+				lane.Plan = kept.Plan
+				lane.Credits = kept.Credits
+				lane.Rows = append([]UsageRowState(nil), kept.Rows...)
+				lane.StaleFor = kept.StaleFor + 1
+				continue
 			}
 			if lane.Error != model.ErrUsageUnavailable && lane.Status == model.StatusConnected {
 				lane.Status = model.StatusError

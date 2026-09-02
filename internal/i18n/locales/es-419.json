@@ -62,6 +62,7 @@
   "settings.language_english": "Inglés (EE. UU.)",
   "settings.datetime": "Hora/Fecha",
   "status.connected": "Conectado",
+  "connection.stale": "Conectado · mostrando la última lectura",
   "status.disconnected": "Inicio de sesión necesario",
   "action.connect": "Conectar",
   "action.reconnect": "Reconectar",
