@@ -105,7 +105,18 @@ func NewController(coordinator provider.Coordinator, config settings.Config) *Co
 func defaultViewState() ViewState {
 	// Keep the established four provider indexes stable for callers and tests;
 	// visibleLanes places the optional Auth account beside Claude when enabled.
-	return ViewState{Lanes: []LaneState{{Provider: model.ProviderClaude, Name: "Claude", Status: model.StatusUnavailable}, {Provider: model.ProviderCodex, Name: "Codex", Status: model.StatusUnavailable}, {Provider: model.ProviderAntigravity, Name: "Antigravity", Status: model.StatusUnavailable}, {Provider: model.ProviderGrok, Name: "Grok", Status: model.StatusUnavailable}, {Provider: model.ProviderClaudeAuth, Name: "Claude Auth", Status: model.StatusUnavailable}}}
+	// The further Claude accounts follow the second so every index that
+	// existed before them stays where it was.
+	return ViewState{Lanes: []LaneState{
+		{Provider: model.ProviderClaude, Name: "Claude", Status: model.StatusUnavailable},
+		{Provider: model.ProviderCodex, Name: "Codex", Status: model.StatusUnavailable},
+		{Provider: model.ProviderAntigravity, Name: "Antigravity", Status: model.StatusUnavailable},
+		{Provider: model.ProviderGrok, Name: "Grok", Status: model.StatusUnavailable},
+		{Provider: model.ProviderClaudeAuth, Name: "Claude Auth", Status: model.StatusUnavailable},
+		{Provider: model.ProviderClaude3, Name: "Claude 3", Status: model.StatusUnavailable},
+		{Provider: model.ProviderClaude4, Name: "Claude 4", Status: model.StatusUnavailable},
+		{Provider: model.ProviderClaude5, Name: "Claude 5", Status: model.StatusUnavailable},
+	}}
 }
 func (c *Controller) Config() settings.Config { c.mu.RLock(); defer c.mu.RUnlock(); return c.config }
 func (c *Controller) SetConfig(cfg settings.Config) {
@@ -125,14 +136,16 @@ type sourceModeSetter interface {
 }
 
 func (c *Controller) applyProviderSourceModes(config settings.Config) {
-	for _, id := range []model.ProviderID{model.ProviderClaude, model.ProviderClaudeAuth} {
+	for _, id := range model.ClaudeAccountIDs() {
 		implementation := c.coordinator.Provider(id)
 		setter, ok := implementation.(sourceModeSetter)
 		if !ok {
 			continue
 		}
 		value := config.ConnectionMethods[string(id)]
-		if id == model.ProviderClaudeAuth && value == "" {
+		// Every account past the first defaults to the browser sign-in; only
+		// the first can fall back to the CLI on its own.
+		if id != model.ProviderClaude && value == "" {
 			value = settings.ConnectionMethodAuth
 		}
 		setter.SetSourceMode(value)

@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 
 	"github.com/jungdosa/QuotaDock/internal/model"
+	"github.com/jungdosa/QuotaDock/internal/process"
 )
 
 // WebProvider is the independently rendered Claude account held by
@@ -14,8 +15,55 @@ import (
 // identity and never reads browser cookies directly.
 type WebProvider struct {
 	parent *Provider
-	state  *model.StateMachine
-	source atomic.Uint32
+	// id is the lane this account is drawn as. The second account keeps the
+	// id it has always had; the third onward are numbered.
+	id    model.ProviderID
+	state *model.StateMachine
+	// fetcher and group belong to an account with a browser profile of its
+	// own. When fetcher is nil the account is the second one, which reads
+	// through the parent's shared profile and shared fetch group instead.
+	fetcher oauthUsageFetcher
+	group   process.Group[model.UsageSnapshot]
+	source  atomic.Uint32
+}
+
+// accountID is the lane this provider reports as.
+func (p *WebProvider) accountID() model.ProviderID {
+	if p.id == "" {
+		return model.ProviderClaudeAuth
+	}
+	return p.id
+}
+
+// webFetcher is the browser fetcher this account reads through: its own when
+// it has one, otherwise the parent's shared one.
+func (p *WebProvider) webFetcher() oauthUsageFetcher {
+	if p.fetcher != nil {
+		return p.fetcher
+	}
+	if p.parent == nil {
+		return nil
+	}
+	return p.parent.webAuth
+}
+
+// fetchWeb reads usage through the browser. An account with its own profile
+// runs the read in its own group; the second account shares the parent's, so
+// it and a CLI-less root fallback never open two browsers on one profile.
+func (p *WebProvider) fetchWeb(ctx context.Context) (model.UsageSnapshot, error) {
+	if p.fetcher == nil {
+		return p.parent.fetchWebAuth(ctx)
+	}
+	return p.group.Do(ctx, func() (model.UsageSnapshot, error) {
+		if !p.fetcher.Available() {
+			return model.UsageSnapshot{}, errOAuthCredentialsUnavailable
+		}
+		result, err := p.fetcher.Fetch(ctx)
+		if err != nil {
+			return model.UsageSnapshot{}, err
+		}
+		return NormalizeOAuthUsage(result.raw, result.rateLimitTier, result.subscriptionType, p.parent.now())
+	})
 }
 
 // SetSourceMode makes the additional account independently selectable. Its
@@ -61,7 +109,7 @@ func (p *WebProvider) Inspect(ctx context.Context) model.ConnectionState {
 		}
 		return p.set(model.StatusLoggedOut, model.ErrNotLoggedIn, "error.not_logged_in", "")
 	}
-	if p.parent.webAuth == nil || !p.parent.webAuth.Available() {
+	if fetcher := p.webFetcher(); fetcher == nil || !fetcher.Available() {
 		return p.set(model.StatusLoggedOut, model.ErrNotLoggedIn, "error.not_logged_in", model.SourceWebSignIn)
 	}
 	current := p.state.Current()
@@ -83,7 +131,7 @@ func (p *WebProvider) Refresh(ctx context.Context) (model.UsageSnapshot, error) 
 	case selectOther:
 		snapshot, err = p.refreshOAuth(ctx, OAuthCredentialEnvironment)
 	default:
-		snapshot, err = p.parent.fetchWebAuth(ctx)
+		snapshot, err = p.fetchWeb(ctx)
 	}
 	if err != nil {
 		var safe model.SafeError
@@ -114,7 +162,7 @@ func (p *WebProvider) Refresh(ctx context.Context) (model.UsageSnapshot, error) 
 			return p.fail(model.StatusError, model.ErrUnavailable, "error.unavailable")
 		}
 	}
-	snapshot.Provider = model.ProviderClaudeAuth
+	snapshot.Provider = p.accountID()
 	p.set(model.StatusConnected, model.ErrNone, "", p.connectionSource())
 	return snapshot, nil
 }

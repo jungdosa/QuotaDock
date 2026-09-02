@@ -55,8 +55,12 @@ type Provider struct {
 	groups         [sourceSelectionCount]process.Group[model.UsageSnapshot]
 	webGroup       process.Group[model.UsageSnapshot]
 	webProvider    *WebProvider
-	source         atomic.Uint32
-	now            func() time.Time
+	// accounts are the third and later Claude accounts, each with a browser
+	// fetcher of its own. The second account stays on webProvider, which shares
+	// the root provider's browser profile as it always has.
+	accounts map[model.ProviderID]*WebProvider
+	source   atomic.Uint32
+	now      func() time.Time
 }
 
 func New(client Client, minimumVersion string) *Provider {
@@ -99,19 +103,48 @@ func (p *Provider) SetWebAuth(webAuth oauthUsageFetcher) {
 		p.webProvider = nil
 		return
 	}
-	p.webProvider = &WebProvider{parent: p, state: model.NewStateMachine()}
+	p.webProvider = &WebProvider{parent: p, id: model.ProviderClaudeAuth, state: model.NewStateMachine()}
 	p.webProvider.SetSourceMode(string(SourceModeAuth))
 }
 
-// AdditionalProviders exposes the isolated embedded-browser account as a
-// second Claude lane. It shares the fetch group with the root provider so a
-// CLI-less fallback and the explicit Auth lane never open duplicate WebView2
-// sessions against the same profile.
+// SetAccountWebAuth attaches a browser fetcher for one of the further Claude
+// accounts, the third onward. Each of those has a profile folder and a fetch
+// group of its own: a profile takes one writer, and two accounts sharing one
+// would race each other the way the two requests of a single read once did.
+// The first two accounts are not accepted here; they keep sharing the root
+// provider's profile through SetWebAuth.
+func (p *Provider) SetAccountWebAuth(id model.ProviderID, webAuth oauthUsageFetcher) {
+	if model.ClaudeAccountIndex(id) < 3 {
+		return
+	}
+	if webAuth == nil {
+		delete(p.accounts, id)
+		return
+	}
+	if p.accounts == nil {
+		p.accounts = make(map[model.ProviderID]*WebProvider)
+	}
+	account := &WebProvider{parent: p, id: id, fetcher: webAuth, state: model.NewStateMachine()}
+	account.SetSourceMode(string(SourceModeAuth))
+	p.accounts[id] = account
+}
+
+// AdditionalProviders exposes every further Claude account as its own lane.
+// The second shares the fetch group with the root provider so a CLI-less
+// fallback and the explicit Auth lane never open duplicate WebView2 sessions
+// against the same profile; the third onward each bring their own.
 func (p *Provider) AdditionalProviders() map[model.ProviderID]model.Provider {
-	if p.webProvider == nil {
+	if p.webProvider == nil && len(p.accounts) == 0 {
 		return nil
 	}
-	return map[model.ProviderID]model.Provider{model.ProviderClaudeAuth: p.webProvider}
+	additional := make(map[model.ProviderID]model.Provider, 1+len(p.accounts))
+	if p.webProvider != nil {
+		additional[model.ProviderClaudeAuth] = p.webProvider
+	}
+	for id, account := range p.accounts {
+		additional[id] = account
+	}
+	return additional
 }
 
 type authStatus struct {
@@ -462,6 +495,9 @@ func (p *Provider) Close() error {
 	p.state.Set(model.ConnectionState{Status: model.StatusClosed})
 	if p.webProvider != nil {
 		_ = p.webProvider.Close()
+	}
+	for _, account := range p.accounts {
+		_ = account.Close()
 	}
 	return p.client.Close()
 }

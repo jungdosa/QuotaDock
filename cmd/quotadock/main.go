@@ -142,9 +142,20 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	// folder, beside the diagnostics logs. It is a fallback: the Claude
 	// provider only consults it when the CLI path is unavailable.
 	var claudeWebAuth *claudeprovider.WebAuthFetcher
+	// The third Claude account onward each get a browser profile folder of
+	// their own beside the first: a profile takes one writer, and a browser
+	// session is one account, so two accounts cannot share a folder.
+	accountWebAuth := make(map[model.ProviderID]*claudeprovider.WebAuthFetcher)
 	if dataDir, dirErr := diagnostics.LocalDataDirectory(); dirErr == nil {
 		claudeWebAuth = claudeprovider.NewWebAuthFetcher(filepath.Join(dataDir, webview.DefaultUserDataDir))
 		claudeProvider.SetWebAuth(claudeWebAuth)
+		for _, id := range model.ClaudeAccountIDs() {
+			if index := model.ClaudeAccountIndex(id); index >= 3 {
+				fetcher := claudeprovider.NewWebAuthFetcher(filepath.Join(dataDir, fmt.Sprintf("%s-%d", webview.DefaultUserDataDir, index)))
+				accountWebAuth[id] = fetcher
+				claudeProvider.SetAccountWebAuth(id, fetcher)
+			}
+		}
 	}
 	claudeProvider.SetSourceMode(cfg.ConnectionMethods[string(model.ProviderClaude)])
 	coordinator := provider.Coordinator{Providers: map[model.ProviderID]model.Provider{
@@ -374,7 +385,16 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		applyScreen(ui.ScreenForDisplayMode(mode))
 	}
 	runSignIn := func(id model.ProviderID) {
-		if demo || id != model.ProviderClaude || claudeWebAuth == nil {
+		if demo || !model.IsClaudeAccount(id) {
+			return
+		}
+		// The first two accounts sign in to the shared profile; every later
+		// one opens the window on its own.
+		fetcher := claudeWebAuth
+		if own, ok := accountWebAuth[id]; ok {
+			fetcher = own
+		}
+		if fetcher == nil {
 			return
 		}
 		diagnostics.Go("web_signin", func() {
@@ -382,7 +402,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 			// generous ceiling well beyond a normal request.
 			signInCtx, stop := context.WithTimeout(ctx, 5*time.Minute)
 			defer stop()
-			err := claudeWebAuth.SignIn(signInCtx)
+			err := fetcher.SignIn(signInCtx)
 			slog.Info("web.signin", "provider", string(id), "ok", err == nil)
 			if err == nil {
 				refresh()
