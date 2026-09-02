@@ -128,7 +128,9 @@ and where QuotaDock looks. Press `Rescan` when you are done; no restart needed.
 
 ### Connecting Claude three ways
 
-The Claude card offers three connection methods. Pick one per account:
+QuotaDock shows up to five Claude accounts side by side. Press `+` on the last Claude card in
+**Settings → Connections** to add one and `−` to remove the last one; each account gets its own
+display name and colour. Every Claude card offers three connection methods. Pick one per account:
 
 | Method | What it reads | When to use it |
 |---|---|---|
