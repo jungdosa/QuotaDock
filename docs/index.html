@@ -160,8 +160,14 @@ it does not transmit any personal data. Diagnostic logs stay on your machine wit
 email addresses redacted before they are written. Update checks reach GitHub without
 credentials attached.</p>
 
+<h3>Code signing</h3>
+<p id="signpath">QuotaDock uses the <a href="https://signpath.org/">SignPath Foundation</a>
+for code signing: free code signing is provided by <a href="https://about.signpath.io/">SignPath.io</a>,
+with a certificate issued by the SignPath Foundation. While the application is in progress the
+binaries remain unsigned, so verify downloads with the checksums below.</p>
+
 <h3>Verification</h3>
-<p>Until code signing is in place, each release carries SHA-256 checksums for its binaries,
+<p>Each release carries SHA-256 checksums for its binaries,
 and the full source and build script are public. Verified integrity is checked twice during
 in-app updates: after the download and again immediately before the installer runs.</p>
 
