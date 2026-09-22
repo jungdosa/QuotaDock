@@ -7,7 +7,7 @@ plus checksums for its binaries.
 Versions follow [Semantic Versioning](https://semver.org/). The project reaches 1.0.0 once
 Windows feature verification is finished.
 
-## [Unreleased]
+## [0.7.53] — 2026-09-22
 
 ### Added
 
