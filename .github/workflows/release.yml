@@ -1,0 +1,64 @@
+name: Build release artifacts
+
+# Builds the same artifacts as a hand-run release: tests first, then the
+# portable exe, the Inno Setup installer, and SHA256SUMS.txt, all through
+# build/windows/build-release.ps1. Publishing stays a deliberate manual step;
+# this workflow only proves the build and hands back the files.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to stamp into the build (e.g. 0.7.53)'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+        shell: pwsh
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if ('${{ github.event_name }}' -eq 'push') {
+            $v = '${{ github.ref_name }}'.TrimStart('v')
+          } else {
+            $v = '${{ github.event.inputs.version }}'
+          }
+          "version=$v" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+          gcc --version | Select-Object -First 1
+        shell: pwsh
+
+      - name: Vet
+        run: go vet ./...
+        shell: pwsh
+
+      - name: Build release artifacts
+        run: |
+          ./build/windows/build-release.ps1 `
+            -Version '${{ steps.ver.outputs.version }}' `
+            -ISCC 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+        shell: pwsh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QuotaDock-${{ steps.ver.outputs.version }}
+          path: |
+            dist/QuotaDock-*.exe
+            dist/SHA256SUMS.txt
+            dist/BUILD-REPORT.md
+          if-no-files-found: error
