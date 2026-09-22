@@ -583,6 +583,67 @@ func TestClaudeWeeklySortsBeforeFableWeeklyAtEqualDuration(t *testing.T) {
 	}
 }
 
+// The account-wide Codex limit is what the user budgets against, so it stays
+// on top even though the model-scoped session window is shorter.
+func TestCodexAccountLimitSortsAboveModelScopedRows(t *testing.T) {
+	rows := []UsageRowState{
+		{Label: "Spark", WindowMinutes: 300},
+		{Label: "Weekly", WindowMinutes: 10080},
+		{Label: "Spark", WindowMinutes: 10080},
+	}
+	sortLaneRows(model.ProviderCodex, rows)
+	got := []string{
+		rows[0].Label + "/" + compactWindowDuration(rows[0].WindowMinutes),
+		rows[1].Label + "/" + compactWindowDuration(rows[1].WindowMinutes),
+		rows[2].Label + "/" + compactWindowDuration(rows[2].WindowMinutes),
+	}
+	want := []string{"Weekly/7d", "Spark/5h", "Spark/7d"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Codex row order=%v, want %v", got, want)
+	}
+}
+
+func TestCodexModelScopedRowsNameTheirGroupInBothLanguages(t *testing.T) {
+	reset := time.Date(2026, 9, 18, 6, 46, 0, 0, time.UTC)
+	snap := model.UsageSnapshot{Provider: model.ProviderCodex, Limits: []model.UsageLimit{
+		{ID: "codex:primary", Label: "Weekly", UsedPercent: 4, WindowMinutes: 10080, ResetsAt: reset},
+		{ID: "codex_bengalfox:primary", Label: "Spark", UsedPercent: 100, WindowMinutes: 300, ResetsAt: reset},
+		{ID: "codex_bengalfox:secondary", Label: "Spark", UsedPercent: 45, WindowMinutes: 10080, ResetsAt: reset},
+	}}
+	controller := NewController(provider.Coordinator{Providers: map[model.ProviderID]model.Provider{model.ProviderCodex: phase2Provider{snapshot: snap}}}, settings.Default())
+	state := controller.Refresh(context.Background())
+	v, window := newTestView(t)
+	defer window.Close()
+
+	for _, entry := range []struct {
+		language i18n.Language
+		want     []string
+	}{
+		{i18n.Korean, []string{"주간", "Spark 세션", "Spark 주간"}},
+		{i18n.English, []string{"Weekly", "Spark Session", "Spark Weekly"}},
+	} {
+		config := v.config
+		config.Language = settings.Language(entry.language)
+		v.SetConfig(config)
+		v.SetState(state)
+		lane := v.state.Lanes[1]
+		got := make([]string, 0, len(lane.Rows))
+		percents := make([]float64, 0, len(lane.Rows))
+		for _, row := range lane.Rows {
+			got = append(got, v.usageRowLabel(lane, row))
+			percents = append(percents, row.Percent)
+		}
+		if !reflect.DeepEqual(got, entry.want) {
+			t.Fatalf("%s Codex labels=%v, want %v", entry.language, got, entry.want)
+		}
+		// The account-wide 4% must survive next to the model-scoped 45%:
+		// this is the exact figure the old duration merge threw away.
+		if !reflect.DeepEqual(percents, []float64{4, 100, 45}) {
+			t.Fatalf("%s Codex percents=%v, want [4 100 45]", entry.language, percents)
+		}
+	}
+}
+
 func TestConnectedUsageUnavailableShowsStatusWithoutZeroPercentOrMeter(t *testing.T) {
 	snapshot := model.UsageSnapshot{Provider: model.ProviderClaude, Plan: "MAX"}
 	unavailable := model.SafeError{Code: model.ErrUsageUnavailable, Key: i18n.KeyErrorUsageUnavailable}

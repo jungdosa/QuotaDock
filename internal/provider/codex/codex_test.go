@@ -255,6 +255,130 @@ func TestWindowLabelsNeverExposeLimitIDsAndAreSorted(t *testing.T) {
 	}
 }
 
+func TestNamedRateLimitsKeepGeneralWeeklyAllowance(t *testing.T) {
+	transport := workingTransport(t)
+	transport.responses["account/rateLimits/read"] = fixture(t, "codex-rate-limits-spark.json")
+	snapshot, err := New(transport, "0.100.0").Refresh(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []struct {
+		label         string
+		windowMinutes int
+		usedPercent   float64
+	}{
+		{label: "Weekly", windowMinutes: 10080, usedPercent: 4},
+		{label: "Spark", windowMinutes: 300, usedPercent: 100},
+		{label: "Spark", windowMinutes: 10080, usedPercent: 45},
+	}
+	if len(snapshot.Limits) != len(want) {
+		t.Fatalf("named limits = %+v, want %d rows", snapshot.Limits, len(want))
+	}
+	for i, expected := range want {
+		limit := snapshot.Limits[i]
+		if limit.Label != expected.label || limit.WindowMinutes != expected.windowMinutes || limit.UsedPercent != expected.usedPercent {
+			t.Fatalf("limit[%d] = %+v, want label=%q window=%d used=%v", i, limit, expected.label, expected.windowMinutes, expected.usedPercent)
+		}
+	}
+}
+
+func TestNamedRateLimitBucketsStaySeparateAndSorted(t *testing.T) {
+	transport := workingTransport(t)
+	transport.responses["account/rateLimits/read"] = json.RawMessage(`{"rateLimitsByLimitId":{"codex_spark":{"limitId":"codex_spark","limitName":"GPT-5.3-Codex-Spark","primary":{"usedPercent":10,"windowDurationMins":10080},"secondary":{"usedPercent":20,"windowDurationMins":300}},"codex_mini":{"limitId":"codex_mini","limitName":"GPT-6-Mini","primary":{"usedPercent":30,"windowDurationMins":10080},"secondary":{"usedPercent":40,"windowDurationMins":300}}}}`)
+	snapshot, err := New(transport, "0.100.0").Refresh(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []struct {
+		id            string
+		label         string
+		windowMinutes int
+		usedPercent   float64
+	}{
+		{id: "codex_mini:secondary", label: "Mini", windowMinutes: 300, usedPercent: 40},
+		{id: "codex_mini:primary", label: "Mini", windowMinutes: 10080, usedPercent: 30},
+		{id: "codex_spark:secondary", label: "Spark", windowMinutes: 300, usedPercent: 20},
+		{id: "codex_spark:primary", label: "Spark", windowMinutes: 10080, usedPercent: 10},
+	}
+	if len(snapshot.Limits) != len(want) {
+		t.Fatalf("named buckets merged: %+v", snapshot.Limits)
+	}
+	for i, expected := range want {
+		limit := snapshot.Limits[i]
+		if limit.ID != expected.id || limit.Label != expected.label || limit.WindowMinutes != expected.windowMinutes || limit.UsedPercent != expected.usedPercent {
+			t.Fatalf("limit[%d] = %+v, want id=%q label=%q window=%d used=%v", i, limit, expected.id, expected.label, expected.windowMinutes, expected.usedPercent)
+		}
+	}
+}
+
+func TestShortLimitName(t *testing.T) {
+	tests := []struct {
+		name string
+		want string
+	}{
+		{name: "GPT-5.3-Codex-Spark", want: "Spark"},
+		{name: "Spark", want: "Spark"},
+		{name: "", want: ""},
+		{name: "---", want: "---"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := shortLimitName(test.name); got != test.want {
+				t.Fatalf("shortLimitName(%q) = %q, want %q", test.name, got, test.want)
+			}
+		})
+	}
+}
+
+func TestRateLimitEventMergePreservesLimitName(t *testing.T) {
+	transport := workingTransport(t)
+	transport.responses["account/rateLimits/read"] = fixture(t, "codex-rate-limits-spark.json")
+	provider := New(transport, "0.100.0")
+	if _, err := provider.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := provider.ApplyRateLimitsUpdated(json.RawMessage(`{"rateLimitsByLimitId":{"codex_bengalfox":{"primary":{"usedPercent":91}}}}`)); err != nil {
+		t.Fatal(err)
+	}
+
+	provider.mu.Lock()
+	bucket := provider.limits.RateLimitsByLimitID["codex_bengalfox"]
+	snapshot := snapshotFrom(provider.plan, provider.limits, time.Now())
+	provider.mu.Unlock()
+	if bucket == nil || bucket.Snapshot.LimitName != "GPT-5.3-Codex-Spark" {
+		t.Fatalf("limitName was lost after event merge: %+v", bucket)
+	}
+	if len(snapshot.Limits) != 3 || snapshot.Limits[1].Label != "Spark" || snapshot.Limits[1].UsedPercent != 91 {
+		t.Fatalf("snapshot after event merge = %+v", snapshot.Limits)
+	}
+}
+
+func TestNamedRateLimitLabelsNeverExposeRawLimitIDs(t *testing.T) {
+	transport := workingTransport(t)
+	transport.responses["account/rateLimits/read"] = fixture(t, "codex-rate-limits-spark.json")
+	snapshot, err := New(transport, "0.100.0").Refresh(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	namedRows := 0
+	for _, limit := range snapshot.Limits {
+		if strings.Contains(limit.Label, "codex_bengalfox") {
+			t.Fatalf("raw limit ID leaked into label %q", limit.Label)
+		}
+		if strings.Contains(limit.ID, "codex_bengalfox") {
+			namedRows++
+			if limit.Label != "Spark" {
+				t.Fatalf("named limit label = %q, want Spark", limit.Label)
+			}
+		}
+	}
+	if namedRows != 2 {
+		t.Fatalf("named rows = %d, want 2: %+v", namedRows, snapshot.Limits)
+	}
+}
+
 func TestAppServerSparseEventCallbackMergesLastFullResponse(t *testing.T) {
 	transport := workingTransport(t)
 	transport.responses["account/read"] = json.RawMessage(`{"account":{"type":"chatgpt","planType":"plus"}}`)

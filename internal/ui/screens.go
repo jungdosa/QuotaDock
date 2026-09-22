@@ -1337,6 +1337,16 @@ func koreanUsageLabel(lane LaneState, row UsageRowState) string {
 		}
 		return group
 	}
+	if lane.Provider == model.ProviderCodex {
+		// A model-scoped limit names its group ("Spark 세션"); the account-wide
+		// limit keeps the bare period, as the lane header already says Codex.
+		if group := codexRowGroup(row); group != "" {
+			if period := koreanUsagePeriodLabel(row.WindowMinutes); period != "" {
+				return group + " " + period
+			}
+			return group
+		}
+	}
 	if row.DisplayLabel != "" {
 		localized := koreanDisplayLabel(row.DisplayLabel)
 		if localized != row.DisplayLabel || strings.Contains(row.DisplayLabel, " · ") || strings.Contains(row.DisplayLabel, " (") {
@@ -1387,6 +1397,16 @@ func englishUsageLabel(lane LaneState, row UsageRowState) string {
 			return group + " " + period
 		}
 		return group
+	}
+	if lane.Provider == model.ProviderCodex {
+		// Mirrors the Korean path: model-scoped rows say which model, the
+		// account-wide row says only the period.
+		if group := codexRowGroup(row); group != "" {
+			if period := usagePeriodLabel(row.WindowMinutes); period != "" {
+				return group + " " + period
+			}
+			return group
+		}
 	}
 	if strings.Contains(row.DisplayLabel, " · ") || strings.Contains(row.DisplayLabel, "(") {
 		return row.DisplayLabel

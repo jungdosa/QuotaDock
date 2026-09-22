@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -342,6 +343,7 @@ type rateSnapshot struct {
 	Secondary *rateWindow  `json:"secondary"`
 	Credits   *creditState `json:"credits"`
 	LimitID   string       `json:"limitId"`
+	LimitName string       `json:"limitName"`
 	PlanType  string       `json:"planType"`
 }
 
@@ -427,6 +429,9 @@ func mergeSnapshot(current, update rateSnapshot) rateSnapshot {
 	if update.LimitID != "" {
 		current.LimitID = update.LimitID
 	}
+	if update.LimitName != "" {
+		current.LimitName = update.LimitName
+	}
 	if update.PlanType != "" {
 		current.PlanType = update.PlanType
 	}
@@ -475,7 +480,7 @@ func mergeCredits(current, update *creditState) *creditState {
 
 func snapshotFrom(plan model.Plan, envelope rateEnvelope, fetchedAt time.Time) model.UsageSnapshot {
 	snapshot := model.UsageSnapshot{Provider: model.ProviderCodex, Plan: plan, FetchedAt: fetchedAt.UTC()}
-	appendWindow := func(id string, window *rateWindow) {
+	appendWindow := func(limits *[]model.UsageLimit, id, label string, window *rateWindow) {
 		if window == nil || window.UsedPercent == nil {
 			return
 		}
@@ -484,25 +489,54 @@ func snapshotFrom(plan model.Plan, envelope rateEnvelope, fetchedAt time.Time) m
 		if window.WindowDurationMins != nil {
 			limit.WindowMinutes = *window.WindowDurationMins
 		}
-		limit.Label = model.UsageWindowLabel(limit.WindowMinutes)
+		if label == "" {
+			limit.Label = model.UsageWindowLabel(limit.WindowMinutes)
+		} else {
+			limit.Label = label
+		}
 		if window.ResetsAt != nil {
 			limit.ResetsAt = time.Unix(*window.ResetsAt, 0).UTC()
 		}
-		snapshot.Limits = append(snapshot.Limits, limit)
+		*limits = append(*limits, limit)
+	}
+	appendSnapshot := func(limits *[]model.UsageLimit, idPrefix, label string, rate rateSnapshot) {
+		primaryID, secondaryID := "primary", "secondary"
+		if idPrefix != "" {
+			primaryID = idPrefix + ":primary"
+			secondaryID = idPrefix + ":secondary"
+		}
+		appendWindow(limits, primaryID, label, rate.Primary)
+		appendWindow(limits, secondaryID, label, rate.Secondary)
+	}
+	sortByWindow := func(limits []model.UsageLimit) {
+		sort.SliceStable(limits, func(i, j int) bool {
+			left, right := limits[i].WindowMinutes, limits[j].WindowMinutes
+			if left <= 0 {
+				return false
+			}
+			if right <= 0 {
+				return true
+			}
+			return left < right
+		})
 	}
 
 	ids := make([]string, 0, len(envelope.RateLimitsByLimitID))
-	hasNestedBuckets := false
-	for id, bucket := range envelope.RateLimitsByLimitID {
+	for id := range envelope.RateLimitsByLimitID {
 		ids = append(ids, id)
-		if bucket != nil && bucket.Legacy == nil {
-			hasNestedBuckets = true
-		}
 	}
 	sort.Strings(ids)
-	if !hasNestedBuckets {
-		appendWindow("primary", envelope.RateLimits.Primary)
-		appendWindow("secondary", envelope.RateLimits.Secondary)
+
+	type namedBucket struct {
+		id       string
+		snapshot rateSnapshot
+	}
+	generalLimits := make([]model.UsageLimit, 0, 2+len(ids)*2)
+	namedBuckets := make([]namedBucket, 0, len(ids)+1)
+	if strings.TrimSpace(envelope.RateLimits.LimitName) == "" {
+		appendSnapshot(&generalLimits, "", "", envelope.RateLimits)
+	} else {
+		namedBuckets = append(namedBuckets, namedBucket{id: envelope.RateLimits.LimitID, snapshot: envelope.RateLimits})
 	}
 	for _, id := range ids {
 		bucket := envelope.RateLimitsByLimitID[id]
@@ -510,19 +544,22 @@ func snapshotFrom(plan model.Plan, envelope rateEnvelope, fetchedAt time.Time) m
 			continue
 		}
 		if bucket.Legacy != nil {
-			appendWindow(id, bucket.Legacy)
+			appendWindow(&generalLimits, id, "", bucket.Legacy)
 			continue
 		}
-		appendWindow(id+":primary", bucket.Snapshot.Primary)
-		appendWindow(id+":secondary", bucket.Snapshot.Secondary)
+		if strings.TrimSpace(bucket.Snapshot.LimitName) == "" {
+			appendSnapshot(&generalLimits, id, "", bucket.Snapshot)
+			continue
+		}
+		namedBuckets = append(namedBuckets, namedBucket{id: id, snapshot: bucket.Snapshot})
 	}
-	// Collapse windows that share the same duration (e.g. two 7-day weekly
-	// buckets) into a single row, keeping the one closest to its limit. This
-	// matches the reference widget, which shows one weekly bar per provider.
-	if len(snapshot.Limits) > 1 {
-		seen := make(map[int]int, len(snapshot.Limits))
-		deduped := make([]model.UsageLimit, 0, len(snapshot.Limits))
-		for _, limit := range snapshot.Limits {
+	// The unnamed top-level and nested buckets are duplicate views of the same
+	// general allowance. Keep their historical duration-based merge, but never
+	// merge a named model bucket into that allowance or into another model.
+	if len(generalLimits) > 1 {
+		seen := make(map[int]int, len(generalLimits))
+		deduped := make([]model.UsageLimit, 0, len(generalLimits))
+		for _, limit := range generalLimits {
 			if limit.WindowMinutes > 0 {
 				if idx, ok := seen[limit.WindowMinutes]; ok {
 					if limit.UsedPercent > deduped[idx].UsedPercent {
@@ -534,18 +571,28 @@ func snapshotFrom(plan model.Plan, envelope rateEnvelope, fetchedAt time.Time) m
 			}
 			deduped = append(deduped, limit)
 		}
-		snapshot.Limits = deduped
+		generalLimits = deduped
 	}
-	sort.SliceStable(snapshot.Limits, func(i, j int) bool {
-		left, right := snapshot.Limits[i].WindowMinutes, snapshot.Limits[j].WindowMinutes
-		if left <= 0 {
-			return false
-		}
-		if right <= 0 {
-			return true
-		}
-		return left < right
+	sortByWindow(generalLimits)
+	snapshot.Limits = append(snapshot.Limits, generalLimits...)
+
+	sort.SliceStable(namedBuckets, func(i, j int) bool {
+		return namedBuckets[i].id < namedBuckets[j].id
 	})
+	// The top-level rateLimits mirrors one of the nested buckets. When that
+	// mirror is a named model bucket it would otherwise appear twice under the
+	// same id; keep the first occurrence only.
+	seenNamed := make(map[string]bool, len(namedBuckets))
+	for _, bucket := range namedBuckets {
+		if seenNamed[bucket.id] {
+			continue
+		}
+		seenNamed[bucket.id] = true
+		limits := make([]model.UsageLimit, 0, 2)
+		appendSnapshot(&limits, bucket.id, shortLimitName(bucket.snapshot.LimitName), bucket.snapshot)
+		sortByWindow(limits)
+		snapshot.Limits = append(snapshot.Limits, limits...)
+	}
 	credits := envelope.Credits
 	if envelope.RateLimits.Credits != nil {
 		credits = envelope.RateLimits.Credits
@@ -579,6 +626,16 @@ func snapshotFrom(plan model.Plan, envelope rateEnvelope, fetchedAt time.Time) m
 		snapshot.Credits = value
 	}
 	return snapshot
+}
+
+func shortLimitName(limitName string) string {
+	name := strings.TrimSpace(limitName)
+	if idx := strings.LastIndex(name, "-"); idx >= 0 {
+		if token := strings.TrimSpace(name[idx+1:]); token != "" {
+			return token
+		}
+	}
+	return name
 }
 
 func parseBalance(raw json.RawMessage) (float64, bool) {

@@ -35,6 +35,11 @@ Windows feature verification is finished.
 
 ### Fixed
 
+- Codex reported the wrong numbers when an account carries a model-specific limit. The
+  account-wide allowance and the model's own allowance both cover a week, and rows sharing a
+  duration were being collapsed into one, so the model's heavier figure replaced the
+  account's and the account's own weekly disappeared. Each limit now keeps its own row: the
+  account-wide one first, the model-scoped ones beneath it named after the model.
 - The browser-backed Claude account timed out on roughly one refresh in three. Its two
   requests opened two browsers on one profile, and the second attached to the host the first
   was still shutting down; both now ride one browser.

@@ -298,7 +298,36 @@ func sortLaneRows(providerID model.ProviderID, rows []UsageRowState) {
 	})
 }
 
+// codexRowGroup returns the model group a Codex row belongs to, or "" for the
+// account-wide limit. The provider follows the Antigravity convention: a row
+// scoped to one model (GPT-5.3-Codex-Spark today) carries its group name in
+// Label, while an account-wide row carries the plain period word. Comparing
+// against the period word for the row's own window keeps the test exact —
+// any other label is a group name, whatever the model is called next.
+func codexRowGroup(row UsageRowState) string {
+	if row.Label == "" || row.Label == model.UsageWindowLabel(row.WindowMinutes) {
+		return ""
+	}
+	// Rows built by the UI's own fixtures and older paths carry the localized
+	// period word instead of the provider's canonical one. Those are still
+	// account-wide rows, not a model called "세션".
+	switch strings.ToLower(row.Label) {
+	case "session", "weekly", "세션", "주간":
+		return ""
+	}
+	return row.Label
+}
+
 func rowGroupRank(providerID model.ProviderID, row UsageRowState) int {
+	if providerID == model.ProviderCodex {
+		// The account-wide limit is the one the user actually budgets
+		// against, so it stays on top; model-scoped limits follow beneath it
+		// rather than interleaving by window length.
+		if codexRowGroup(row) == "" {
+			return 0
+		}
+		return 1
+	}
 	if providerID != model.ProviderAntigravity {
 		return 0
 	}
