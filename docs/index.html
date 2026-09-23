@@ -149,10 +149,11 @@ repository using the build script under <code>build/windows/</code>.</p>
 </table>
 
 <h3>Release process</h3>
-<p>Releases are cut by hand from the public source, not by an unattended pipeline. Each one
-is built with the script in <code>build/windows/</code>, checksummed, and published with its
-<code>SHA256SUMS.txt</code>. Signing, once in place, will require a deliberate approval step
-for every release rather than running automatically.</p>
+<p>Release artifacts are built on GitHub Actions from the public source, using the same
+script in <code>build/windows/</code> that a local build uses, with the test suite gating
+every build and <code>SHA256SUMS.txt</code> produced alongside. Publishing a release is a
+deliberate manual step by the maintainer, and signing, once in place, will require the same
+per-release approval rather than running unattended.</p>
 
 <h3>Privacy</h3>
 <p>QuotaDock collects nothing. It has no telemetry, no analytics and no crash reporting, and
