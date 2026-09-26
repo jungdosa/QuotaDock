@@ -74,6 +74,12 @@ Claude Code、Codex CLI、Antigravity IDE を使っていると、いつも同�
 
 ## インストール
 
+いちばん手早いのは Windows パッケージ マネージャーです。
+
+```powershell
+winget install jungdosa.QuotaDock
+```
+
 [**Releases**](https://github.com/jungdosa/QuotaDock/releases) から入手できます。
 
 | ファイル | 用途 |

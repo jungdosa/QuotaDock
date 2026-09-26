@@ -66,6 +66,12 @@ Google Antigravity** 的用量額度 —— 工作階段/每週配額，以及�
 
 ## 安裝
 
+最快的方式是使用 Windows 套件管理員：
+
+```powershell
+winget install jungdosa.QuotaDock
+```
+
 請至 [**Releases**](https://github.com/jungdosa/QuotaDock/releases) 下載。
 
 | 檔案 | 用途 |

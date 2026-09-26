@@ -74,7 +74,13 @@ Hovering a row shows a three-line tooltip: `provider · window / remaining / res
 
 ## Install
 
-Grab it from [**Releases**](https://github.com/jungdosa/QuotaDock/releases).
+The quickest way is the Windows Package Manager:
+
+```powershell
+winget install jungdosa.QuotaDock
+```
+
+Or grab a file from [**Releases**](https://github.com/jungdosa/QuotaDock/releases):
 
 | File | Purpose |
 |---|---|

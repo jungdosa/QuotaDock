@@ -71,6 +71,12 @@ Claude Code, Codex CLI, Antigravity IDE를 쓰다 보면 "5시간 세션이 얼�
 
 ## 설치
 
+가장 빠른 방법은 Windows 패키지 관리자입니다.
+
+```powershell
+winget install jungdosa.QuotaDock
+```
+
 [**Releases**](https://github.com/jungdosa/QuotaDock/releases)에서 받습니다.
 
 | 파일 | 용도 |

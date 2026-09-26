@@ -66,6 +66,12 @@ Google Antigravity** 的用量额度 —— 会话/每周配额以及重置倒�
 
 ## 安装
 
+最快的方式是使用 Windows 程序包管理器：
+
+```powershell
+winget install jungdosa.QuotaDock
+```
+
 从 [**Releases**](https://github.com/jungdosa/QuotaDock/releases) 下载。
 
 | 文件 | 用途 |
