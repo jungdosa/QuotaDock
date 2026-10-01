@@ -7,6 +7,19 @@ plus checksums for its binaries.
 Versions follow [Semantic Versioning](https://semver.org/). The project reaches 1.0.0 once
 Windows feature verification is finished.
 
+## [0.7.54] — 2026-10-01
+
+### Fixed
+
+- Moving the widget between monitors with different display scaling (for example a 4K
+  screen at 125% and a 1080p screen at 100%) no longer leaves it misshapen, with a blank band
+  across the top, the bottom cut off and the windows behind showing through. The window now
+  settles to the right size and outline about a second after it lands.
+- The widget no longer drops behind a window that already filled the monitor it was moved
+  to, and a maximized window without a title bar, such as a virtual machine console, no longer
+  counts as fullscreen. Video or a game that goes fullscreen over the widget still pushes it
+  aside, as before.
+
 ## [0.7.53] — 2026-09-22
 
 ### Added
@@ -190,6 +203,8 @@ Ten internal builds since 0.7.15, released together.
 The first release after the repository went public. Earlier versions are listed under
 [releases](https://github.com/jungdosa/QuotaDock/releases).
 
+[0.7.54]: https://github.com/jungdosa/QuotaDock/releases/tag/v0.7.54
+[0.7.53]: https://github.com/jungdosa/QuotaDock/releases/tag/v0.7.53
 [0.7.38]: https://github.com/jungdosa/QuotaDock/releases/tag/v0.7.38
 [0.7.37]: https://github.com/jungdosa/QuotaDock/releases/tag/v0.7.37
 [0.7.36]: https://github.com/jungdosa/QuotaDock/releases/tag/v0.7.36
