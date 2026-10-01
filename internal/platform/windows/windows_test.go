@@ -159,6 +159,7 @@ func TestWindowCloseHidesAndTrayExitQuits(t *testing.T) {
 func TestFullscreenSurfaceRequiresBorderlessFullCover(t *testing.T) {
 	monitor := winRect{Left: 0, Top: 0, Right: 3840, Bottom: 2160}
 	const caption = 0x00C00000
+	const maximize = 0x01000000
 	tests := []struct {
 		name   string
 		style  uintptr
@@ -168,6 +169,7 @@ func TestFullscreenSurfaceRequiresBorderlessFullCover(t *testing.T) {
 		{"fullscreen chrome video", 0x96000000, winRect{Left: 0, Top: 0, Right: 3840, Bottom: 2160}, true},
 		{"borderless overshooting the monitor", 0, winRect{Left: -8, Top: -8, Right: 3848, Bottom: 2168}, true},
 		{"maximized window keeps its caption", caption, winRect{Left: -8, Top: -8, Right: 3848, Bottom: 2168}, false},
+		{"maximized without a caption, like a VM console", maximize, winRect{Left: 0, Top: 0, Right: 3840, Bottom: 2160}, false},
 		{"borderless but smaller than the monitor", 0, winRect{Left: 0, Top: 0, Right: 1920, Bottom: 2160}, false},
 		{"borderless on another monitor", 0, winRect{Left: 3840, Top: 0, Right: 5760, Bottom: 1080}, false},
 	}

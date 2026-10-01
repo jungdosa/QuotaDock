@@ -25,6 +25,7 @@ func (*WindowController) IsVisible() bool               { return true }
 func (*WindowController) DPIScale() float64              { return 1 }
 func (*WindowController) TrimWorkingSet() error         { return nil }
 func (*WindowController) SetAlwaysOnTop(bool) error     { return nil }
+func (*WindowController) Monitor() (uintptr, error)         { return 0, nil }
 func (*WindowController) FullscreenCover() (uintptr, error) { return 0, nil }
 func (*WindowController) LowerBelow(uintptr) error      { return nil }
 func (*WindowController) RaiseTopmost() error           { return nil }

@@ -15,6 +15,7 @@ const (
 	gwlStyle                       = -16
 	gwlExStyle                     = -20
 	wsCaption                      = 0x00C00000
+	wsMaximize                     = 0x01000000
 	wsExAppWindow                  = 0x00040000
 	wsExToolWindow                 = 0x00000080
 	wsExTopmost                    = 0x00000008
@@ -293,6 +294,19 @@ func (c *WindowController) SetAlwaysOnTop(enabled bool) error {
 	return nil
 }
 
+// Monitor reports the handle of the monitor holding most of the window. It
+// changes when the window is dragged onto another display.
+func (c *WindowController) Monitor() (uintptr, error) {
+	if err := c.bound(); err != nil {
+		return 0, err
+	}
+	monitor, _, _ := monitorFromWindow.Call(c.HWND, monitorDefaultToNearest)
+	if monitor == 0 {
+		return 0, fmt.Errorf("window monitor is unavailable")
+	}
+	return monitor, nil
+}
+
 // FullscreenCover walks the z-order for the frontmost normal window that
 // touches this window's monitor and reports its handle when it is a
 // borderless surface covering the whole monitor — a fullscreen video or
@@ -390,9 +404,11 @@ func (c *WindowController) RaiseTopmost() error {
 
 // fullscreenSurface reports whether a window with the given style and rect is
 // a fullscreen surface on the monitor: borderless and covering it entirely.
-// Maximized ordinary windows keep their caption style and stay excluded.
+// Maximized windows stay excluded whether or not they keep a caption: a VM
+// console maximized without its title bar is still a working window, and
+// browsers leave the maximized state before going fullscreen.
 func fullscreenSurface(style uintptr, window, monitor winRect) bool {
-	if style&wsCaption == wsCaption {
+	if style&wsCaption == wsCaption || style&wsMaximize != 0 {
 		return false
 	}
 	return window.Left <= monitor.Left && window.Top <= monitor.Top &&

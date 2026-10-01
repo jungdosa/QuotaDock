@@ -183,6 +183,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	var refreshing atomic.Bool
 	var rendering atomic.Bool
 	var alwaysOnTop atomic.Bool
+	var lastDragMove atomic.Int64
 	var scheduler provider.Scheduler
 	var view *ui.View
 	var tray *platform.Tray
@@ -452,6 +453,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		return cursorX - position.X, cursorY - position.Y, nil
 	}, MoveWindow: func(grabOffsetX, grabOffsetY int) error {
 		markActivity()
+		lastDragMove.Store(time.Now().UnixNano())
 		cursorX, cursorY, cursorErr := native.CursorPos()
 		if cursorErr != nil {
 			return cursorErr
@@ -622,10 +624,16 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		// or not), drop directly beneath it, and rejoin the topmost band once
 		// it is gone. Z-order only; hiding the window is off-limits since the
 		// blank-window bug taught Fyne must not be bypassed with ShowWindow.
+		//
+		// Only a cover that appears while the widget is already on the monitor
+		// counts. Dragging the widget onto a display that a fullscreen VM or
+		// game already fills is a deliberate choice to see it there; yielding
+		// then made the widget vanish behind that window two seconds after
+		// it was dropped.
 		diagnostics.Go("fullscreen_yield", func() {
 			ticker := time.NewTicker(2 * time.Second)
 			defer ticker.Stop()
-			var yieldedTo uintptr
+			var yieldedTo, coverOnArrival, monitor uintptr
 			for {
 				select {
 				case <-ctx.Done():
@@ -635,12 +643,26 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 						yieldedTo = 0
 						continue
 					}
+					current, monitorErr := native.Monitor()
+					if monitorErr != nil {
+						continue
+					}
 					cover, coverErr := native.FullscreenCover()
 					if coverErr != nil {
 						continue
 					}
+					if monitor != 0 && current != monitor {
+						coverOnArrival = cover
+						if yieldedTo != 0 {
+							if raiseErr := native.RaiseTopmost(); raiseErr == nil {
+								yieldedTo = 0
+								slog.Info("window.yield", "reason", "monitor_changed")
+							}
+						}
+					}
+					monitor = current
 					if cover != 0 {
-						if cover == yieldedTo {
+						if cover == yieldedTo || cover == coverOnArrival {
 							continue
 						}
 						if lowerErr := native.LowerBelow(cover); lowerErr == nil {
@@ -657,6 +679,45 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 			}
 		})
 	}
+	// Moving onto a monitor with a different scale makes Fyne rescale the
+	// canvas, but the OS size limits of the fixed-size window stay pinned to
+	// the old pixel size, so the frame, the drawn content and the rounded
+	// window region stop agreeing: content shifted down with the top left
+	// blank, the bottom clipped, windows behind showing through on the right.
+	// Re-running the resize once the window lands re-pins the limits at the
+	// new scale and redraws the corners for the new frame. A drag still in
+	// progress is left alone so the window does not jump under the cursor.
+	diagnostics.Go("monitor_watch", func() {
+		ticker := time.NewTicker(500 * time.Millisecond)
+		defer ticker.Stop()
+		var monitor uintptr
+		var scale float64
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if time.Since(time.Unix(0, lastDragMove.Load())) < time.Second {
+					continue
+				}
+				current, monitorErr := native.Monitor()
+				if monitorErr != nil {
+					continue
+				}
+				currentScale := native.DPIScale()
+				if monitor == 0 {
+					monitor, scale = current, currentScale
+					continue
+				}
+				if current == monitor && currentScale == scale {
+					continue
+				}
+				slog.Info("window.monitor", "scale_from", scale, "scale_to", currentScale, "monitor_changed", current != monitor)
+				monitor, scale = current, currentScale
+				fyne.Do(func() { resizeWindow(view.MinimumSize(view.Screen())) })
+			}
+		}
+	})
 	_ = native.SetAlwaysOnTop(cfg.AlwaysOnTop)
 	_ = native.SetTaskbarVisible(cfg.ShowInTaskbar)
 	if cfg.WindowPositioned {
