@@ -39,6 +39,14 @@ func BuildTrayTooltip(state ViewState, config settings.Config, systemLanguage i1
 		if !ok {
 			continue
 		}
+		if model.IsCodexAccount(lane.Provider) {
+			if model.CodexAccountIndex(lane.Provider) > accountCount(config, lane.Provider) {
+				continue
+			}
+			if accountCount(config, lane.Provider) > 1 {
+				lane.Name = accountDisplayName(config, lane.Provider)
+			}
+		}
 		if model.IsClaudeAccount(lane.Provider) {
 			lane.Name = claudeAccountDisplayName(config, lane.Provider, several)
 		}
@@ -82,7 +90,7 @@ func highestVisibleUsageRow(lane LaneState, config settings.Config) (UsageRowSta
 		if !config.ShowClaude {
 			return UsageRowState{}, false
 		}
-	case model.ProviderCodex:
+	case model.ProviderCodex, model.ProviderCodex2, model.ProviderCodex3, model.ProviderCodex4, model.ProviderCodex5:
 		if !config.ShowCodex {
 			return UsageRowState{}, false
 		}

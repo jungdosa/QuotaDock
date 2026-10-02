@@ -88,6 +88,8 @@
   "connection.remove_account": "Hapus akun Claude terakhir",
   "connection.cli_in_use": "CLI sudah digunakan oleh akun Claude lain",
   "connection.sign_in": "Masuk",
+  "connection.codex_auth_hint": "Masuk dengan akun ChatGPT lain di browser. Akun ini disimpan terpisah untuk QuotaDock; login Codex CLI yang ada tetap tidak berubah.",
+  "connection.cancel_sign_in": "Batalkan login",
   "connection.auth_web_hint": "Membuka halaman masuk resmi Anthropic di jendela dalam aplikasi. Kata sandi Anda langsung dikirim ke Anthropic; QuotaDock tidak dapat membacanya. Sesi hanya disimpan untuk aplikasi ini.",
   "connection.panel_install_title": "Koneksi %s — perlu dipasang",
   "connection.install_step_1": "Pasang %s",

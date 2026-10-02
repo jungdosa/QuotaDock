@@ -88,6 +88,8 @@
   "connection.remove_account": "Letztes Claude-Konto entfernen",
   "connection.cli_in_use": "CLI wird bereits von einem anderen Claude-Konto verwendet",
   "connection.sign_in": "Anmelden",
+  "connection.codex_auth_hint": "Melde dich im Browser mit einem anderen ChatGPT-Konto an. Dieses Konto wird separat für QuotaDock gespeichert. Deine bestehende Codex-CLI-Anmeldung bleibt unverändert.",
+  "connection.cancel_sign_in": "Anmeldung abbrechen",
   "connection.auth_web_hint": "Öffnet die offizielle Anmeldeseite von Anthropic in einem Fenster in der App. Ihr Passwort geht direkt an Anthropic; QuotaDock kann es nicht lesen. Die Sitzung bleibt nur in dieser App.",
   "connection.panel_install_title": "%s-Verbindung — Installation erforderlich",
   "connection.install_step_1": "Installieren Sie %s",

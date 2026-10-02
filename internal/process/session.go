@@ -46,6 +46,8 @@ func StartJSONLSession(spec CommandSpec, runner Runner) (*JSONLSession, error) {
 	}
 	cmd := exec.Command(spec.Name, spec.Args...)
 	configureCommand(cmd)
+	cmd.Env = spec.Env
+	cmd.Dir = spec.Dir
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("open stdout: %w", err)

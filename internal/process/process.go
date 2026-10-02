@@ -29,6 +29,9 @@ var (
 type CommandSpec struct {
 	Name string
 	Args []string
+	// Env is a complete child environment when non-nil; it never changes the parent.
+	Env []string
+	Dir string
 }
 type LogFunc func(string)
 
@@ -95,6 +98,8 @@ func (r Runner) RunJSONL(ctx context.Context, spec CommandSpec) ([]json.RawMessa
 	defer cancel()
 	cmd := exec.CommandContext(runCtx, spec.Name, spec.Args...)
 	configureCommand(cmd)
+	cmd.Env = spec.Env
+	cmd.Dir = spec.Dir
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("open stdout: %w", err)

@@ -239,8 +239,11 @@ type Actions struct {
 	// WebAuthAvailable reports whether the embedded browser sign-in can run,
 	// so the Claude Auth method reads as available instead of planned.
 	WebAuthAvailable bool
+	CancelSignIn     func(model.ProviderID)
 }
 type View struct {
+	settingsScroll          *container.Scroll
+	signingIn               map[model.ProviderID]bool
 	Canvas                  fyne.Canvas
 	Catalog                 *i18n.Catalog
 	SystemLanguage          i18n.Language
@@ -374,6 +377,7 @@ func (v *View) SetConfig(config settings.Config) {
 	oldShowClaude := v.config.ShowClaude
 	oldShowClaudeAuth := v.config.ShowClaudeAuth
 	oldClaudeAccounts := v.config.ClaudeAccounts
+	oldCodexAccounts, oldShowCodex := v.config.CodexAccounts, v.config.ShowCodex
 	oldNanoVertical := v.config.NanoVertical
 	current := v.screen
 
@@ -387,7 +391,7 @@ func (v *View) SetConfig(config settings.Config) {
 	// Nano's orientation moves the title bar from the top edge to the right one,
 	// which is a different frame rather than a different arrangement inside the
 	// same one, so it rebuilds like a theme or language change does.
-	if (oldLanguage != v.config.Language || oldTheme != v.config.Theme || oldWarningsEnabled != v.config.WarningsEnabled || oldShowClaude != v.config.ShowClaude || oldShowClaudeAuth != v.config.ShowClaudeAuth || oldClaudeAccounts != v.config.ClaudeAccounts || oldNanoVertical != v.config.NanoVertical) && v.Root != nil {
+	if (oldLanguage != v.config.Language || oldTheme != v.config.Theme || oldWarningsEnabled != v.config.WarningsEnabled || oldShowClaude != v.config.ShowClaude || oldShowClaudeAuth != v.config.ShowClaudeAuth || oldClaudeAccounts != v.config.ClaudeAccounts || oldCodexAccounts != v.config.CodexAccounts || oldShowCodex != v.config.ShowCodex || oldNanoVertical != v.config.NanoVertical) && v.Root != nil {
 		v.rebuildScreens(current)
 		v.resizeCurrentWidget()
 		return
@@ -990,8 +994,8 @@ func (v *View) antigravityRowsFor(lane LaneState) LaneState {
 
 func (v *View) laneVisible(id model.ProviderID) bool {
 	switch id {
-	case model.ProviderCodex:
-		return v.config.ShowCodex
+	case model.ProviderCodex, model.ProviderCodex2, model.ProviderCodex3, model.ProviderCodex4, model.ProviderCodex5:
+		return v.config.ShowCodex && model.CodexAccountIndex(id) <= accountCount(v.config, id)
 	case model.ProviderAntigravity:
 		return v.config.ShowAGGemini || v.config.ShowAGClaude
 	case model.ProviderGrok:
@@ -1020,6 +1024,9 @@ func (v *View) visibleLanes() []LaneState {
 			lane.Name = claudeAccountDisplayName(v.config, id, several)
 			out = append(out, lane)
 			continue
+		}
+		if model.IsCodexAccount(id) {
+			lane.Name = accountDisplayName(v.config, id)
 		}
 		switch id {
 		case model.ProviderAntigravity:
@@ -1117,8 +1124,8 @@ func providerColorKey(id model.ProviderID, row UsageRowState) string {
 	if model.IsClaudeAccount(id) {
 		return string(id)
 	}
-	if id == model.ProviderCodex {
-		return "codex"
+	if model.IsCodexAccount(id) {
+		return string(id)
 	}
 	if id == model.ProviderGrok {
 		return "grok"
@@ -1227,7 +1234,7 @@ func providerIconKind(lane LaneState, row UsageRowState) ProviderIconKind {
 	switch lane.Provider {
 	case model.ProviderClaude, model.ProviderClaudeAuth, model.ProviderClaude3, model.ProviderClaude4, model.ProviderClaude5:
 		return ProviderIconClaude
-	case model.ProviderCodex:
+	case model.ProviderCodex, model.ProviderCodex2, model.ProviderCodex3, model.ProviderCodex4, model.ProviderCodex5:
 		return ProviderIconCodex
 	case model.ProviderAntigravity:
 		if antigravityRowIsGemini(row) {
@@ -1337,7 +1344,7 @@ func koreanUsageLabel(lane LaneState, row UsageRowState) string {
 		}
 		return group
 	}
-	if lane.Provider == model.ProviderCodex {
+	if model.IsCodexAccount(lane.Provider) {
 		// A model-scoped limit names its group ("Spark 세션"); the account-wide
 		// limit keeps the bare period, as the lane header already says Codex.
 		if group := codexRowGroup(row); group != "" {
@@ -1398,7 +1405,7 @@ func englishUsageLabel(lane LaneState, row UsageRowState) string {
 		}
 		return group
 	}
-	if lane.Provider == model.ProviderCodex {
+	if model.IsCodexAccount(lane.Provider) {
 		// Mirrors the Korean path: model-scoped rows say which model, the
 		// account-wide row says only the period.
 		if group := codexRowGroup(row); group != "" {
@@ -1547,7 +1554,15 @@ func (v *View) buildSettings() *fyne.Container {
 	bar := v.settingsTitleBar(back, v.Actions.AppVersion, closeSettings)
 	page := canvas.NewRectangle(v.colors.SettingsBackground)
 	page.CornerRadius = WindowCornerRadius
-	body := container.NewBorder(bar, nil, nil, nil, container.New(layout.NewCustomPaddedLayout(4, 8, 12, 12), content))
+	var settingsBody fyne.CanvasObject = content
+	// Extra Codex cards can exceed the display height. Keep the title fixed and
+	// all settings reachable through one vertical scroll surface.
+	v.settingsScroll = nil
+	if v.config.CodexAccounts > 1 {
+		v.settingsScroll = container.NewVScroll(content)
+		settingsBody = v.settingsScroll
+	}
+	body := container.NewBorder(bar, nil, nil, nil, container.New(layout.NewCustomPaddedLayout(4, 8, 12, 12), settingsBody))
 	return container.NewStack(page, body)
 }
 
@@ -1712,7 +1727,7 @@ func (v *View) showConnectionHelp(id model.ProviderID) {
 
 func connectionHelpKeys(id model.ProviderID) (string, string, string) {
 	switch id {
-	case model.ProviderCodex:
+	case model.ProviderCodex, model.ProviderCodex2, model.ProviderCodex3, model.ProviderCodex4, model.ProviderCodex5:
 		return i18n.KeyHelpCodexTitle, i18n.KeyHelpCodex, i18n.KeyHelpCodexRetry
 	case model.ProviderAntigravity:
 		return i18n.KeyHelpAntigravityTitle, i18n.KeyHelpAntigravity, i18n.KeyHelpAntigravityRetry

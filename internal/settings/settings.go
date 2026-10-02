@@ -14,11 +14,12 @@ import (
 	"unicode/utf8"
 
 	"github.com/jungdosa/QuotaDock/internal/i18n"
+	"github.com/jungdosa/QuotaDock/internal/model"
 	"github.com/jungdosa/QuotaDock/internal/security"
 )
 
 const (
-	CurrentSchemaVersion       = 7
+	CurrentSchemaVersion       = 8
 	MaxFileSize          int64 = 256 << 10
 )
 
@@ -102,6 +103,7 @@ type Config struct {
 	// ShowClaudeAuth is written back as "at least two" so a build that only
 	// knows two accounts still sees the second one.
 	ClaudeAccounts int  `json:"claudeAccounts,omitempty"`
+	CodexAccounts  int  `json:"codexAccounts,omitempty"`
 	ShowCodex      bool `json:"showCodex"`
 	ShowAGGemini   bool `json:"showAGGemini"`
 	ShowAGClaude   bool `json:"showAGClaude"`
@@ -146,13 +148,13 @@ type Config struct {
 // (An earlier draft banned warm provider hues; that reservation was withdrawn
 // when defaults were matched to the logos.)
 func Default() Config {
-	return Config{SchemaVersion: CurrentSchemaVersion, Language: LanguageSystem, DateTimeFormat: Format12HourDate, Theme: ThemeLight, UsageMode: UsageUsed, RefreshSeconds: 300, WarningsEnabled: true, WarningPercent: 80, DangerPercent: 90, WarningColor: "amber", DangerColor: "red", ProviderColors: map[string]string{"claude": "orange", "claude-auth": "slate", "claude-3": "teal", "claude-4": "indigo", "claude-5": "purple", "codex": "gray", "antigravity": "slate", "antigravity-gemini": "violet", "grok": "sky"}, LaneOrder: DefaultLaneOrder(), ShowClaude: true, ShowClaudeAuth: false, ClaudeAccounts: 1, ShowCodex: true, ShowAGGemini: true, ShowAGClaude: true, ShowGrok: false, ShowClaudeCredits: true, ShowCodexCredits: true, ShowInTaskbar: true, PromoteTrayIcon: true, DisplayMode: ModeNormal}
+	return Config{SchemaVersion: CurrentSchemaVersion, Language: LanguageSystem, DateTimeFormat: Format12HourDate, Theme: ThemeLight, UsageMode: UsageUsed, RefreshSeconds: 300, WarningsEnabled: true, WarningPercent: 80, DangerPercent: 90, WarningColor: "amber", DangerColor: "red", ProviderColors: map[string]string{"claude": "orange", "claude-auth": "slate", "claude-3": "teal", "claude-4": "indigo", "claude-5": "purple", "codex": "gray", "codex-2": "teal", "codex-3": "indigo", "codex-4": "purple", "codex-5": "sky", "antigravity": "slate", "antigravity-gemini": "violet", "grok": "sky"}, LaneOrder: DefaultLaneOrder(), ShowClaude: true, ShowClaudeAuth: false, ClaudeAccounts: 1, CodexAccounts: 1, ShowCodex: true, ShowAGGemini: true, ShowAGClaude: true, ShowGrok: false, ShowClaudeCredits: true, ShowCodexCredits: true, ShowInTaskbar: true, PromoteTrayIcon: true, DisplayMode: ModeNormal}
 }
 
 const MaxAccountLabelRunes = 20
 
 var accountLabelProviderIDs = map[string]struct{}{
-	"claude": {}, "claude-auth": {}, "claude-3": {}, "claude-4": {}, "claude-5": {},
+	"claude": {}, "claude-auth": {}, "claude-3": {}, "claude-4": {}, "claude-5": {}, "codex": {}, "codex-2": {}, "codex-3": {}, "codex-4": {}, "codex-5": {},
 }
 
 // NormalizeAccountLabel keeps user aliases short and single-line. It never
@@ -210,7 +212,7 @@ var connectionMethodIDs = map[string]struct{}{
 }
 
 var connectionProviderIDs = map[string]struct{}{
-	"claude": {}, "claude-auth": {}, "claude-3": {}, "claude-4": {}, "claude-5": {}, "codex": {}, "antigravity": {}, "grok": {},
+	"claude": {}, "claude-auth": {}, "claude-3": {}, "claude-4": {}, "claude-5": {}, "codex": {}, "codex-2": {}, "codex-3": {}, "codex-4": {}, "codex-5": {}, "antigravity": {}, "grok": {},
 }
 
 // IsConnectionMethodID reports whether a stored method identifier is one this
@@ -229,7 +231,12 @@ const MaxClaudeAccounts = 5
 // The first two keep the names they always had, because every file written
 // so far keys the second account's label, colour and sign-in route on them.
 func ClaudeAccountIDs() []string {
-	return []string{"claude", "claude-auth", "claude-3", "claude-4", "claude-5"}
+	ids := model.ClaudeAccountIDs()
+	out := make([]string, len(ids))
+	for i, id := range ids {
+		out[i] = string(id)
+	}
+	return out
 }
 
 // DefaultLaneOrder is the order QuotaDock has always drawn its providers in,
@@ -237,7 +244,7 @@ func ClaudeAccountIDs() []string {
 // its Gemini and Claude readings are one provider group that moves together,
 // even though the nano screen draws them as two cells.
 func DefaultLaneOrder() []string {
-	return []string{"claude", "claude-auth", "claude-3", "claude-4", "claude-5", "codex", "antigravity", "grok"}
+	return []string{"claude", "claude-auth", "claude-3", "claude-4", "claude-5", "codex", "codex-2", "codex-3", "codex-4", "codex-5", "antigravity", "grok"}
 }
 
 var laneOrderIDs = func() map[string]struct{} {
@@ -273,8 +280,8 @@ func NormalizeLaneOrder(order []string) []string {
 		// Claude accounts it does name, not at the end of the list. A user who
 		// arranged two accounts and then added a third would otherwise find it
 		// below Grok, away from the group it belongs to.
-		if isClaudeAccountID(id) {
-			if at := lastClaudeAccount(out); at >= 0 {
+		if family := model.AccountFamily(model.ProviderID(id)); family != "" {
+			if at := lastFamilyAccount(out, family); at >= 0 {
 				out = append(out[:at+1], append([]string{id}, out[at+1:]...)...)
 				continue
 			}
@@ -388,6 +395,7 @@ func (c Config) Validated() Config {
 	}
 	c.ClaudeAccounts = min(MaxClaudeAccounts, c.ClaudeAccounts)
 	c.ShowClaudeAuth = c.ClaudeAccounts >= 2
+	c.CodexAccounts = max(1, min(MaxCodexAccounts, c.CodexAccounts))
 	c.LaneOrder = NormalizeLaneOrder(c.LaneOrder)
 	// Drop entries this build cannot honor instead of rejecting the file: a
 	// method removed in a later version, or a provider that no longer exists,

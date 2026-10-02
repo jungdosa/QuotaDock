@@ -167,9 +167,11 @@ const (
 	KeyConnectionAccountLabel      = "connection.account_label"
 	KeyConnectionAccountLabelHint  = "connection.account_label_hint"
 	KeyConnectionAddAccount        = "connection.add_account"
-	KeyConnectionRemoveAccount   = "connection.remove_account"
+	KeyConnectionRemoveAccount     = "connection.remove_account"
 	KeyConnectionCLIInUse          = "connection.cli_in_use"
 	KeyConnectionSignIn            = "connection.sign_in"
+	KeyConnectionCodexAuthHint     = "connection.codex_auth_hint"
+	KeyConnectionCancelSignIn      = "connection.cancel_sign_in"
 	KeyConnectionAuthWebHint       = "connection.auth_web_hint"
 	KeyConnectionPanelInstallTitle = "connection.panel_install_title"
 	KeyConnectionInstallStep1      = "connection.install_step_1"
@@ -375,6 +377,8 @@ var RequiredKeys = []string{
 	KeyConnectionCLIInUse,
 	KeyConnectionSignIn,
 	KeyConnectionAuthWebHint,
+	KeyConnectionCodexAuthHint,
+	KeyConnectionCancelSignIn,
 	KeyConnectionPanelInstallTitle,
 	KeyConnectionInstallStep1,
 	KeyConnectionInstallStep2,

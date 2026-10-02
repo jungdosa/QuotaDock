@@ -20,17 +20,21 @@ import (
 const MinimumCLIVersion = "0.145.0"
 
 type AppServerTransport struct {
-	mu         sync.Mutex
-	executable string
-	find       func() (string, error)
-	runner     process.Runner
-	session    *process.JSONLSession
-	handler    func(json.RawMessage)
+	mu           sync.Mutex
+	executable   string
+	find         func() (string, error)
+	runner       process.Runner
+	session      *process.JSONLSession
+	handler      func(json.RawMessage)
+	home         string
+	loginEvents  chan loginEvent
+	startSession func(process.CommandSpec, process.Runner) (*process.JSONLSession, error)
 }
 
 func NewAppServerTransport(log process.LogFunc) *AppServerTransport {
 	transport := &AppServerTransport{runner: process.Runner{Timeout: 5 * time.Second, MaxLineBytes: 512 << 10, MaxOutputBytes: 1 << 20, MaxStderrBytes: 64 << 10, Log: log}}
 	transport.find = findCodexExecutable
+	transport.startSession = process.StartJSONLSession
 	return transport
 }
 
@@ -94,7 +98,12 @@ func (t *AppServerTransport) Version(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	output, err := t.runner.RunOutput(ctx, process.CommandSpec{Name: path, Args: []string{"--version"}})
+	if t.home != "" {
+		if err := os.MkdirAll(t.home, 0o700); err != nil {
+			return "", errors.New("create Codex account profile")
+		}
+	}
+	output, err := t.runner.RunOutput(ctx, t.command(path, "--version"))
 	if err != nil {
 		return "", err
 	}
@@ -120,11 +129,20 @@ func (t *AppServerTransport) ensureSession() (*process.JSONLSession, error) {
 			return t.session, nil
 		}
 	}
-	session, err := process.StartJSONLSession(process.CommandSpec{Name: path, Args: []string{"app-server"}}, t.runner)
+	if t.home != "" {
+		if err := os.MkdirAll(t.home, 0o700); err != nil {
+			return nil, errors.New("create Codex account profile")
+		}
+	}
+	session, err := t.startSession(t.command(path, "app-server"), t.runner)
 	if err != nil {
 		return nil, err
 	}
 	session.SetNotificationHandler(func(method string, params json.RawMessage) {
+		if method == "account/login/completed" {
+			t.deliverLoginEvent(params)
+			return
+		}
 		if method != "account/rateLimits/updated" {
 			return
 		}

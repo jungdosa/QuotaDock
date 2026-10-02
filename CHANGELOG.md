@@ -7,6 +7,24 @@ plus checksums for its binaries.
 Versions follow [Semantic Versioning](https://semver.org/). The project reaches 1.0.0 once
 Windows feature verification is finished.
 
+## [0.7.55] — 2026-10-03
+
+### Added
+
+- Monitor up to five Codex accounts side by side. Add an account with `+` in
+  Settings → Connections, then sign in through the browser. The first account uses
+  the existing Codex CLI login; additional accounts keep separate sign-in data.
+- Give each Codex account its own display name and colour in normal, compact and
+  nano modes and the tray tooltip. General and Spark limits remain separate for
+  each account. Connection settings scroll when additional Codex accounts are shown.
+- Cancel a pending Codex sign-in. Conflicting account actions are disabled during
+  sign-in, and delayed refresh results cannot restore usage from the previous login.
+
+### Changed
+
+- Share account display and settings helpers between providers and separate Codex
+  rate-limit parsing from connection management. Existing settings migrate automatically.
+
 ## [0.7.54] — 2026-10-01
 
 ### Fixed
@@ -203,6 +221,7 @@ Ten internal builds since 0.7.15, released together.
 The first release after the repository went public. Earlier versions are listed under
 [releases](https://github.com/jungdosa/QuotaDock/releases).
 
+[0.7.55]: https://github.com/jungdosa/QuotaDock/releases/tag/v0.7.55
 [0.7.54]: https://github.com/jungdosa/QuotaDock/releases/tag/v0.7.54
 [0.7.53]: https://github.com/jungdosa/QuotaDock/releases/tag/v0.7.53
 [0.7.38]: https://github.com/jungdosa/QuotaDock/releases/tag/v0.7.38

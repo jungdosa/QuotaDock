@@ -32,6 +32,10 @@ const (
 	ProviderClaude4     ProviderID = "claude-4"
 	ProviderClaude5     ProviderID = "claude-5"
 	ProviderCodex       ProviderID = "codex"
+	ProviderCodex2      ProviderID = "codex-2"
+	ProviderCodex3      ProviderID = "codex-3"
+	ProviderCodex4      ProviderID = "codex-4"
+	ProviderCodex5      ProviderID = "codex-5"
 	ProviderAntigravity ProviderID = "antigravity"
 	ProviderGrok        ProviderID = "grok"
 )
@@ -239,8 +243,8 @@ func NormalizePlan(provider ProviderID, raw string) Plan {
 	key := strings.ToUpper(strings.Join(strings.Fields(strings.NewReplacer("_", " ", "-", " ").Replace(raw)), " "))
 	// Every Claude account reads the same plans; the table is keyed on the
 	// first account and the rest are folded onto it.
-	if IsClaudeAccount(provider) {
-		provider = ProviderClaude
+	if family := AccountFamily(provider); family != "" {
+		provider = family
 	}
 	if plan, ok := planAllowlists[provider][key]; ok {
 		return plan

@@ -158,9 +158,14 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		}
 	}
 	claudeProvider.SetSourceMode(cfg.ConnectionMethods[string(model.ProviderClaude)])
+	codexRoot := ""
+	if dataDir, dirErr := diagnostics.LocalDataDirectory(); dirErr == nil {
+		codexRoot = filepath.Join(dataDir, "codex-accounts")
+	}
+	codexAccounts := codexprovider.NewAccounts(codexRoot, processLog)
 	coordinator := provider.Coordinator{Providers: map[model.ProviderID]model.Provider{
 		model.ProviderClaude:      claudeProvider,
-		model.ProviderCodex:       codexprovider.New(codexprovider.NewAppServerTransport(processLog), codexprovider.MinimumCLIVersion),
+		model.ProviderCodex:       codexAccounts,
 		model.ProviderAntigravity: agprovider.New(agprovider.NewLocalClient()),
 		model.ProviderGrok:        grokprovider.New(nil, ""),
 	}}
@@ -320,9 +325,10 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		diagnostics.Go("provider_refresh", func() {
 			refreshCtx, stop := context.WithTimeout(ctx, 12*time.Second)
 			defer stop()
-			state := controller.Refresh(refreshCtx)
+			_ = controller.Refresh(refreshCtx)
 			rendering.Store(true)
 			fyne.DoAndWait(func() {
+				state := controller.State()
 				view.SetState(state)
 				setTrayTooltip(state)
 				view.SetRefreshing(false)
@@ -385,7 +391,51 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		applyConfig(cfg)
 		applyScreen(ui.ScreenForDisplayMode(mode))
 	}
+	var codexSigningIn atomic.Bool
+	var codexSignInCancel context.CancelFunc
 	runSignIn := func(id model.ProviderID) {
+		if model.CodexAccountIndex(id) >= 2 && !demo {
+			if !codexSigningIn.CompareAndSwap(false, true) {
+				return
+			}
+			signInCtx, stop := context.WithTimeout(ctx, 5*time.Minute)
+			codexSignInCancel = stop
+			controller.ForgetAccount(id)
+			view.SetState(controller.State())
+			setTrayTooltip(controller.State())
+			view.SetSigningIn(id, true)
+			diagnostics.Go("codex_signin", func() {
+				defer stop()
+				err := codexAccounts.SignIn(signInCtx, id, func(raw string) error { return platform.OpenAllowedURL(a, raw) })
+				userCanceled := errors.Is(signInCtx.Err(), context.Canceled)
+				slog.Info("web.signin", "provider", string(id), "ok", err == nil)
+				controller.ForgetAccount(id)
+				if ctx.Err() != nil {
+					codexSigningIn.Store(false)
+					return
+				}
+				fyne.Do(func() {
+					codexSigningIn.Store(false)
+					codexSignInCancel = nil
+					view.SetSigningIn(id, false)
+					view.SetState(controller.State())
+					if err != nil && !userCanceled {
+						view.ShowSignInError(err)
+					}
+				})
+				// An older refresh may still be finishing. Refresh once it releases its guard.
+				for refreshing.Load() {
+					select {
+					case <-ctx.Done():
+						return
+					case <-time.After(100 * time.Millisecond):
+					}
+				}
+				refresh()
+			})
+			return
+		}
+
 		if demo || !model.IsClaudeAccount(id) {
 			return
 		}
@@ -411,7 +461,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		})
 	}
 	runConnectionAction := func(id model.ProviderID, reconnect bool) {
-		implementation := coordinator.Providers[id]
+		implementation := coordinator.Provider(id)
 		if implementation == nil {
 			return
 		}
@@ -482,9 +532,15 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	}, Close: shell.hide, CloseSettings: func() {
 		applyScreen(ui.ScreenForDisplayMode(cfg.DisplayMode))
 	}, ConfigChanged: applyConfig, Activity: markActivity,
-		Inspect:     func(id model.ProviderID) { runConnectionAction(id, false) },
-		Reconnect:   func(id model.ProviderID) { runConnectionAction(id, true) },
-		SignIn:      runSignIn,
+		Inspect:   func(id model.ProviderID) { runConnectionAction(id, false) },
+		Reconnect: func(id model.ProviderID) { runConnectionAction(id, true) },
+		SignIn:    runSignIn,
+		CancelSignIn: func(id model.ProviderID) {
+			if codexSignInCancel != nil {
+				codexSignInCancel()
+			}
+			codexAccounts.CancelSignIn(id)
+		},
 		CheckUpdate: func() { updates.Check(true) },
 		OpenURL:     func(raw string) error { return platform.OpenAllowedURL(a, raw) },
 	}

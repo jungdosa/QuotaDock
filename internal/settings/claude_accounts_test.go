@@ -67,7 +67,7 @@ func TestAccountCountIsClampedToTheMaximum(t *testing.T) {
 // to the other Claude accounts, not at the bottom of the list below Grok.
 func TestANewClaudeAccountJoinsTheOthersInTheOrder(t *testing.T) {
 	order := NormalizeLaneOrder([]string{"codex", "claude-auth", "claude", "grok", "antigravity"})
-	want := []string{"codex", "claude-auth", "claude", "claude-3", "claude-4", "claude-5", "grok", "antigravity"}
+	want := []string{"codex", "codex-2", "codex-3", "codex-4", "codex-5", "claude-auth", "claude", "claude-3", "claude-4", "claude-5", "grok", "antigravity"}
 	if !slices.Equal(order, want) {
 		t.Fatalf("order = %v, want %v", order, want)
 	}

@@ -80,7 +80,7 @@ func TestVersionLiteralHasSingleSource(t *testing.T) {
 			return walkErr
 		}
 		if entry.IsDir() {
-			if entry.Name() == ".git" || strings.HasPrefix(entry.Name(), ".tmp-go") {
+			if entry.Name() == ".git" || entry.Name() == "wt" || strings.HasPrefix(entry.Name(), ".tmp-go") {
 				return filepath.SkipDir
 			}
 			return nil

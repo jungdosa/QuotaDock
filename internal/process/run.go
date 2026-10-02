@@ -23,6 +23,8 @@ func (r Runner) RunOutput(ctx context.Context, spec CommandSpec) ([]byte, error)
 
 	cmd := exec.CommandContext(runCtx, spec.Name, spec.Args...)
 	configureCommand(cmd)
+	cmd.Env = spec.Env
+	cmd.Dir = spec.Dir
 	_, outputLimit, stderrLimit := r.limits()
 	stdout := &limitedBuffer{limit: outputLimit}
 	stderr := &limitedBuffer{limit: stderrLimit}

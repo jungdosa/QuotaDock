@@ -132,7 +132,7 @@ func TestAccountLabelsAreOptionalShortUserValues(t *testing.T) {
 	config.AccountLabels = map[string]string{
 		"claude":      "  Personal   Work  ",
 		"claude-auth": strings.Repeat("界", MaxAccountLabelRunes+5),
-		"codex":       "must be dropped",
+		"unknown":     "must be dropped",
 	}
 	got := config.Validated()
 	if got.AccountLabels["claude"] != "Personal Work" {
@@ -141,7 +141,7 @@ func TestAccountLabelsAreOptionalShortUserValues(t *testing.T) {
 	if len([]rune(got.AccountLabels["claude-auth"])) != MaxAccountLabelRunes {
 		t.Fatalf("auth label length = %d, want %d", len([]rune(got.AccountLabels["claude-auth"])), MaxAccountLabelRunes)
 	}
-	if _, exists := got.AccountLabels["codex"]; exists {
+	if _, exists := got.AccountLabels["unknown"]; exists {
 		t.Fatal("unsupported provider account label survived validation")
 	}
 	if label := NormalizeAccountLabel(strings.Repeat("x", MaxAccountLabelRunes-1) + "  y"); strings.HasSuffix(label, " ") || len([]rune(label)) > MaxAccountLabelRunes {
@@ -328,7 +328,7 @@ func TestConfigWithoutLaneOrderKeepsTheShippedOrder(t *testing.T) {
 // never rearrange it.
 func TestLaneOrderKeepsTheUserArrangement(t *testing.T) {
 	config := Config{LaneOrder: []string{"codex", "grok", "claude"}}.Validated()
-	want := []string{"codex", "grok", "claude", "claude-auth", "claude-3", "claude-4", "claude-5", "antigravity"}
+	want := []string{"codex", "codex-2", "codex-3", "codex-4", "codex-5", "grok", "claude", "claude-auth", "claude-3", "claude-4", "claude-5", "antigravity"}
 	if !slices.Equal(config.LaneOrder, want) {
 		t.Fatalf("lane order = %v, want %v", config.LaneOrder, want)
 	}
@@ -339,7 +339,7 @@ func TestLaneOrderKeepsTheUserArrangement(t *testing.T) {
 // than hide a provider or draw one twice.
 func TestLaneOrderDropsUnknownAndRepeatedNames(t *testing.T) {
 	config := Config{LaneOrder: []string{"grok", "gemini-cli", "grok", "", "codex"}}.Validated()
-	want := []string{"grok", "codex", "claude", "claude-auth", "claude-3", "claude-4", "claude-5", "antigravity"}
+	want := []string{"grok", "codex", "codex-2", "codex-3", "codex-4", "codex-5", "claude", "claude-auth", "claude-3", "claude-4", "claude-5", "antigravity"}
 	if !slices.Equal(config.LaneOrder, want) {
 		t.Fatalf("lane order = %v, want %v", config.LaneOrder, want)
 	}

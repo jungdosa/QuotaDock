@@ -89,11 +89,12 @@ type ViewState struct {
 }
 
 type Controller struct {
-	mu          sync.RWMutex
-	coordinator provider.Coordinator
-	config      settings.Config
-	state       ViewState
-	listeners   []func(ViewState)
+	mu           sync.RWMutex
+	coordinator  provider.Coordinator
+	config       settings.Config
+	state        ViewState
+	listeners    []func(ViewState)
+	accountEpoch map[model.ProviderID]uint64
 }
 
 func NewController(coordinator provider.Coordinator, config settings.Config) *Controller {
@@ -116,6 +117,10 @@ func defaultViewState() ViewState {
 		{Provider: model.ProviderClaude3, Name: "Claude 3", Status: model.StatusUnavailable},
 		{Provider: model.ProviderClaude4, Name: "Claude 4", Status: model.StatusUnavailable},
 		{Provider: model.ProviderClaude5, Name: "Claude 5", Status: model.StatusUnavailable},
+		{Provider: model.ProviderCodex2, Name: "Codex 2", Status: model.StatusUnavailable},
+		{Provider: model.ProviderCodex3, Name: "Codex 3", Status: model.StatusUnavailable},
+		{Provider: model.ProviderCodex4, Name: "Codex 4", Status: model.StatusUnavailable},
+		{Provider: model.ProviderCodex5, Name: "Codex 5", Status: model.StatusUnavailable},
 	}}
 }
 func (c *Controller) Config() settings.Config { c.mu.RLock(); defer c.mu.RUnlock(); return c.config }
@@ -136,6 +141,9 @@ type sourceModeSetter interface {
 }
 
 func (c *Controller) applyProviderSourceModes(config settings.Config) {
+	if setter, ok := c.coordinator.Providers[model.ProviderCodex].(interface{ SetAccountCount(int) }); ok {
+		setter.SetAccountCount(config.CodexAccounts)
+	}
 	for _, id := range model.ClaudeAccountIDs() {
 		implementation := c.coordinator.Provider(id)
 		setter, ok := implementation.(sourceModeSetter)
@@ -171,6 +179,10 @@ func (c *Controller) Refresh(ctx context.Context) ViewState {
 	// against it rather than against the inspection that follows the failure,
 	// because a provider that just failed already reports itself as failed.
 	c.mu.RLock()
+	epochs := make(map[model.ProviderID]uint64, len(c.accountEpoch))
+	for id, epoch := range c.accountEpoch {
+		epochs[id] = epoch
+	}
 	prior := make(map[model.ProviderID]LaneState, len(c.state.Lanes))
 	for _, lane := range c.state.Lanes {
 		prior[lane.Provider] = lane
@@ -230,6 +242,16 @@ func (c *Controller) Refresh(ctx context.Context) ViewState {
 	}
 	c.mu.Lock()
 	previous := cloneState(c.state)
+	for i, lane := range next.Lanes {
+		if epochs[lane.Provider] != c.accountEpoch[lane.Provider] {
+			for _, current := range c.state.Lanes {
+				if current.Provider == lane.Provider {
+					next.Lanes[i] = current
+					break
+				}
+			}
+		}
+	}
 	c.state = next
 	listeners := append([]func(ViewState){}, c.listeners...)
 	snapshot := cloneState(next)
@@ -319,7 +341,7 @@ func codexRowGroup(row UsageRowState) string {
 }
 
 func rowGroupRank(providerID model.ProviderID, row UsageRowState) int {
-	if providerID == model.ProviderCodex {
+	if model.IsCodexAccount(providerID) {
 		// The account-wide limit is the one the user actually budgets
 		// against, so it stays on top; model-scoped limits follow beneath it
 		// rather than interleaving by window length.

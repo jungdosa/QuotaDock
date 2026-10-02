@@ -88,6 +88,8 @@
   "connection.remove_account": "最後の Claude アカウントを削除",
   "connection.cli_in_use": "CLI は別の Claude アカウントで使用中です",
   "connection.sign_in": "サインイン",
+  "connection.codex_auth_hint": "ブラウザーで別のChatGPTアカウントにログインしてください。このアカウントはQuotaDock専用に保存され、既存のCodex CLIログインは維持されます。",
+  "connection.cancel_sign_in": "ログインをキャンセル",
   "connection.auth_web_hint": "アプリ内のウィンドウで Anthropic 公式サインインページを開きます。パスワードは Anthropic に直接送信され、QuotaDock は読み取れません。セッションはこのアプリ内にのみ保存されます。",
   "connection.panel_install_title": "%s 接続 — インストールが必要です",
   "connection.install_step_1": "%s をインストール",
