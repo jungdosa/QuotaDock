@@ -24,6 +24,8 @@ const (
 	GetUserStatusEndpoint = "/exa.language_server_pb.LanguageServerService/GetUserStatus"
 	MaxResponseBytes      = 1 << 20
 	RequestTimeout        = 5 * time.Second
+	retrieveQuotaBody     = `{"forceRefresh":true}`
+	getUserStatusBody     = `{}`
 )
 
 var (
@@ -52,13 +54,18 @@ type LocalClient struct {
 	discover discoverFunc
 	current  *endpointCandidate
 	tier     string
+	cli      *cliClient
+	usingCLI bool
 }
 
 func NewLocalClient() *LocalClient {
-	return &LocalClient{discover: discoverLocalEndpoints}
+	return &LocalClient{discover: discoverLocalEndpoints, cli: defaultCLIClient()}
 }
 
 func (c *LocalClient) Status(ctx context.Context) (bool, bool, error) {
+	if _, ok := c.fetchCLI(ctx); ok {
+		return true, true, nil
+	}
 	candidates, err := c.discover()
 	if err != nil {
 		return false, false, ErrLocalRequest
@@ -120,20 +127,27 @@ func statusTier(raw json.RawMessage) string {
 }
 
 func (c *LocalClient) RetrieveUserQuotaSummary(ctx context.Context) (json.RawMessage, error) {
-	c.mu.Lock()
-	current := c.current
-	c.mu.Unlock()
-	if current != nil {
-		if raw, err := requestLocal(ctx, *current, RetrieveQuotaEndpoint); err == nil {
-			c.mu.Lock()
-			tier := c.tier
-			c.mu.Unlock()
-			return adaptQuotaResponse(raw, tier)
-		}
+	if raw, ok := c.fetchCLI(ctx); ok {
+		return raw, nil
 	}
+	// Rediscover on fallback so a stale endpoint cannot hide an IDE change.
 	candidates, err := c.discover()
 	if err != nil {
 		return nil, ErrLocalRequest
+	}
+	c.mu.Lock()
+	current, tier := c.current, c.tier
+	c.mu.Unlock()
+	// Preserve the existing fast path only while discovery still verifies it.
+	if current != nil {
+		for _, candidate := range candidates {
+			if candidate == *current {
+				if raw, err := requestLocal(ctx, candidate, RetrieveQuotaEndpoint); err == nil {
+					return adaptQuotaResponse(raw, tier)
+				}
+				break
+			}
+		}
 	}
 	for _, candidate := range candidates {
 		statusRaw, statusErr := requestLocal(ctx, candidate, GetUserStatusEndpoint)
@@ -156,17 +170,22 @@ func (c *LocalClient) RetrieveUserQuotaSummary(ctx context.Context) (json.RawMes
 
 type transportQuotaResponse struct {
 	Response struct {
-		Groups []struct {
-			DisplayName string `json:"displayName"`
-			Description string `json:"description"`
-			Buckets     []struct {
-				RemainingFraction *float64 `json:"remainingFraction"`
-				ResetTime         string   `json:"resetTime"`
-				Window            string   `json:"window"`
-				DisplayName       string   `json:"displayName"`
-			} `json:"buckets"`
-		} `json:"groups"`
+		Groups []transportQuotaGroup `json:"groups"`
 	} `json:"response"`
+}
+
+type transportQuotaGroup struct {
+	DisplayName string                 `json:"displayName"`
+	Description string                 `json:"description"`
+	Buckets     []transportQuotaBucket `json:"buckets"`
+}
+
+type transportQuotaBucket struct {
+	Disabled          bool     `json:"disabled"`
+	RemainingFraction *float64 `json:"remainingFraction"`
+	ResetTime         string   `json:"resetTime"`
+	Window            string   `json:"window"`
+	DisplayName       string   `json:"displayName"`
 }
 
 func adaptQuotaResponse(raw json.RawMessage, tierName string) (json.RawMessage, error) {
@@ -183,9 +202,14 @@ func adaptQuotaResponse(raw json.RawMessage, tierName string) (json.RawMessage, 
 	if json.Unmarshal(raw, &source) != nil || source.Response.Groups == nil {
 		return nil, ErrLocalRequest
 	}
+	return adaptQuotaGroups(source.Response.Groups, tierName)
+}
+
+// Both transports share the same allowlisted labels, bucket IDs and percentages.
+func adaptQuotaGroups(groups []transportQuotaGroup, tierName string) (json.RawMessage, error) {
 	var target quotaEnvelope
 	target.UserStatus.UserTier.Name = tierName
-	for _, group := range source.Response.Groups {
+	for _, group := range groups {
 		name := safeQuotaGroupName(group.DisplayName)
 		if name == "" {
 			name = safeQuotaGroupName(group.Description)
@@ -195,7 +219,7 @@ func adaptQuotaResponse(raw json.RawMessage, tierName string) (json.RawMessage, 
 		}
 		converted := quotaGroup{Name: name}
 		for _, sourceBucket := range group.Buckets {
-			if sourceBucket.RemainingFraction == nil {
+			if sourceBucket.Disabled || sourceBucket.RemainingFraction == nil {
 				continue
 			}
 			window := quotaWindowMinutes(sourceBucket.Window, sourceBucket.DisplayName)
@@ -206,7 +230,9 @@ func adaptQuotaResponse(raw json.RawMessage, tierName string) (json.RawMessage, 
 				ResetTime:         resetUnix(sourceBucket.ResetTime),
 			})
 		}
-		target.QuotaGroups = append(target.QuotaGroups, converted)
+		if len(converted.Buckets) > 0 {
+			target.QuotaGroups = append(target.QuotaGroups, converted)
+		}
 	}
 	encoded, err := json.Marshal(target)
 	if err != nil {
@@ -272,6 +298,38 @@ func (c *LocalClient) Close() error {
 	return nil
 }
 
+// Only a successful CLI result (including its interval cache) takes priority.
+// Every failure falls through immediately to the existing IDE state and quota.
+func (c *LocalClient) fetchCLI(ctx context.Context) (json.RawMessage, bool) {
+	if c.cli != nil {
+		if raw, err := c.cli.fetch(ctx); err == nil {
+			c.selectSource(true)
+			return raw, true
+		}
+	}
+	c.selectSource(false)
+	return nil, false
+}
+
+func (c *LocalClient) selectSource(cli bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.usingCLI = cli && c.cli != nil
+	if cli {
+		c.current = nil
+		c.tier = ""
+	}
+}
+
+func (c *LocalClient) Source() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.usingCLI {
+		return "CLI"
+	}
+	return "Local LSP"
+}
+
 func isAllowedEndpoint(endpoint string) bool {
 	_, ok := allowedEndpoints[endpoint]
 	return ok
@@ -301,7 +359,12 @@ func requestLocal(ctx context.Context, candidate endpointCandidate, endpoint str
 			return ErrEndpointNotAllowed
 		},
 	}
-	request, err := http.NewRequestWithContext(requestCtx, http.MethodPost, "https://"+address+endpoint, bytes.NewReader([]byte("{}")))
+	body := getUserStatusBody
+	if endpoint == RetrieveQuotaEndpoint {
+		// Refresh the server's quota cache instead of reusing stale measurements.
+		body = retrieveQuotaBody
+	}
+	request, err := http.NewRequestWithContext(requestCtx, http.MethodPost, "https://"+address+endpoint, bytes.NewReader([]byte(body)))
 	if err != nil {
 		return nil, ErrLocalRequest
 	}

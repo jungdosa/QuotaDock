@@ -15,6 +15,8 @@ func TestLiveAntigravityQuotaSchema(t *testing.T) {
 		t.Skip("set QUOTADOCK_LIVE_ANTIGRAVITY=1 to test a running Antigravity IDE")
 	}
 	client := NewLocalClient()
+	// This opt-in checks only IDE schema; it must never invoke the CLI fallback.
+	client.cli = nil
 	defer client.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()

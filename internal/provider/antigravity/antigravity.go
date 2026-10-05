@@ -36,6 +36,12 @@ func New(client Client) *Provider {
 func (p *Provider) Inspect(ctx context.Context) model.ConnectionState {
 	running, loggedIn, err := p.client.Status(ctx)
 	if err != nil {
+		if errors.Is(err, errCLIInvalidResponse) {
+			return p.set(model.StatusError, model.ErrInvalidResponse, "error.invalid_response")
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return p.set(model.StatusError, model.ErrTimeout, "error.timeout")
+		}
 		return p.set(model.StatusError, model.ErrUnavailable, "error.unavailable")
 	}
 	if !running {
@@ -48,6 +54,9 @@ func (p *Provider) Inspect(ctx context.Context) model.ConnectionState {
 }
 func (p *Provider) set(status model.ConnectionStatus, code model.ErrorCode, key string) model.ConnectionState {
 	state := model.ConnectionState{Status: status, Error: code, ErrorKey: key, Source: "Local LSP"}
+	if source, ok := p.client.(interface{ Source() string }); ok {
+		state.Source = source.Source()
+	}
 	p.state.Set(state)
 	return state
 }
@@ -59,6 +68,12 @@ func (p *Provider) Refresh(ctx context.Context) (model.UsageSnapshot, error) {
 		}
 		raw, err := p.client.RetrieveUserQuotaSummary(ctx)
 		if err != nil {
+			if errors.Is(err, errCLIInvalidResponse) {
+				return model.UsageSnapshot{}, model.SafeError{Code: model.ErrInvalidResponse, Key: "error.invalid_response"}
+			}
+			if errors.Is(err, errCLILoggedOut) {
+				return model.UsageSnapshot{}, model.SafeError{Code: model.ErrNotLoggedIn, Key: "error.not_logged_in"}
+			}
 			if errors.Is(err, context.DeadlineExceeded) {
 				return model.UsageSnapshot{}, model.SafeError{Code: model.ErrTimeout, Key: "error.timeout"}
 			}

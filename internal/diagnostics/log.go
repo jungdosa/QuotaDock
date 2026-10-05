@@ -42,6 +42,7 @@ var appEvents = []string{
 	"app.exit",
 	"provider.refresh",
 	"provider.state",
+	"antigravity.cli.tripped",
 	"session.invalidate",
 	"session.reconnect",
 	"web.signin",
