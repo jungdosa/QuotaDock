@@ -149,11 +149,17 @@ func (p *Provider) fetch(ctx context.Context, credential Credential) (model.Usag
 	if err != nil {
 		return model.UsageSnapshot{}, model.SafeError{Code: model.ErrInvalidResponse, Key: "error.invalid_response"}
 	}
+	dataFrames := 0
+	for _, frame := range frames {
+		if !frame.Trailer {
+			dataFrames++
+		}
+	}
 	for _, frame := range frames {
 		if frame.Trailer {
 			continue
 		}
-		snapshot, normalizeErr := NormalizeBilling(frame.Payload, p.now())
+		snapshot, normalizeErr := normalizeBilling(frame.Payload, p.now(), dataFrames)
 		if normalizeErr != nil {
 			return model.UsageSnapshot{}, model.SafeError{Code: model.ErrInvalidResponse, Key: "error.invalid_response"}
 		}

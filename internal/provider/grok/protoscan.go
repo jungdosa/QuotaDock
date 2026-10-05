@@ -34,6 +34,11 @@ func ScanFields(payload []byte, maxDepth int) ([]Field, error) {
 }
 
 func scanMessage(payload []byte, parent []int, depth, maxDepth int) ([]Field, error) {
+	complete := true
+	return scanMessageChecked(payload, parent, depth, maxDepth, &complete)
+}
+
+func scanMessageChecked(payload []byte, parent []int, depth, maxDepth int, complete *bool) ([]Field, error) {
 	fields := make([]Field, 0)
 	for offset := 0; offset < len(payload); {
 		key, next, ok := readVarint(payload, offset)
@@ -73,10 +78,17 @@ func scanMessage(payload []byte, parent []int, depth, maxDepth int) ([]Field, er
 			end := start + int(length)
 			field.Bytes = append([]byte(nil), payload[start:end]...)
 			fields = append(fields, field)
+			// Without a schema, opaque bytes and malformed nested messages cannot
+			// be distinguished. Preserve tolerant scanning, but veto inferred zero
+			// whenever nested contents cannot be inspected completely.
 			if depth < maxDepth {
-				if nested, nestedErr := scanMessage(field.Bytes, path, depth+1, maxDepth); nestedErr == nil {
+				if nested, nestedErr := scanMessageChecked(field.Bytes, path, depth+1, maxDepth, complete); nestedErr == nil {
 					fields = append(fields, nested...)
+				} else {
+					*complete = false
 				}
+			} else if len(field.Bytes) != 0 {
+				*complete = false
 			}
 			offset = end
 		case 5:
@@ -117,12 +129,19 @@ func appendPath(parent []int, fieldNumber int) []int {
 }
 
 func NormalizeBilling(payload []byte, fetchedAt time.Time) (model.UsageSnapshot, error) {
+	// A bare protobuf payload cannot prove how many transport frames arrived.
+	return normalizeBilling(payload, fetchedAt, 0)
+}
+
+// dataFrames is supplied only after the entire gRPC-web body decodes successfully.
+func normalizeBilling(payload []byte, fetchedAt time.Time, dataFrames int) (model.UsageSnapshot, error) {
 	snapshot := model.UsageSnapshot{
 		Provider:  model.ProviderGrok,
 		Plan:      model.PlanUnknown,
 		FetchedAt: fetchedAt.UTC(),
 	}
-	fields, err := ScanFields(payload, 4)
+	complete := true
+	fields, err := scanMessageChecked(payload, nil, 0, 4, &complete)
 	if err != nil {
 		return model.UsageSnapshot{}, err
 	}
@@ -143,14 +162,36 @@ func NormalizeBilling(payload []byte, fetchedAt time.Time) (model.UsageSnapshot,
 	// Field 1.1 is the weekly used-percent as a float32 (confirmed live: it
 	// tracks the web dashboard's "주간 한도 N%", and equals the sum of the
 	// per-feature breakdown in the repeated field 1.7). Out-of-range or absent
-	// leaves the row marked unknown rather than inventing a zero.
+	// leaves the row marked unknown unless all implicit-zero guards hold.
 	if percent, ok := usagePercentAt(fields, []int{1, 1}); ok {
 		limit.UsedPercent = percent
 	} else {
-		limit.UsageUnknown = true
+		limit.UsageUnknown = !(dataFrames == 1 && complete && end.After(fetchedAt) && implicitZeroPeriod(fields, fetchedAt))
 	}
 	snapshot.Limits = []model.UsageLimit{limit}
 	return snapshot, nil
+}
+
+func implicitZeroPeriod(fields []Field, now time.Time) bool {
+	periodTypes := 0
+	for _, field := range fields {
+		// Any fixed32, even outside the known usage path, may be a moved metric.
+		if field.Type == 5 || samePath(field.Path, []int{1, 1}) {
+			return false
+		}
+		if samePath(field.Path, []int{1, 8, 1}) {
+			if field.Type != 0 || (field.Value != 1 && field.Value != 2) {
+				return false
+			}
+			periodTypes++
+		}
+	}
+	if periodTypes != 1 {
+		return false
+	}
+	start, startErr := timestampAt(fields, []int{1, 8, 2})
+	end, endErr := timestampAt(fields, []int{1, 8, 3})
+	return startErr == nil && endErr == nil && start.Before(end) && !now.Before(start) && now.Before(end)
 }
 
 // usagePercentAt reads a float32 (wire type i32) at the given path and accepts

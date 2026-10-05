@@ -23,7 +23,7 @@ func (function httpClientFunc) Do(request *http.Request) (*http.Response, error)
 	return function(request)
 }
 
-func TestProviderReturnsResetOnlySnapshotAndRequiredRequest(t *testing.T) {
+func TestProviderReturnsImplicitZeroSnapshotAndRequiredRequest(t *testing.T) {
 	credentialPath := writeCredentialFile(t, "request-token", time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC), credentialScopePrefix+"profile")
 	client := httpClientFunc(func(request *http.Request) (*http.Response, error) {
 		if request.Method != http.MethodPost || request.URL.String() != billingEndpoint {
@@ -49,10 +49,10 @@ func TestProviderReturnsResetOnlySnapshotAndRequiredRequest(t *testing.T) {
 	if err != nil || snapshot.Provider != model.ProviderGrok || snapshot.Plan != model.PlanUnknown || len(snapshot.Limits) != 1 {
 		t.Fatalf("snapshot = %+v, err = %v", snapshot, err)
 	}
-	// This fixture carries no usage field, so the lane reports the reset
-	// window and marks usage unknown rather than inventing a zero.
-	if snapshot.Limits[0].UsedPercent != 0 || !snapshot.Limits[0].UsageUnknown {
-		t.Fatalf("a usage-less response should read unknown: %+v", snapshot.Limits[0])
+	// This fixture carries no usage field and satisfies every implicit-zero
+	// guard, so the lane reports zero alongside the reset window.
+	if snapshot.Limits[0].UsedPercent != 0 || snapshot.Limits[0].UsageUnknown {
+		t.Fatalf("a guarded usage-less response should read zero: %+v", snapshot.Limits[0])
 	}
 }
 
