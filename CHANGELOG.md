@@ -7,6 +7,36 @@ plus checksums for its binaries.
 Versions follow [Semantic Versioning](https://semver.org/). The project reaches 1.0.0 once
 Windows feature verification is finished.
 
+## [0.7.56] — 2026-10-06
+
+### Added
+
+- Antigravity usage now comes first from the signed-in Antigravity CLI's read-only usage
+  report (`agy` 1.1.11 or later), so it shows without the IDE open. When the CLI is missing or
+  signed out, usage comes from the IDE's language server as before, and the CLI is tried
+  again five minutes later. The report starts no agent turn and spends no quota; a report
+  that cannot be verified as read-only stops the CLI path for the rest of the session.
+
+### Fixed
+
+- Dragging the widget onto a monitor with different display scaling resizes it the moment
+  it crosses, keeping the spot you grabbed under the cursor, instead of showing a stretched,
+  cut-off frame until you let go. On release it settles at once rather than about a second later.
+- An Antigravity limit that does not currently apply — the Claude/GPT five-hour limit while
+  the weekly one is used up — no longer shows as a usage reading. Quota reads ask
+  Antigravity for fresh values.
+- Claude waits at least five minutes after a rate limit, doubling up to an hour, instead of
+  asking again on the next refresh. A token-service outage no longer reads as "sign in
+  again", and a rejected token refresh keeps reading usage while the current token is valid.
+- Additional Claude accounts signed in through the built-in browser no longer show an empty
+  connected lane on a rate limit or server error, or "sign in again" on a Cloudflare check.
+- A Grok week with no usage yet shows 0% instead of "–".
+
+### Known issues
+
+- While Antigravity usage comes from the CLI, the plan badge is not shown; the CLI report
+  does not include the plan.
+
 ## [0.7.55] — 2026-10-03
 
 ### Added
