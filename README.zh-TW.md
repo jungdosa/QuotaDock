@@ -22,7 +22,7 @@ Google Antigravity** 的用量額度 —— 工作階段/每週配額，以及�
 |---|---|---|
 | **Claude**（Claude Code） | 5 小時工作階段 · 7 天每週 · Fable 每週 | 使用 Claude Code 既有的 OAuth 認證資訊（認證檔案或環境變數）；無須在應用程式內貼上，也不擷取瀏覽器 Cookie |
 | **OpenAI Codex** | 工作階段 · 每週上限 | 官方 Codex CLI app-server（stdio JSONL） |
-| **Google Antigravity** | Gemini 與 Claude/GPT 群組的工作階段 · 每週 | 本機語言伺服器（loopback） |
+| **Google Antigravity** | Gemini 與 Claude/GPT 群組的工作階段 · 每週 | Antigravity CLI 唯讀用量報告；CLI 無法使用時使用本機語言伺服器（loopback） |
 
 即使其中一個供應商連線失敗，其餘仍照常運作。每一列都會在**分段長條（已用量）**下方繪製一條
 **細長連續長條（距離重設的剩餘時間）**，讓你一眼判斷額度是否消耗得比時間更快。超過警告或危險
@@ -134,15 +134,19 @@ QuotaDock **使用官方工具已經建立的認證狀態**。它不要求你貼
   Claude Code 的 OAuth 認證資訊；當檔案型認證資訊需要續期時，會將 refresh token 傳送至
   Anthropic 的權杖端點並以原子方式更新該檔案，接著將 access token 傳送至 Anthropic 的用量端點。
   Codex 用量透過 stdio 與官方 Codex CLI 的 app-server 溝通，Antigravity 用量來自經驗證的
-  `127.0.0.1` 語言伺服器。沒有輸入認證資訊的欄位，不擷取瀏覽器 Cookie，沒有瀏覽器自動化，
+  `127.0.0.1` 語言伺服器（當 Antigravity CLI 無法使用時）。優先使用已登入 Antigravity CLI 的唯讀用量報告
+  （`agy -p "/usage" --output-format json`，最多每五分鐘一次），此報告不會啟動代理回合，也不消耗配額；
+  CLI 未安裝或未登入時才讀取上述語言伺服器。若收到無法確認為唯讀的報告，本次工作階段內將不再使用 CLI 路徑。沒有輸入認證資訊的欄位，不擷取瀏覽器 Cookie，沒有瀏覽器自動化，
   也沒有非官方網頁抓取。
 - **機密不會進入介面與記錄。** 權杖、Cookie 與認證檔案原文既不會繪製到介面，也不會寫入記錄。
   傳給介面的只有正規化後的用量比例、經允許清單驗證的方案標籤，以及重設時刻。
 - **診斷記錄只保留在本機。** 正常使用時會將小型且有大小上限的 JSON 診斷記錄寫入
   `%LOCALAPPDATA%\QuotaDock\quotadock.log`。異常結束時，同一資料夾還可能留下 `crash.log`。
   密鑰與電子郵件位址會在寫入前遮蔽，兩份記錄都不會傳送到任何地方。
-- **對外連線僅限一份簡短的允許清單。** 供應商請求只能連往 `api.anthropic.com` 與
-  `platform.claude.com`；更新檢查只能連往 `api.github.com` 與 GitHub 的發行主機，且不夾帶任何
+- **對外連線僅限一份簡短的允許清單。** 供應商請求只能連往 `api.anthropic.com`、
+  `platform.claude.com` 與 `grok.com`；內建登入視窗只能開啟 `claude.ai`、`anthropic.com`、
+  `grok.com` 與 `x.ai` 的頁面，其用量讀取只能連往 `claude.ai` 與 `grok.com`；QuotaDock 啟動的官方
+  Codex 與 Antigravity CLI 會連線至各自的服務；更新檢查只能連往 `api.github.com` 與 GitHub 的發行主機，且不夾帶任何
   認證資訊。其餘全部是回送連線。沒有遙測、沒有分析，也沒有當機回報。
 - **設定屬於你。** 設定存放在 `%APPDATA%\QuotaDock\settings.json`，解除安裝後仍會保留，也不會
   同步到任何地方。
@@ -154,7 +158,7 @@ QuotaDock **使用官方工具已經建立的認證狀態**。它不要求你貼
 - **不碰機密資訊。** 權杖、Cookie 與 `auth.json` 原文不會進入介面或記錄檔。傳給介面的只有正規化後的
   用量比例、經允許清單驗證的方案標籤，以及重設時刻。
 - **只連本機。** 沒有遙測，也沒有外部分析伺服器。loopback 連線僅允許連往已驗證的處理程序與固定端點。
-  唯一的對外請求是更新檢查，不夾帶任何認證資訊，且只在啟動時或你點選時發生。
+  對外請求僅限上述允許清單；更新檢查不夾帶任何認證資訊，且只在啟動時或你點選時發生。
 - **不消耗額度。** 更新用量絕不會送出需要計費的 AI 請求。
 - **夠輕巧。** Go + Fyne 原生繪製，閒置時 CPU 佔用為 0%，記憶體也主動管理。
 

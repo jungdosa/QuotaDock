@@ -22,7 +22,7 @@ Google Antigravity** 的用量额度 —— 会话/每周配额以及重置倒�
 |---|---|---|
 | **Claude**（Claude Code） | 5 小时会话 · 7 天每周 · Fable 每周 | 使用 Claude Code 已有的 OAuth 凭据（凭据文件或环境变量）；无需在应用内粘贴，也不提取浏览器 Cookie |
 | **OpenAI Codex** | 会话 · 每周额度 | 官方 Codex CLI app-server（stdio JSONL） |
-| **Google Antigravity** | Gemini 与 Claude/GPT 组的会话 · 每周 | 本地语言服务器（loopback） |
+| **Google Antigravity** | Gemini 与 Claude/GPT 组的会话 · 每周 | Antigravity CLI 只读用量报告；CLI 不可用时使用本地语言服务器（loopback） |
 
 某一个服务商连接失败时，其余仍照常工作。每一行都会在**分段条（已用量）**下方绘制一条
 **细长连续条（距离重置的剩余时间）**，让你一眼判断额度是否消耗得比时间更快。超过警告或
@@ -134,14 +134,18 @@ QuotaDock **使用官方工具已经建立的认证状态**。它不要求你粘
   Claude Code 的 OAuth 凭据；当基于文件的凭据需要续期时，会把 refresh token 发送到 Anthropic
   的令牌端点并原子性地更新该文件，随后把 access token 发送到 Anthropic 的用量端点。Codex 用量
   通过 stdio 与官方 Codex CLI 的 app-server 通信，Antigravity 用量来自经校验的 `127.0.0.1`
-  语言服务器。没有输入凭据的输入框，不提取浏览器 Cookie，没有浏览器自动化，也没有非官方网页抓取。
+  语言服务器（当 Antigravity CLI 不可用时）。优先使用已登录 Antigravity CLI 的只读用量报告
+  （`agy -p "/usage" --output-format json`，最多每五分钟一次），该报告不会启动代理回合，也不消耗配额；
+  CLI 未安装或未登录时才读取上述语言服务器。若收到无法确认为只读的报告，本次会话内将不再使用 CLI 路径。没有输入凭据的输入框，不提取浏览器 Cookie，没有浏览器自动化，也没有非官方网页抓取。
 - **机密不会进入界面和日志。** 令牌、Cookie 和凭据文件原文既不会渲染到 UI，也不会写入日志。
   传给界面的只有归一化的用量比例、经白名单校验的套餐标签和重置时刻。
 - **诊断记录仅保留在本机。** 正常使用时会把小型、限长的 JSON 诊断日志写入
   `%LOCALAPPDATA%\QuotaDock\quotadock.log`。异常退出时，同一目录还可能留下 `crash.log`。
   密钥和邮箱地址会在写入前脱敏，两份日志都不会发送到任何地方。
-- **对外通信仅限一份短白名单。** 服务商请求只能到达 `api.anthropic.com` 与
-  `platform.claude.com`；更新检查只能到达 `api.github.com` 与 GitHub 的发布主机，且不携带任何
+- **对外通信仅限一份短白名单。** 服务商请求只能到达 `api.anthropic.com`、
+  `platform.claude.com` 与 `grok.com`；内置登录窗口只能打开 `claude.ai`、`anthropic.com`、
+  `grok.com` 与 `x.ai` 的页面，其用量读取只能到达 `claude.ai` 与 `grok.com`；QuotaDock 启动的官方
+  Codex 与 Antigravity CLI 会连接各自的服务；更新检查只能到达 `api.github.com` 与 GitHub 的发布主机，且不携带任何
   凭据。其余全部是回环连接。没有遥测、没有分析、没有崩溃上报。
 - **配置归你所有。** 配置保存在 `%APPDATA%\QuotaDock\settings.json`，卸载后仍会保留，且不会
   同步到任何地方。
@@ -153,7 +157,7 @@ QuotaDock **使用官方工具已经建立的认证状态**。它不要求你粘
 - **不接触机密。** 令牌、Cookie 和 `auth.json` 原文不会进入界面或日志。传给界面的只有归一化的
   用量比例、经白名单校验的套餐标签和重置时刻。
 - **只连本地。** 没有遥测，没有外部分析服务。loopback 连接仅允许连往经过校验的进程与固定端点。
-  唯一的对外请求是更新检查，它不携带任何凭据，且只在启动时或你点击时发生。
+  对外请求仅限上述白名单；更新检查不携带任何凭据，且只在启动时或你点击时发生。
 - **不消耗额度。** 刷新用量绝不会发送计费的 AI 请求。
 - **足够轻。** Go + Fyne 原生渲染，空闲 CPU 占用为 0%，内存主动管理。
 

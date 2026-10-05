@@ -24,7 +24,7 @@ QuotaDock answers both without you having to check.
 |---|---|---|
 | **Claude** (Claude Code) | 5-hour session · 7-day weekly · Fable weekly | Uses Claude Code's existing OAuth credentials (credentials file or environment override); no in-app paste or browser-cookie extraction |
 | **OpenAI Codex** | Session · weekly limits | Official Codex CLI app-server (stdio JSONL) |
-| **Google Antigravity** | Gemini and Claude/GPT group session · weekly | Local language server (loopback) |
+| **Google Antigravity** | Gemini and Claude/GPT group session · weekly | Antigravity CLI read-only usage report; local language server (loopback) when the CLI is unavailable |
 
 If one provider fails, the others keep working. Every row draws a **segmented bar (usage)**
 above a **thin continuous bar (time until reset)**, so you can see at a glance whether your
@@ -174,7 +174,11 @@ billable AI requests.
   when file-based credentials need renewal, it sends the refresh token to Anthropic's token
   endpoint and atomically updates that file, then sends the access token to Anthropic's usage
   endpoint. Codex usage comes from the official Codex CLI app-server over stdio, and
-  Antigravity usage comes from its verified language server on `127.0.0.1`. There is no
+  Antigravity usage comes first from the signed-in Antigravity CLI's read-only usage report
+  (`agy -p "/usage" --output-format json`, at most once every five minutes), which starts no
+  agent turn and spends no quota; when the CLI is missing or signed out, it comes from the IDE's
+  verified language server on `127.0.0.1`. A CLI report that cannot be verified as read-only
+  stops the CLI path for the rest of the session. There is no
   credential-entry box, browser-cookie extraction, browser automation, or unofficial web
   scraping.
 - **Secrets stay out of the interface and logs.** Tokens, cookies, and raw credential-file
@@ -185,9 +189,12 @@ billable AI requests.
   `crash.log` in that folder. Secrets and email addresses are redacted before writing, and
   neither log is ever sent anywhere.
 - **Outbound traffic is a short allowlist.** Provider requests may only reach
-  `api.anthropic.com` and `platform.claude.com`. Update checks may only reach
-  `api.github.com` and GitHub's release hosts, and they carry no credentials. Everything else
-  is loopback. No telemetry, no analytics, no crash reporting.
+  `api.anthropic.com`, `platform.claude.com`, and `grok.com`. The built-in sign-in window may
+  only open pages on `claude.ai`, `anthropic.com`, `grok.com`, and `x.ai`, and its usage reads
+  may only reach `claude.ai` and `grok.com`. Update checks may only reach `api.github.com` and
+  GitHub's release hosts, and they carry no credentials. The official Codex and Antigravity
+  CLIs that QuotaDock starts talk to their own services. Everything else is loopback. No
+  telemetry, no analytics, no crash reporting.
 - **Your settings stay yours.** Configuration lives in `%APPDATA%\QuotaDock\settings.json`
   and survives uninstall. Nothing is synced anywhere.
 - **No billable requests.** Refreshing usage never spends your quota or credits.
@@ -200,8 +207,8 @@ billable AI requests.
   contents are never rendered in the UI or written to logs. Only normalized usage rates,
   allowlist-validated plan labels, and reset times do.
 - **It stays local.** No telemetry, no external analytics. Loopback connections are allowed
-  only to verified processes on fixed endpoints. The one outbound request is the update
-  check, which carries no credentials and runs only at startup or when you click.
+  only to verified processes on fixed endpoints. Outbound requests stay within the allowlist
+  above; the update check carries no credentials and runs only at startup or when you click.
 - **It doesn't spend credits.** Refreshing usage never sends a billable AI request.
 - **It stays small.** Native Go + Fyne rendering, 0% idle CPU, actively managed memory.
 
