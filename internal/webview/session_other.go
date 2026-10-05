@@ -17,5 +17,7 @@ func NewSession(userDataDir string) *Session { return &Session{userDataDir: user
 var errUnsupported = errors.New("the embedded sign-in browser is available on Windows only")
 
 func (*Session) SignIn(context.Context, string, func(string) bool) error { return errUnsupported }
-func (*Session) Fetch(context.Context, string) (string, error)          { return "", errUnsupported }
-func (*Session) Close() error                                           { return nil }
+func (*Session) Fetch(context.Context, func(int, string) (string, bool)) ([]FetchResult, error) {
+	return nil, errUnsupported
+}
+func (*Session) Close() error { return nil }

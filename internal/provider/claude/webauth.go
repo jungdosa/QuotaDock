@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -33,7 +34,7 @@ type WebAuthFetcher struct {
 // can be faked in tests without a real browser. Fetch takes the whole chain of
 // requests rather than one address, so both of them ride a single browser.
 type webSession interface {
-	Fetch(ctx context.Context, next func(index int, previous string) (string, bool)) ([]string, error)
+	Fetch(ctx context.Context, next func(index int, previous string) (string, bool)) ([]webview.FetchResult, error)
 	Close() error
 }
 
@@ -106,24 +107,46 @@ func (w *WebAuthFetcher) Fetch(ctx context.Context) (oauthResult, error) {
 		trace.usage = time.Since(stage).Milliseconds()
 		return "", false
 	})
+	// An HTTP failure ends the chain without invoking next again, so account
+	// for the final round trip here as well as in the successful callbacks.
+	if issued >= 2 {
+		trace.usage = time.Since(stage).Milliseconds()
+	} else {
+		trace.organizations = time.Since(stage).Milliseconds()
+	}
+	// Classify both round trips before inspecting JSON: an error payload can
+	// be valid JSON, and a challenge page is not proof of a signed-out session.
+	for index, response := range bodies {
+		failureStage := "organizations"
+		if index > 0 {
+			failureStage = "usage"
+		}
+		if failure := webResponseError(response, failureStage); failure != nil {
+			trace.status = response.Status
+			trace.fail(failureStage, failure)
+			return oauthResult{}, failure
+		}
+	}
 	if err != nil {
 		if issued >= 2 {
-			trace.usage = time.Since(stage).Milliseconds()
 			trace.fail("usage", err)
 		} else {
-			trace.organizations = time.Since(stage).Milliseconds()
 			trace.fail("organizations", err)
 		}
 		return oauthResult{}, err
 	}
 	if len(bodies) < 2 {
 		// The endpoint answered but not with a usable organization list —
-		// almost always a signed-out redirect to HTML or a challenge page.
+		// usually a signed-out redirect to HTML; HTTP challenges were handled above.
+		if len(bodies) > 0 {
+			trace.status = bodies[0].Status
+		}
 		trace.fail("organizations", errOAuthReauthentication)
 		return oauthResult{}, errOAuthReauthentication
 	}
-	usageRaw := bodies[1]
+	usageRaw := bodies[1].Body
 	if !json.Valid([]byte(usageRaw)) {
+		trace.status = bodies[1].Status
 		trace.fail("usage", errOAuthReauthentication)
 		return oauthResult{}, errOAuthReauthentication
 	}
@@ -132,6 +155,41 @@ func (w *WebAuthFetcher) Fetch(ctx context.Context) (oauthResult, error) {
 		rateLimitTier:    org.RateLimitTier,
 		subscriptionType: org.BillingType,
 	}, nil
+}
+
+func webResponseError(response webview.FetchResult, stage string) error {
+	// Older sessions did not report a status. Keep their historical body-only
+	// interpretation rather than pretending the response was HTTP 200.
+	if response.Status == 0 {
+		return nil
+	}
+	switch {
+	case response.Status == http.StatusForbidden:
+		if strings.EqualFold(strings.TrimSpace(response.CF), "challenge") ||
+			strings.Contains(strings.ToLower(response.Body), "just a moment") {
+			return errOAuthUnavailable
+		}
+		return errOAuthReauthentication
+	case response.Status == http.StatusUnauthorized:
+		return errOAuthReauthentication
+	case response.Status < 200 || response.Status >= 300:
+		return errOAuthUnavailable
+	}
+	if !json.Valid([]byte(response.Body)) {
+		if stage == "organizations" {
+			return errOAuthReauthentication
+		}
+		return errOAuthInvalidResponse
+	}
+	if stage == "usage" {
+		// Only the web path rejects an empty measurement. OAuth normalization
+		// remains compatible with its existing callers.
+		snapshot, err := NormalizeOAuthUsage(json.RawMessage(response.Body), "", "", time.Time{})
+		if err != nil || len(snapshot.Limits) == 0 {
+			return errOAuthInvalidResponse
+		}
+	}
+	return nil
 }
 
 // webAuthTrace records how one usage read spent its time. Each read costs two
@@ -145,6 +203,7 @@ type webAuthTrace struct {
 	usage         int64
 	stage         string
 	reason        string
+	status        int
 }
 
 // fail names the round trip that ended the read and classifies why. The error
@@ -168,6 +227,7 @@ func (t *webAuthTrace) log() {
 	slog.Info("webauth.fetch",
 		"ok", t.stage == "",
 		"stage", t.stage,
+		"status", t.status,
 		"err", t.reason,
 		"orgs_ms", t.organizations,
 		"usage_ms", t.usage,

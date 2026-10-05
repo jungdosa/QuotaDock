@@ -28,6 +28,8 @@ const (
 	oauthRequestTimeout  = 10 * time.Second
 	oauthExpiryBuffer    = 5 * time.Minute
 	defaultRetryBackoff  = 5 * time.Minute
+	maxRetryBackoff      = time.Hour
+	refreshRetryBackoff  = time.Minute
 	defaultAccessTokenTT = time.Hour
 )
 
@@ -115,8 +117,9 @@ type sourceSelectableOAuthUsageFetcher interface {
 }
 
 type oauthSourceCache struct {
-	backoffUntil time.Time
-	lastSuccess  oauthResult
+	backoffUntil   time.Time
+	consecutive429 int
+	lastSuccess    oauthResult
 }
 
 // OAuthClient reads only Claude Code's credentials file (or the optional
@@ -132,6 +135,9 @@ type OAuthClient struct {
 	allowURL             func(string) bool
 	sourceCache          [OAuthCredentialDefault + 1]oauthSourceCache
 	reportRefreshFailure func()
+	refreshFailedToken   string
+	refreshRetryUntil    time.Time
+	refreshFailure       error
 }
 
 func NewOAuthClient() *OAuthClient {
@@ -207,9 +213,31 @@ func (c *OAuthClient) FetchFrom(ctx context.Context, sources OAuthCredentialSour
 	if refreshErr != nil && c.reportRefreshFailure != nil {
 		c.reportRefreshFailure()
 	}
+	// A rejected refresh only means sign-in is needed once the bearer in hand
+	// has actually expired: refreshing starts inside the expiry buffer, and the
+	// CLI may have rotated the refresh token under us while the bearer is
+	// still good, so keep reading usage with it until then.
+	if errors.Is(refreshErr, errOAuthReauthentication) && credentials.expiresWithin(c.now(), 0) {
+		return oauthResult{}, refreshErr
+	}
+	if refreshErr != nil && !errors.Is(refreshErr, errOAuthReauthentication) && credentials.expiresWithin(c.now(), 0) {
+		// A transient refresh failure must not turn an expired bearer into a
+		// misleading usage 401. A persistence failure still leaves a fresh bearer.
+		if len(cache.lastSuccess.raw) != 0 {
+			result := cache.lastSuccess
+			result.cached = true
+			return result, nil
+		}
+		return oauthResult{}, errOAuthUnavailable
+	}
 	raw, retryAfter, err := c.fetchUsage(ctx, credentials)
 	if errors.Is(err, errOAuthRateLimited) {
-		cache.backoffUntil = now.Add(retryAfter)
+		// Saturate the counter once the exponential floor reaches the cap.
+		if cache.consecutive429 < 5 {
+			cache.consecutive429++
+		}
+		floor := defaultRetryBackoff * time.Duration(1<<(cache.consecutive429-1))
+		cache.backoffUntil = c.now().Add(min(max(retryAfter, floor), maxRetryBackoff))
 		if len(cache.lastSuccess.raw) != 0 {
 			result := cache.lastSuccess
 			result.cached = true
@@ -227,6 +255,7 @@ func (c *OAuthClient) FetchFrom(ctx context.Context, sources OAuthCredentialSour
 		subscriptionType: credentials.subscriptionType,
 	}
 	cache.backoffUntil = time.Time{}
+	cache.consecutive429 = 0
 	cache.lastSuccess = result
 	return result, nil
 }
@@ -273,11 +302,22 @@ func (c *OAuthClient) ensureFreshCredentials(ctx context.Context, credentials oa
 	if credentials.refreshToken == "" {
 		return credentials, errOAuthUnavailable
 	}
+	// The client mutex serializes refreshes. Key the cooldown by the token so
+	// a credential rotated by the CLI can recover immediately.
+	if credentials.refreshToken == c.refreshFailedToken && c.now().Before(c.refreshRetryUntil) {
+		return credentials, c.refreshFailure
+	}
 
 	refreshed, err := c.refreshCredentials(ctx, credentials)
 	if err != nil {
+		c.refreshFailedToken = credentials.refreshToken
+		c.refreshRetryUntil = c.now().Add(refreshRetryBackoff)
+		c.refreshFailure = err
 		return credentials, err
 	}
+	c.refreshFailedToken = ""
+	c.refreshRetryUntil = time.Time{}
+	c.refreshFailure = nil
 	if err := persistOAuthCredentials(c.credentialsPath, refreshed); err != nil {
 		// The refreshed in-memory credential is still usable. Atomic persistence
 		// guarantees that the original file remains intact on failure.
@@ -317,6 +357,9 @@ func (c *OAuthClient) refreshCredentials(ctx context.Context, current oauthCrede
 		return oauthCredentials{}, errOAuthUnavailable
 	}
 	defer response.Body.Close()
+	if response.StatusCode == http.StatusBadRequest || response.StatusCode == http.StatusUnauthorized {
+		return oauthCredentials{}, errOAuthReauthentication
+	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return oauthCredentials{}, errOAuthUnavailable
 	}
@@ -390,6 +433,10 @@ func (c *OAuthClient) newRequest(ctx context.Context, method, rawURL string, bod
 func retryAfterDuration(value string, now time.Time) time.Duration {
 	value = strings.TrimSpace(value)
 	if seconds, err := strconv.ParseInt(value, 10, 64); err == nil && seconds >= 0 {
+		// Clamp before converting seconds to avoid duration overflow.
+		if seconds >= int64(maxRetryBackoff/time.Second) {
+			return maxRetryBackoff
+		}
 		return time.Duration(seconds) * time.Second
 	}
 	if deadline, err := http.ParseTime(value); err == nil && deadline.After(now) {

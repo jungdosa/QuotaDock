@@ -11,6 +11,7 @@ import (
 
 	"github.com/jungdosa/QuotaDock/internal/model"
 	shared "github.com/jungdosa/QuotaDock/internal/provider"
+	"github.com/jungdosa/QuotaDock/internal/webview"
 )
 
 const webUsageJSON = `{"five_hour":{"utilization":12,"resets_at":"2030-01-02T03:04:05Z"},
@@ -153,16 +154,18 @@ func TestInspectKeepsTheCLIErrorWithoutASession(t *testing.T) {
 // stubWebSession answers each round trip from a queue so a test can make the
 // second one fail while the first succeeds.
 type stubWebSession struct {
-	urls    []string
-	replies []string
-	errs    []error
+	urls     []string
+	replies  []string
+	statuses []int
+	cf       []string
+	errs     []error
 }
 
 // Fetch drives the caller's chain the way the real session does — asking for
 // the next address, answering it, and stopping where the caller stops or where
 // the queued error says the browser gave up.
-func (s *stubWebSession) Fetch(_ context.Context, next func(index int, previous string) (string, bool)) ([]string, error) {
-	var bodies []string
+func (s *stubWebSession) Fetch(_ context.Context, next func(index int, previous string) (string, bool)) ([]webview.FetchResult, error) {
+	var bodies []webview.FetchResult
 	previous := ""
 	for {
 		url, more := next(len(bodies), previous)
@@ -179,7 +182,17 @@ func (s *stubWebSession) Fetch(_ context.Context, next func(index int, previous 
 		} else {
 			previous = ""
 		}
-		bodies = append(bodies, previous)
+		response := webview.FetchResult{Body: previous}
+		if index < len(s.statuses) {
+			response.Status = s.statuses[index]
+		}
+		if index < len(s.cf) {
+			response.CF = s.cf[index]
+		}
+		bodies = append(bodies, response)
+		if response.Status != 0 && (response.Status < 200 || response.Status >= 300) {
+			return bodies, nil
+		}
 	}
 }
 
@@ -299,4 +312,110 @@ func TestWebAuthTraceNeverCarriesTheAddress(t *testing.T) {
 	if value, ok := attrValue(record, "ok"); !ok || !value.Bool() {
 		t.Fatalf("a completed read reported ok = %v", value)
 	}
+}
+
+func TestWebAuthHTTPClassificationAtBothStages(t *testing.T) {
+	const orgs = `[{"uuid":"org-test","capabilities":["chat"]}]`
+	for _, stage := range []string{"organizations", "usage"} {
+		for _, tc := range []struct {
+			name   string
+			status int
+			cf     string
+			body   string
+			want   error
+		}{
+			{"ok", 200, "", "", nil},
+			{"unauthorized", 401, "", `{"error":"unauthorized"}`, errOAuthReauthentication},
+			{"forbidden", 403, "", `{"error":"forbidden"}`, errOAuthReauthentication},
+			{"cf-header", 403, "challenge", `{"error":"challenge"}`, errOAuthUnavailable},
+			{"cf-html", 403, "", "<html>JuSt A MoMeNt</html>", errOAuthUnavailable},
+			{"rate-limit", 429, "", `{"error":"rate limited"}`, errOAuthUnavailable},
+			{"unavailable", 503, "", "<html>temporarily unavailable</html>", errOAuthUnavailable},
+			{"invalid-json", 200, "", "<html>signed out</html>", errOAuthInvalidResponse},
+			{"empty-json", 200, "", `{}`, errOAuthInvalidResponse},
+			{"legacy-html", 0, "", "<html>signed out</html>", errOAuthReauthentication},
+			{"legacy-ok", 0, "", "", nil},
+		} {
+			t.Run(stage+"/"+tc.name, func(t *testing.T) {
+				events := captureEvents(t)
+				session := &stubWebSession{replies: []string{orgs, webUsageJSON}, statuses: []int{200, 200}, cf: make([]string, 2)}
+				index := 0
+				if stage == "usage" {
+					index = 1
+				}
+				session.statuses[index] = tc.status
+				session.cf[index] = tc.cf
+				if tc.body != "" {
+					session.replies[index] = tc.body
+				}
+				want := tc.want
+				if stage == "organizations" && (tc.name == "invalid-json" || tc.name == "empty-json") {
+					want = errOAuthReauthentication
+				}
+				fetcher := &WebAuthFetcher{newSession: func(string) webSession { return session }}
+				result, err := fetcher.Fetch(context.Background())
+				if !errors.Is(err, want) {
+					t.Fatalf("error = %v, want %v", err, want)
+				}
+				if want == nil && string(result.raw) != webUsageJSON {
+					t.Fatal("normal usage was lost")
+				}
+				if want != nil {
+					record, ok := events.find("webauth.fetch")
+					gotStage, _ := attrValue(record, "stage")
+					gotStatus, _ := attrValue(record, "status")
+					if !ok || gotStage.String() != stage || gotStatus.Int64() != int64(tc.status) {
+						t.Fatal("failure trace lost stage or numeric HTTP status")
+					}
+					parent := newProvider(&fakeClient{}, nil, "")
+					parent.SetWebAuth(fakeOAuthFetcher{available: true, err: err})
+					lane := parent.AdditionalProviders()[model.ProviderClaudeAuth]
+					_, laneErr := lane.Refresh(context.Background())
+					wantCode := model.ErrUnavailable
+					if errors.Is(want, errOAuthReauthentication) {
+						wantCode = model.ErrNotLoggedIn
+					} else if errors.Is(want, errOAuthInvalidResponse) {
+						wantCode = model.ErrInvalidResponse
+					}
+					var safe model.SafeError
+					if !errors.As(laneErr, &safe) || safe.Code != wantCode {
+						t.Fatal("web lane did not preserve failure classification")
+					}
+					if wantCode != model.ErrNotLoggedIn && lane.Inspect(context.Background()).Status != model.StatusError {
+						t.Fatal("transient failure became a logged-out or connected-empty lane")
+					}
+				}
+				if stage == "organizations" && want != nil && len(session.urls) != 1 {
+					t.Fatal("usage requested after failed organization fetch")
+				}
+			})
+		}
+	}
+}
+
+func TestWebAuthLegacyEmptyUsageRemainsCompatible(t *testing.T) {
+	session := &stubWebSession{replies: []string{`[{"uuid":"org-test","capabilities":["chat"]}]`, `{}`}}
+	fetcher := &WebAuthFetcher{newSession: func(string) webSession { return session }}
+	if result, err := fetcher.Fetch(context.Background()); err != nil || string(result.raw) != `{}` {
+		t.Fatal("status-zero usage interpretation changed")
+	}
+}
+
+func TestWebAuthFailureTraceDoesNotLeakResponse(t *testing.T) {
+	events := captureEvents(t)
+	session := &stubWebSession{replies: []string{`{"error":"private-body-marker"}`}, statuses: []int{429}}
+	fetcher := &WebAuthFetcher{newSession: func(string) webSession { return session }}
+	if _, err := fetcher.Fetch(context.Background()); !errors.Is(err, errOAuthUnavailable) {
+		t.Fatal("unexpected classification")
+	}
+	record, ok := events.find("webauth.fetch")
+	if !ok {
+		t.Fatal("missing trace")
+	}
+	record.Attrs(func(attr slog.Attr) bool {
+		if strings.Contains(attr.Value.String(), "private-body-marker") {
+			t.Fatal("trace leaked response body")
+		}
+		return true
+	})
 }

@@ -18,8 +18,19 @@ func IsAllowedNavigation(raw string) bool { return security.IsAllowedAuthWebNavi
 func IsAllowedFetch(raw string) bool { return security.IsAllowedAuthWebFetchURL(raw) }
 
 type webMessage struct {
-	Kind  string `json:"kind"`
-	Value string `json:"value"`
+	Kind   string `json:"kind"`
+	Value  string `json:"value"`
+	Status int    `json:"status"`
+	CF     string `json:"cf"`
+}
+
+// FetchResult preserves HTTP metadata so callers can distinguish an expired
+// session from a transient service failure without logging response bodies.
+// Status zero denotes a legacy message with no HTTP metadata.
+type FetchResult struct {
+	Body   string
+	Status int
+	CF     string
 }
 
 // decodeURLMessage extracts a navigation report. Anything else is ignored:
@@ -36,16 +47,16 @@ func decodeURLMessage(raw string) (string, bool) {
 }
 
 // decodeResultMessage extracts a fetch outcome.
-func decodeResultMessage(raw string) (kind, value string, ok bool) {
+func decodeResultMessage(raw string) (kind string, result FetchResult, ok bool) {
 	var message webMessage
 	if err := json.Unmarshal([]byte(raw), &message); err != nil {
-		return "", "", false
+		return "", FetchResult{}, false
 	}
 	switch message.Kind {
 	case "body", "error":
-		return message.Kind, message.Value, true
+		return message.Kind, FetchResult{Body: message.Value, Status: message.Status, CF: message.CF}, true
 	}
-	return "", "", false
+	return "", FetchResult{}, false
 }
 
 // originOf reduces a request address to its scheme and host, which is the page

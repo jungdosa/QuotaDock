@@ -453,7 +453,7 @@ func TestOAuthRefreshPersistsCredentialsAtomically(t *testing.T) {
 func TestOAuthRefreshFailureFallsBackToExistingCredentials(t *testing.T) {
 	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
 	path := filepath.Join(t.TempDir(), ".credentials.json")
-	writeCredentials(t, path, "existing-access", "existing-refresh", now)
+	writeCredentials(t, path, "existing-access", "existing-refresh", now.Add(time.Minute))
 	var usageAuthorization string
 	client, _ := testOAuthClient(t, path, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -505,7 +505,7 @@ func TestOAuthUsageRateLimitBackoffHonorsRetryAfter(t *testing.T) {
 	client, _ := testOAuthClient(t, path, func(w http.ResponseWriter, _ *http.Request) {
 		requestNumber := requests.Add(1)
 		if requestNumber == 2 {
-			w.Header().Set("Retry-After", "120")
+			w.Header().Set("Retry-After", "600")
 			w.WriteHeader(http.StatusTooManyRequests)
 			return
 		}
@@ -520,7 +520,7 @@ func TestOAuthUsageRateLimitBackoffHonorsRetryAfter(t *testing.T) {
 	if err != nil || !limited.cached {
 		t.Fatal("429 did not preserve the last successful usage")
 	}
-	current = current.Add(119 * time.Second)
+	current = current.Add(599 * time.Second)
 	if cached, err := client.Fetch(context.Background()); err != nil || !cached.cached || requests.Load() != 2 {
 		t.Fatal("request was sent during Retry-After backoff")
 	}

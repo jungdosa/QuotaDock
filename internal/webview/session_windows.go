@@ -388,9 +388,10 @@ func (s *Session) SignIn(ctx context.Context, startURL string, ready func(url st
 }
 
 // Fetch runs a chain of same-session requests inside one hidden window and
-// returns the bodies. next is asked for the address to request, given the
-// index and the previous response, and ends the chain by answering false. The
-// responses are never logged: account pages carry personal data.
+// returns the bodies and HTTP metadata. next is asked for the request address,
+// given the index and previous body, and ends the chain by answering false.
+// HTTP failures end the chain too. Responses are never logged: account pages
+// carry personal data.
 //
 // The whole chain shares one browser. Opening a window per request looked
 // simpler but raced itself: the profile folder takes one writer, and a second
@@ -399,7 +400,7 @@ func (s *Session) SignIn(ctx context.Context, startURL string, ready func(url st
 // navigating — measured as an environment ready in about 50ms against the
 // usual 400, followed by a navigation that never reported and burned the whole
 // refresh budget. Roughly a third of readings died that way.
-func (s *Session) Fetch(ctx context.Context, next func(index int, previous string) (string, bool)) ([]string, error) {
+func (s *Session) Fetch(ctx context.Context, next func(index int, previous string) (string, bool)) ([]FetchResult, error) {
 	if next == nil {
 		return nil, errors.New("no request was described")
 	}
@@ -412,7 +413,7 @@ func (s *Session) Fetch(ctx context.Context, next func(index int, previous strin
 	}
 	var (
 		mu        sync.Mutex
-		bodies    []string
+		bodies    []FetchResult
 		failed    string
 		refused   bool
 		navMillis int64
@@ -451,12 +452,17 @@ func (s *Session) Fetch(ctx context.Context, next func(index int, previous strin
 			case "body":
 				bodies = append(bodies, value)
 			case "error":
-				failed = value
+				failed = value.Body
 				return true
 			default:
 				return false
 			}
-			address, more, allowed := nextRequest(next, len(bodies), value)
+			// Do not let an HTTP error body steer the next request. Preserve it
+			// for the caller's provider-specific classification instead.
+			if value.Status != 0 && (value.Status < 200 || value.Status >= 300) {
+				return true
+			}
+			address, more, allowed := nextRequest(next, len(bodies), value.Body)
 			if !more {
 				return true
 			}
@@ -494,7 +500,7 @@ func (s *Session) Fetch(ctx context.Context, next func(index int, previous strin
 		}
 		total := 0
 		for _, body := range bodies {
-			total += len(body)
+			total += len(body.Body)
 		}
 		s.logFetch("", navMillis, started, total)
 		return bodies, nil
@@ -566,7 +572,6 @@ func (s *Session) Close() error {
 func fetchScript(requestURL string) string {
 	escaped := strings.ReplaceAll(requestURL, `"`, `\"`)
 	return `(function(){fetch("` + escaped + `",{credentials:"include",headers:{"Accept":"application/json"}})` +
-		`.then(function(r){return r.text();})` +
-		`.then(function(t){window.chrome.webview.postMessage(JSON.stringify({kind:"body",value:t}));})` +
+		`.then(function(r){return r.text().then(function(t){window.chrome.webview.postMessage(JSON.stringify({kind:"body",status:r.status,cf:r.headers.get("cf-mitigated")||"",value:t}));});})` +
 		`.catch(function(e){window.chrome.webview.postMessage(JSON.stringify({kind:"error",value:String(e)}));});})();`
 }
