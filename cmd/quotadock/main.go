@@ -189,6 +189,9 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	var rendering atomic.Bool
 	var alwaysOnTop atomic.Bool
 	var lastDragMove atomic.Int64
+	var dragging atomic.Bool
+	var dragStartScale float32
+	var monitorState monitorWatchState
 	var scheduler provider.Scheduler
 	var view *ui.View
 	var tray *platform.Tray
@@ -239,7 +242,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	var widgetPositionRemembered bool
 	var restoreWidgetPosition platform.Rect
 	var restoreWidgetPositionOnResize bool
-	resizeWindow := func(size fyne.Size) {
+	resizeWindowWithPosition := func(size fyne.Size, inPlace bool) {
 		// A fixed-size window has its OS size limits pinned to its current
 		// size, and Fyne's Resize asks GLFW for the new size without lifting
 		// them first — so a request to shrink is clamped to the old frame until
@@ -255,6 +258,12 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		shouldRestorePosition := restoreWidgetPositionOnResize
 		restoreWidgetPositionOnResize = false
 		applyPosition := func() {
+			// A crossing resize must stay in place even if its delayed pass
+			// runs after release. Older ordinary resizes must also leave an
+			// active drag alone; fitting would pull the grab point away.
+			if inPlace || monitorDragActive(dragging.Load(), time.Now(), lastDragMove.Load()) {
+				return
+			}
 			if shouldRestorePosition {
 				if moveErr := native.MoveTo(positionToRestore.X, positionToRestore.Y); moveErr != nil {
 					slog.Debug("widget position could not be restored", "error", moveErr)
@@ -287,6 +296,30 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 				)
 			})
 		})
+	}
+	resizeWindow := func(size fyne.Size) { resizeWindowWithPosition(size, false) }
+	resizeWindowInPlace := func(size fyne.Size) { resizeWindowWithPosition(size, true) }
+	// All paths reconcile on the UI thread, so a queued watch cannot apply
+	// an old observation after a drag has already corrected the window.
+	reconcileMonitor := func(trigger string) bool {
+		current, monitorErr := native.Monitor()
+		if monitorErr != nil {
+			return false
+		}
+		next := monitorSignature{monitor: current, scale: native.DPIScale(), canvasScale: w.Canvas().Scale()}
+		previous, changed := monitorState.update(next)
+		if !changed {
+			return false
+		}
+		slog.Info("window.monitor", "scale_from", previous.scale, "scale_to", next.scale,
+			"canvas_from", previous.canvasScale, "canvas_to", next.canvasScale,
+			"monitor_changed", next.monitor != previous.monitor, "trigger", trigger)
+		if trigger == "drag_cross" {
+			resizeWindowInPlace(view.MinimumSize(view.Screen()))
+		} else {
+			resizeWindow(view.MinimumSize(view.Screen()))
+		}
+		return true
 	}
 	applyScreen := func(screen ui.Screen) {
 		current := view.Screen()
@@ -500,6 +533,8 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		if positionErr != nil {
 			return 0, 0, positionErr
 		}
+		dragStartScale = w.Canvas().Scale()
+		dragging.Store(true)
 		return cursorX - position.X, cursorY - position.Y, nil
 	}, MoveWindow: func(grabOffsetX, grabOffsetY int) error {
 		markActivity()
@@ -508,8 +543,22 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		if cursorErr != nil {
 			return cursorErr
 		}
-		return native.MoveTo(cursorX-grabOffsetX, cursorY-grabOffsetY)
+		moveAtScale := func(scale float32) error {
+			offsetX := scaledDragOffset(grabOffsetX, dragStartScale, scale)
+			offsetY := scaledDragOffset(grabOffsetY, dragStartScale, scale)
+			return native.MoveTo(cursorX-offsetX, cursorY-offsetY)
+		}
+		if moveErr := moveAtScale(w.Canvas().Scale()); moveErr != nil {
+			return moveErr
+		}
+		if reconcileMonitor("drag_cross") {
+			// Moving can change Fyne's scale before Windows reports a new
+			// DPI. Re-anchor using the canvas scale after resizing the frame.
+			return moveAtScale(w.Canvas().Scale())
+		}
+		return nil
 	}, EndWindowDrag: func() {
+		dragging.Store(false)
 		position, positionErr := native.Position()
 		if positionErr != nil {
 			slog.Warn("window position could not be read after dragging", "error", positionErr)
@@ -518,6 +567,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		if restoreErr := native.Restore(position); restoreErr != nil {
 			slog.Warn("window position could not be corrected after dragging", "error", restoreErr)
 		}
+		reconcileMonitor("drag_end")
 	}, ToggleCompact: func() {
 		setDisplayMode(settings.NextDisplayMode(cfg.DisplayMode))
 	}, SetDisplayMode: setDisplayMode, OpenContextMenu: func(position fyne.Position) {
@@ -636,6 +686,9 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	if err := native.Bind(); err != nil {
 		return err
 	}
+	if monitor, monitorErr := native.Monitor(); monitorErr == nil {
+		monitorState.update(monitorSignature{monitor: monitor, scale: native.DPIScale(), canvasScale: w.Canvas().Scale()})
+	}
 	shell.workAreas = platform.MonitorWorkAreas()
 	effectiveLanguage := i18n.Language(cfg.Language)
 	if cfg.Language == settings.LanguageSystem {
@@ -740,37 +793,37 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	// the old pixel size, so the frame, the drawn content and the rounded
 	// window region stop agreeing: content shifted down with the top left
 	// blank, the bottom clipped, windows behind showing through on the right.
-	// Re-running the resize once the window lands re-pins the limits at the
-	// new scale and redraws the corners for the new frame. A drag still in
-	// progress is left alone so the window does not jump under the cursor.
+	// Re-running the resize at a crossing re-pins the limits at the new scale
+	// and redraws the corners for the new frame. Drag callbacks preserve the
+	// grab point and skip fitting so the window does not jump under the cursor.
+	// Drag end corrects position; polling also catches keyboard moves and
+	// display changes that do not pass through the drag callback.
 	diagnostics.Go("monitor_watch", func() {
-		ticker := time.NewTicker(500 * time.Millisecond)
+		ticker := time.NewTicker(monitorWatchInterval)
 		defer ticker.Stop()
-		var monitor uintptr
-		var scale float64
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if time.Since(time.Unix(0, lastDragMove.Load())) < time.Second {
+				if monitorDragActive(dragging.Load(), time.Now(), lastDragMove.Load()) || !monitorDragQuiet(time.Now(), lastDragMove.Load()) {
 					continue
 				}
 				current, monitorErr := native.Monitor()
 				if monitorErr != nil {
 					continue
 				}
-				currentScale := native.DPIScale()
-				if monitor == 0 {
-					monitor, scale = current, currentScale
+				if !nativeMonitorChanged(monitorState.snapshot(), monitorSignature{monitor: current, scale: native.DPIScale()}) {
 					continue
 				}
-				if current == monitor && currentScale == scale {
-					continue
-				}
-				slog.Info("window.monitor", "scale_from", scale, "scale_to", currentScale, "monitor_changed", current != monitor)
-				monitor, scale = current, currentScale
-				fyne.Do(func() { resizeWindow(view.MinimumSize(view.Screen())) })
+				fyne.Do(func() {
+					// A new drag may have started while this callback was queued.
+					// Read canvas scale here too: it is owned by the UI thread,
+					// and can change independently of the native monitor/DPI.
+					if ctx.Err() == nil && !monitorDragActive(dragging.Load(), time.Now(), lastDragMove.Load()) && monitorDragQuiet(time.Now(), lastDragMove.Load()) {
+						reconcileMonitor("watch")
+					}
+				})
 			}
 		}
 	})
