@@ -22,10 +22,13 @@ import (
 
 const (
 	claudeUsageURL       = "https://api.anthropic.com/api/oauth/usage"
+	claudeProfileURL     = "https://api.anthropic.com/api/oauth/profile"
 	claudeTokenURL       = "https://platform.claude.com/v1/oauth/token"
 	claudeOAuthClientID  = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 	claudeOAuthBeta      = "oauth-2025-04-20"
 	oauthRequestTimeout  = 10 * time.Second
+	oauthProfileTimeout  = 5 * time.Second
+	oauthProfileInterval = 6 * time.Hour
 	oauthExpiryBuffer    = 5 * time.Minute
 	defaultRetryBackoff  = 5 * time.Minute
 	maxRetryBackoff      = time.Hour
@@ -117,9 +120,12 @@ type sourceSelectableOAuthUsageFetcher interface {
 }
 
 type oauthSourceCache struct {
-	backoffUntil   time.Time
-	consecutive429 int
-	lastSuccess    oauthResult
+	backoffUntil            time.Time
+	consecutive429          int
+	lastSuccess             oauthResult
+	profileCheckedAt        time.Time
+	profileRateLimitTier    string
+	profileOrganizationType string
 }
 
 // OAuthClient reads only Claude Code's credentials file (or the optional
@@ -129,6 +135,7 @@ type OAuthClient struct {
 	httpClient           *http.Client
 	credentialsPath      string
 	usageURL             string
+	profileURL           string
 	tokenURL             string
 	now                  func() time.Time
 	getenv               func(string) string
@@ -157,6 +164,7 @@ func NewOAuthClient() *OAuthClient {
 		httpClient:      client,
 		credentialsPath: path,
 		usageURL:        claudeUsageURL,
+		profileURL:      claudeProfileURL,
 		tokenURL:        claudeTokenURL,
 		now:             time.Now,
 		getenv:          os.Getenv,
@@ -253,6 +261,24 @@ func (c *OAuthClient) FetchFrom(ctx context.Context, sources OAuthCredentialSour
 		raw:              raw,
 		rateLimitTier:    credentials.rateLimitTier,
 		subscriptionType: credentials.subscriptionType,
+	}
+	// Only a successful usage poll may refresh the optional profile metadata.
+	// Remember failed attempts too, so a missing profile scope cannot add a
+	// request to every usage poll.
+	if cache.profileCheckedAt.IsZero() || !c.now().Before(cache.profileCheckedAt.Add(oauthProfileInterval)) {
+		cache.profileCheckedAt = c.now()
+		cache.profileRateLimitTier = ""
+		cache.profileOrganizationType = ""
+		if profile, err := c.fetchProfile(ctx, credentials); err == nil {
+			cache.profileRateLimitTier = profile.Organization.RateLimitTier
+			cache.profileOrganizationType = profile.Organization.OrganizationType
+		}
+	}
+	if cache.profileRateLimitTier != "" {
+		result.rateLimitTier = cache.profileRateLimitTier
+	}
+	if cache.profileOrganizationType != "" {
+		result.subscriptionType = cache.profileOrganizationType
 	}
 	cache.backoffUntil = time.Time{}
 	cache.consecutive429 = 0
@@ -417,6 +443,40 @@ func (c *OAuthClient) fetchUsage(ctx context.Context, credentials oauthCredentia
 		return nil, 0, errOAuthInvalidResponse
 	}
 	return raw, 0, nil
+}
+
+// Keep the profile decoder narrow: the endpoint also returns personal data
+// that is irrelevant to plan display.
+type oauthProfile struct {
+	Organization struct {
+		RateLimitTier    string `json:"rate_limit_tier"`
+		OrganizationType string `json:"organization_type"`
+	} `json:"organization"`
+}
+
+func (c *OAuthClient) fetchProfile(ctx context.Context, credentials oauthCredentials) (oauthProfile, error) {
+	ctx, cancel := context.WithTimeout(ctx, oauthProfileTimeout)
+	defer cancel()
+	request, err := c.newRequest(ctx, http.MethodGet, c.profileURL, nil)
+	if err != nil {
+		return oauthProfile{}, err
+	}
+	request.Header.Set("Authorization", "Bearer "+credentials.accessToken)
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("anthropic-beta", claudeOAuthBeta)
+	response, err := c.httpClient.Do(request)
+	if err != nil {
+		return oauthProfile{}, errOAuthUnavailable
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return oauthProfile{}, errOAuthUnavailable
+	}
+	var profile oauthProfile
+	if err := security.DecodeJSONLimited(response.Body, security.DefaultMaxJSONSize, &profile); err != nil {
+		return oauthProfile{}, errOAuthInvalidResponse
+	}
+	return profile, nil
 }
 
 func (c *OAuthClient) newRequest(ctx context.Context, method, rawURL string, body io.Reader) (*http.Request, error) {

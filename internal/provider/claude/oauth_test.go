@@ -85,6 +85,8 @@ func testOAuthClient(t *testing.T, path string, handler http.HandlerFunc) (*OAut
 	client := NewOAuthClient()
 	client.credentialsPath = path
 	client.usageURL = server.URL + "/usage"
+	// Existing usage tests do not exercise the optional profile endpoint.
+	client.profileURL = ""
 	client.tokenURL = server.URL + "/token"
 	client.getenv = func(string) string { return "" }
 	client.httpClient = server.Client()
