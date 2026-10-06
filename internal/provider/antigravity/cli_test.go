@@ -51,7 +51,27 @@ func fakeCLI(t *testing.T) (*cliClient, *fakeAGY, *time.Time) {
 		prepare: func() (process.CommandSpec, error) {
 			return process.CommandSpec{Name: "fake-agy.exe", Dir: "fake-empty-probe", Env: []string{"SYSTEMROOT=fake"}}, nil
 		}}
+	t.Cleanup(c.stopBackground)
 	return c, f, &now
+}
+
+func waitCLI(t *testing.T, c *cliClient) {
+	t.Helper()
+	deadline := time.After(2 * time.Second)
+	for {
+		c.asyncMu.Lock()
+		running := c.asyncRunning
+		c.asyncMu.Unlock()
+		if !running {
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatal("fake CLI did not finish")
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
 }
 
 func TestCLIUsageFixtureSharesNormalization(t *testing.T) {
@@ -215,18 +235,49 @@ func TestCLIEnvelopeGuardsTripPermanently(t *testing.T) {
 	}
 }
 
-func TestCLITripLogsOnlyOnceWithoutPayload(t *testing.T) {
+type fakeExitCodeError struct{}
+
+func (fakeExitCodeError) Error() string { return "private-process-error" }
+func (fakeExitCodeError) Unwrap() error { return process.ErrProcessExited }
+func (fakeExitCodeError) ExitCode() int { return 17 }
+
+func TestCLITripLogsReasonWithoutPayload(t *testing.T) {
 	previous := slog.Default()
-	var output bytes.Buffer
-	slog.SetDefault(slog.New(slog.NewJSONHandler(&output, nil)))
 	t.Cleanup(func() { slog.SetDefault(previous) })
-	c, f, now := fakeCLI(t)
-	f.raw = []byte(`{"error":"private-payload-must-not-leak"}`)
-	_, _ = c.fetch(context.Background())
-	*now = now.Add(time.Hour)
-	_, _ = c.fetch(context.Background())
-	if strings.Count(output.String(), "antigravity.cli.tripped") != 1 || strings.Contains(output.String(), "private-payload") {
-		t.Fatal("trip logging was repeated or leaked output")
+	for _, tc := range []struct {
+		name, reason string
+		prepare      func(*fakeAGY)
+		exitCode     bool
+	}{
+		{"nonzero", "exit_nonzero", func(f *fakeAGY) { f.err = fakeExitCodeError{} }, true},
+		{"output limit", "output_limit", func(f *fakeAGY) { f.err = process.ErrOutputLimit }, false},
+		{"parse", "parse", func(f *fakeAGY) { f.raw = []byte(`{"private-payload-must-not-leak":true}`) }, false},
+		{"turns", "turns_or_tokens", func(f *fakeAGY) { f.raw = fixture(t, "antigravity-agy-agent-turn.json") }, false},
+		{"login", "login_unverified", func(f *fakeAGY) {
+			f.err, f.stderr = process.ErrProcessExited, "Please sign in private-payload-must-not-leak"
+		}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var output bytes.Buffer
+			slog.SetDefault(slog.New(slog.NewJSONHandler(&output, nil)))
+			c, f, now := fakeCLI(t)
+			tc.prepare(f)
+			_, _ = c.fetch(context.Background())
+			*now = now.Add(time.Hour)
+			_, _ = c.fetch(context.Background())
+			var event map[string]any
+			if err := json.Unmarshal(bytes.TrimSpace(output.Bytes()), &event); err != nil {
+				t.Fatal(err)
+			}
+			if event["msg"] != "antigravity.cli.tripped" || event["reason"] != tc.reason ||
+				strings.Contains(output.String(), "private-payload") || strings.Count(output.String(), "antigravity.cli.tripped") != 1 {
+				t.Fatal("trip log reason, count, or payload is incorrect")
+			}
+			_, hasCode := event["exit_code"]
+			if hasCode != tc.exitCode || tc.exitCode && event["exit_code"] != float64(17) {
+				t.Fatal("exit code presence or value is incorrect")
+			}
+		})
 	}
 }
 
@@ -287,6 +338,9 @@ func TestCLILanguageServerPriorityAndSwitching(t *testing.T) {
 		return []endpointCandidate{{}}, errors.New("discovery failed")
 	}}
 	provider := New(client)
+	// The first call starts the probe and still uses the IDE fallback.
+	_ = provider.Inspect(context.Background())
+	waitCLI(t, c)
 	if state := provider.Inspect(context.Background()); state.Status != model.StatusConnected || state.Source != "CLI" {
 		t.Fatal("CLI success must take priority over IDE discovery")
 	}
@@ -294,7 +348,7 @@ func TestCLILanguageServerPriorityAndSwitching(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _ = client.RetrieveUserQuotaSummary(context.Background())
-	if f.versionCalls != 1 || f.usageCalls != 1 || discoveries != 0 || client.Source() != "CLI" {
+	if f.versionCalls != 1 || f.usageCalls != 1 || discoveries != 1 || client.Source() != "CLI" {
 		t.Fatal("cached CLI success must avoid IDE discovery and repeated commands")
 	}
 }
@@ -388,12 +442,11 @@ func TestCLIConcurrentPollingAndRecreatedClientsShareState(t *testing.T) {
 		go func() {
 			defer group.Done()
 			client := &LocalClient{cli: c, discover: func() ([]endpointCandidate, error) { return nil, nil }}
-			if _, err := New(client).Refresh(context.Background()); err != nil {
-				t.Error(err)
-			}
+			_, _ = New(client).Refresh(context.Background())
 		}()
 	}
 	group.Wait()
+	waitCLI(t, c)
 	if f.usageCalls != 1 || f.versionCalls != 1 {
 		t.Fatal("concurrent polling created duplicate commands")
 	}

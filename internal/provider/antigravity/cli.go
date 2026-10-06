@@ -18,6 +18,7 @@ const (
 	cliVersionTimeout = 3 * time.Second
 	cliUsageTimeout   = 20 * time.Second
 	cliInterval       = 5 * time.Minute
+	cliCacheLifetime  = 15 * time.Minute
 	cliOutputLimit    = 256 << 10
 )
 
@@ -41,7 +42,68 @@ type cliClient struct {
 	terminalErr    error
 	lastAttempt    time.Time
 	lastSuccess    json.RawMessage
+	lastSuccessAt  time.Time
 	lastErr        error
+	asyncMu        sync.Mutex
+	asyncRunning   bool
+	asyncClosed    bool
+	asyncCancel    context.CancelFunc
+	asyncAttempt   time.Time
+	asyncSuccess   time.Time
+	asyncResult    json.RawMessage
+}
+
+// cachedOrStart never waits for a CLI process or its safety-state mutex.
+// The process owns its own deadline and publishes only a completed result.
+func (c *cliClient) cachedOrStart() (json.RawMessage, bool) {
+	c.asyncMu.Lock()
+	defer c.asyncMu.Unlock()
+	now := c.now()
+	if !c.asyncClosed && !c.asyncRunning && (c.asyncAttempt.IsZero() || now.Sub(c.asyncAttempt) >= cliInterval) {
+		ctx, cancel := context.WithCancel(context.Background())
+		c.asyncCancel = cancel
+		c.asyncRunning = true
+		c.asyncAttempt = now
+		go c.fetchInBackground(ctx, cancel)
+	}
+	if c.asyncResult == nil || now.Sub(c.asyncSuccess) >= cliCacheLifetime {
+		return nil, false
+	}
+	return append(json.RawMessage(nil), c.asyncResult...), true
+}
+
+func (c *cliClient) fetchInBackground(ctx context.Context, cancel context.CancelFunc) {
+	defer cancel()
+	// fetch includes the version probe in this 20-second process lifetime.
+	raw, err := c.fetch(ctx)
+	c.mu.Lock()
+	tripped := c.tripped
+	successAt := c.lastSuccessAt
+	c.mu.Unlock()
+	c.asyncMu.Lock()
+	defer c.asyncMu.Unlock()
+	c.asyncRunning = false
+	c.asyncCancel = nil
+	if c.asyncClosed {
+		return
+	}
+	if err == nil {
+		c.asyncResult = append(json.RawMessage(nil), raw...)
+		c.asyncSuccess = successAt
+	} else if tripped || errors.Is(err, errCLILoggedOut) {
+		// A terminal safety or login failure invalidates even a fresh result.
+		c.asyncResult = nil
+	}
+}
+
+func (c *cliClient) stopBackground() {
+	c.asyncMu.Lock()
+	c.asyncClosed = true
+	cancel := c.asyncCancel
+	c.asyncMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
 }
 
 func (c *cliClient) fetch(ctx context.Context) (json.RawMessage, error) {
@@ -101,7 +163,7 @@ func (c *cliClient) fetch(ctx context.Context) (json.RawMessage, error) {
 	// Check safety evidence before considering the pre-model login exception.
 	// An oversized or truncated response cannot establish a safe login failure.
 	if errors.Is(runErr, process.ErrOutputLimit) || len(raw) > cliOutputLimit {
-		return nil, c.trip(errCLIInvalidResponse)
+		return nil, c.trip(errCLIInvalidResponse, "output_limit", runErr)
 	}
 	var envelope struct {
 		Error    string  `json:"error"`
@@ -112,7 +174,7 @@ func (c *cliClient) fetch(ctx context.Context) (json.RawMessage, error) {
 	}
 	if json.Unmarshal(raw, &envelope) == nil {
 		if envelope.NumTurns > 0 || envelope.Usage.TotalTokens > 0 {
-			return nil, c.trip(errCLIInvalidResponse)
+			return nil, c.trip(errCLIInvalidResponse, "turns_or_tokens", runErr)
 		}
 		loginFailure = loginFailure || cliLoginFailure(envelope.Error)
 		retryableLoginFailure = retryableLoginFailure || cliRetryableLoginFailure(envelope.Error)
@@ -130,11 +192,11 @@ func (c *cliClient) fetch(ctx context.Context) (json.RawMessage, error) {
 			// verified, so fail closed outside the narrow login exception.
 			// Broader sign-in text classifies the failure but cannot allow retry.
 			if loginFailure {
-				return nil, c.trip(errCLILoggedOut)
+				return nil, c.trip(errCLILoggedOut, "login_unverified", runErr)
 			}
-			return nil, c.trip(errCLIUnavailable)
+			return nil, c.trip(errCLIUnavailable, "exit_nonzero", runErr)
 		case loginFailure:
-			return nil, c.trip(errCLILoggedOut)
+			return nil, c.trip(errCLILoggedOut, "login_unverified", runErr)
 		case errors.Is(runErr, process.ErrTimeout), errors.Is(runErr, context.DeadlineExceeded):
 			c.lastErr = context.DeadlineExceeded
 		default:
@@ -145,24 +207,32 @@ func (c *cliClient) fetch(ctx context.Context) (json.RawMessage, error) {
 	adapted, parseErr := parseCLIQuota(raw)
 	if parseErr != nil {
 		if loginFailure {
-			return nil, c.trip(errCLILoggedOut)
+			return nil, c.trip(errCLILoggedOut, "login_unverified", runErr)
 		}
-		return nil, c.trip(errCLIInvalidResponse)
+		return nil, c.trip(errCLIInvalidResponse, "parse", runErr)
 	}
 	if loginFailure {
-		return nil, c.trip(errCLILoggedOut)
+		return nil, c.trip(errCLILoggedOut, "login_unverified", runErr)
 	}
 	c.lastSuccess = append(json.RawMessage(nil), adapted...)
+	c.lastSuccessAt = c.now()
 	c.lastErr = nil
 	return adapted, nil
 }
 
-func (c *cliClient) trip(err error) error {
+func (c *cliClient) trip(err error, reason string, runErr error) error {
 	if !c.tripped {
 		c.tripped = true
 		c.terminalErr = err
 		c.lastSuccess = nil
-		slog.Warn("antigravity.cli.tripped")
+		attrs := []any{"reason", reason}
+		// The production Runner currently erases exit status. An injected
+		// runner can provide one without ever logging command output.
+		var exitCoder interface{ ExitCode() int }
+		if runErr != nil && errors.As(runErr, &exitCoder) && exitCoder.ExitCode() >= 0 {
+			attrs = append(attrs, "exit_code", exitCoder.ExitCode())
+		}
+		slog.Warn("antigravity.cli.tripped", attrs...)
 	}
 	return c.terminalErr
 }

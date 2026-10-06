@@ -291,6 +291,9 @@ func resetUnix(value string) int64 {
 }
 
 func (c *LocalClient) Close() error {
+	if c.cli != nil {
+		c.cli.stopBackground()
+	}
 	c.mu.Lock()
 	c.current = nil
 	c.tier = ""
@@ -298,11 +301,11 @@ func (c *LocalClient) Close() error {
 	return nil
 }
 
-// Only a successful CLI result (including its interval cache) takes priority.
-// Every failure falls through immediately to the existing IDE state and quota.
+// A completed, fresh CLI result takes priority. The CLI probe never consumes
+// the caller's refresh budget; a pending probe falls through to the IDE.
 func (c *LocalClient) fetchCLI(ctx context.Context) (json.RawMessage, bool) {
-	if c.cli != nil {
-		if raw, err := c.cli.fetch(ctx); err == nil {
+	if c.cli != nil && ctx.Err() == nil {
+		if raw, ok := c.cli.cachedOrStart(); ok {
 			c.selectSource(true)
 			return raw, true
 		}

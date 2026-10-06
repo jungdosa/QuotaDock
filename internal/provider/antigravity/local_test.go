@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -98,6 +99,8 @@ func TestCLIPriorityLoginFallbackAndRecovery(t *testing.T) {
 					t.Fatal("IDE quota was not preserved")
 				}
 			}
+			_, _ = cli.cachedOrStart()
+			waitCLI(t, cli)
 			check("CLI", 3)
 			*now = now.Add(cliInterval - time.Nanosecond)
 			check("CLI", 3)
@@ -106,6 +109,8 @@ func TestCLIPriorityLoginFallbackAndRecovery(t *testing.T) {
 			}
 			*now = now.Add(time.Nanosecond)
 			runner.raw, runner.err, runner.stderr = nil, process.ErrProcessExited, "You are not logged into Antigravity."
+			_, _ = cli.cachedOrStart()
+			waitCLI(t, cli)
 			check("Local LSP", 1)
 			if cli.tripped || !errors.Is(cli.lastErr, errCLILoggedOut) || requests.Load() == 0 {
 				t.Fatal("login failure did not fall back without tripping")
@@ -118,6 +123,8 @@ func TestCLIPriorityLoginFallbackAndRecovery(t *testing.T) {
 			}
 			priorDiscoveries, priorRequests := discoveries.Load(), requests.Load()
 			*now = now.Add(time.Nanosecond)
+			_, _ = cli.cachedOrStart()
+			waitCLI(t, cli)
 			check("CLI", 3)
 			if runner.usageCalls != 3 || runner.versionCalls != 1 || cli.tripped ||
 				discoveries.Load() != priorDiscoveries || requests.Load() != priorRequests {
@@ -134,7 +141,7 @@ func TestCLIFailuresImmediatelyUseLanguageServer(t *testing.T) {
 				cli, runner, now := fakeCLI(t)
 				switch kind {
 				case "tripped":
-					cli.trip(errCLIInvalidResponse)
+					cli.trip(errCLIInvalidResponse, "parse", nil)
 				case "missing":
 					cli.prepare = func() (process.CommandSpec, error) { return process.CommandSpec{}, errCLIUnavailable }
 				case "old version":
@@ -173,6 +180,9 @@ func TestCLIFailuresImmediatelyUseLanguageServer(t *testing.T) {
 					}
 				}
 				check()
+				if cli != nil {
+					waitCLI(t, cli)
+				}
 				calls := runner.usageCalls
 				*now = now.Add(time.Minute)
 				check()
@@ -191,22 +201,92 @@ func TestCLIFailuresImmediatelyUseLanguageServer(t *testing.T) {
 	}
 }
 
-func TestCLIFailedRefreshDoesNotServeOldSuccess(t *testing.T) {
+func TestCLIFailedRefreshKeepsOnlyFreshSuccess(t *testing.T) {
 	cli, runner, now := fakeCLI(t)
 	client, _, requests := fakeCLILocalClient(t, cli)
 	if _, err := client.RetrieveUserQuotaSummary(context.Background()); err != nil {
 		t.Fatal(err)
 	}
+	waitCLI(t, cli)
 	*now = now.Add(cliInterval)
 	runner.err = process.ErrTimeout
-	for range 2 {
-		if _, err := client.RetrieveUserQuotaSummary(context.Background()); err != nil || client.Source() != "Local LSP" {
-			t.Fatal("failed refresh or its cache returned stale CLI success")
+	if _, err := client.RetrieveUserQuotaSummary(context.Background()); err != nil || client.Source() != "CLI" {
+		t.Fatal("fresh success was lost during a slow probe")
+	}
+	waitCLI(t, cli)
+	if _, err := client.RetrieveUserQuotaSummary(context.Background()); err != nil || client.Source() != "CLI" {
+		t.Fatal("transient failure discarded a fresh CLI success")
+	}
+	*now = now.Add(cliCacheLifetime - cliInterval - time.Nanosecond)
+	if _, err := client.RetrieveUserQuotaSummary(context.Background()); err != nil || client.Source() != "CLI" {
+		t.Fatal("CLI success expired before the 15-minute boundary")
+	}
+	waitCLI(t, cli)
+	*now = now.Add(time.Nanosecond)
+	if _, err := client.RetrieveUserQuotaSummary(context.Background()); err != nil || client.Source() != "Local LSP" {
+		t.Fatal("expired CLI success did not fall back to the IDE")
+	}
+	waitCLI(t, cli)
+	if runner.usageCalls != 3 || requests.Load() == 0 {
+		t.Fatal("expired cache failed to retry or use IDE fallback")
+	}
+}
+
+func TestCLISlowProbeDoesNotConsumeRefreshBudgetOrDuplicate(t *testing.T) {
+	cli, runner, _ := fakeCLI(t)
+	started := make(chan struct{}, 16)
+	finished := make(chan struct{})
+	var calls atomic.Int32
+	cli.run = func(ctx context.Context, spec process.CommandSpec, _ process.LogFunc) ([]byte, error) {
+		if len(spec.Args) == 1 && spec.Args[0] == "--version" {
+			return runner.version, nil
+		}
+		calls.Add(1)
+		started <- struct{}{}
+		defer close(finished)
+		select {
+		case <-time.After(30 * time.Second):
+			return runner.raw, nil
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		}
 	}
-	if runner.usageCalls != 2 || requests.Load() == 0 {
-		t.Fatal("failed refresh bypassed interval or IDE fallback")
+	client, _, _ := fakeCLILocalClient(t, cli)
+	begin := time.Now()
+	if _, err := client.RetrieveUserQuotaSummary(context.Background()); err != nil || client.Source() != "Local LSP" {
+		t.Fatal("pending CLI probe did not use the IDE")
 	}
+	if time.Since(begin) > time.Second {
+		t.Fatal("slow CLI consumed the refresh budget")
+	}
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("background CLI did not start")
+	}
+	var group sync.WaitGroup
+	for range 12 {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			if _, err := client.RetrieveUserQuotaSummary(context.Background()); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	group.Wait()
+	if calls.Load() != 1 {
+		t.Fatal("overlapping refreshes launched duplicate CLI probes")
+	}
+	if err := client.Close(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-finished:
+	case <-time.After(time.Second):
+		t.Fatal("app close did not cancel the CLI probe")
+	}
+	waitCLI(t, cli)
 }
 
 func TestCLIAndIDEUnavailablePreservesIDEState(t *testing.T) {
@@ -220,6 +300,7 @@ func TestCLIAndIDEUnavailablePreservesIDEState(t *testing.T) {
 	if _, err := client.RetrieveUserQuotaSummary(context.Background()); !errors.Is(err, ErrLocalRequest) {
 		t.Fatal("CLI logout replaced the IDE quota failure")
 	}
+	waitCLI(t, cli)
 	state := New(client).Inspect(context.Background())
 	if state.Status != model.StatusUnavailable || state.Error != model.ErrUnavailable || state.Source != "Local LSP" || cli.tripped {
 		t.Fatal("CLI logout leaked to the lane or tripped the breaker")
