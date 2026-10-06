@@ -7,6 +7,24 @@ plus checksums for its binaries.
 Versions follow [Semantic Versioning](https://semver.org/). The project reaches 1.0.0 once
 Windows feature verification is finished.
 
+## [0.7.59] — 2026-10-06
+
+### Fixed
+
+- A Claude account upgraded after signing in no longer shows its old plan, such as MAX 5X
+  for a MAX 20X subscription. The plan tier now comes from Anthropic's profile endpoint every
+  six hours, falling back to the value saved at sign-in.
+- Crossing onto a monitor with different display scaling hides the widget for the instant it
+  resizes, instead of showing it grow, shrink and draw several outlines along the way. It always
+  reappears within 0.6 seconds.
+- The Antigravity CLI report runs in the background, so a slow run no longer stalls the refresh;
+  the language server fills in until the report arrives. When the CLI path is stopped, the log
+  records why.
+- Reset times in the normal window start at the same distance from every meter, instead of
+  shifting with the length of each time.
+- Credit balances show at most two decimal places (62498.83 rather than 62498.833005), in a
+  slightly larger font.
+
 ## [0.7.56] — 2026-10-06
 
 ### Added
