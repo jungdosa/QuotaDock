@@ -149,7 +149,7 @@ QuotaDock は **公式ツールがすでに確立した認証状態を利用し�
 - **認証情報を新たに集めず、既存のサインインを利用します。** Claude では、Claude Code の
   OAuth 認証情報をローカルの認証ファイルまたは環境変数から読み取ります。ファイルベースの
   認証情報の更新が必要な場合は、refresh token を Anthropic のトークンエンドポイントへ送って
-  そのファイルをアトミックに更新し、その後 access token を Anthropic の使用量エンドポイントへ
+  そのファイルをアトミックに更新し、その後 access token を Anthropic の使用量エンドポイントへ（現在のプランを読むため 6 時間ごとにプロフィールエンドポイントへも）
   送ります。Codex の使用量は公式 Codex CLI の app-server と stdio でやり取りし、Antigravity の
   使用量は、まずログイン済みの Antigravity CLI の読み取り専用使用量レポート
   （`agy -p "/usage" --output-format json`、最大 5 分に 1 回）から読み、CLI がない場合や

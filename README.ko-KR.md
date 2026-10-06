@@ -144,7 +144,7 @@ QuotaDock은 **공식 도구가 이미 맺어 둔 인증 상태를 사용합니�
 - **자격 정보를 새로 수집하지 않고 기존 로그인을 사용합니다.** Claude의 경우 Claude Code의
   OAuth 자격 정보를 로컬 자격 파일 또는 환경변수에서 읽습니다. 파일 기반 자격 정보의 갱신이
   필요하면 refresh token을 Anthropic 토큰 엔드포인트로 보내 그 파일을 원자적으로 갱신한 뒤,
-  access token을 Anthropic 사용량 엔드포인트로 보냅니다. Codex 사용량은 공식 Codex CLI의
+  access token을 Anthropic 사용량 엔드포인트로, 그리고 현재 요금제 등급을 읽으려고 6시간마다 프로필 엔드포인트로 보냅니다. Codex 사용량은 공식 Codex CLI의
   app-server와 stdio로 주고받습니다. Antigravity 사용량은 로그인된 Antigravity CLI의 읽기 전용
   사용량 보고(`agy -p "/usage" --output-format json`, 최대 5분에 한 번)를 먼저 쓰고, CLI가 없거나
   로그인돼 있지 않으면 IDE의 검증된 `127.0.0.1` 언어 서버에서 읽습니다. 이 보고는 에이전트 턴을

@@ -173,7 +173,7 @@ billable AI requests.
   Claude Code's OAuth credentials from its local credentials file or an environment override;
   when file-based credentials need renewal, it sends the refresh token to Anthropic's token
   endpoint and atomically updates that file, then sends the access token to Anthropic's usage
-  endpoint. Codex usage comes from the official Codex CLI app-server over stdio, and
+  endpoint and, every six hours, to its profile endpoint to read the current plan tier. Codex usage comes from the official Codex CLI app-server over stdio, and
   Antigravity usage comes first from the signed-in Antigravity CLI's read-only usage report
   (`agy -p "/usage" --output-format json`, at most once every five minutes), which starts no
   agent turn and spends no quota; when the CLI is missing or signed out, it comes from the IDE's

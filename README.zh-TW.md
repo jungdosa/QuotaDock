@@ -132,7 +132,7 @@ QuotaDock **使用官方工具已經建立的認證狀態**。它不要求你貼
 
 - **使用既有登入，而非蒐集認證資訊。** 對 Claude，QuotaDock 會從本機認證檔案或環境變數讀取
   Claude Code 的 OAuth 認證資訊；當檔案型認證資訊需要續期時，會將 refresh token 傳送至
-  Anthropic 的權杖端點並以原子方式更新該檔案，接著將 access token 傳送至 Anthropic 的用量端點。
+  Anthropic 的權杖端點並以原子方式更新該檔案，接著將 access token 傳送至 Anthropic 的用量端點，並每六小時傳送至其個人資料端點以讀取目前方案等級。
   Codex 用量透過 stdio 與官方 Codex CLI 的 app-server 溝通，Antigravity 用量來自經驗證的
   `127.0.0.1` 語言伺服器（當 Antigravity CLI 無法使用時）。優先使用已登入 Antigravity CLI 的唯讀用量報告
   （`agy -p "/usage" --output-format json`，最多每五分鐘一次），此報告不會啟動代理回合，也不消耗配額；
