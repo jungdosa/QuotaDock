@@ -547,7 +547,12 @@ func (v *View) makeNormalUsageRow(lane LaneState, row UsageRowState, now time.Ti
 		NewColumnLayout(normalRowColumns, NormalRowGap, NormalRowHeight),
 		label,
 		meterWithPercent,
-		container.NewCenter(reset),
+		// Left-align the reset block (vertically centred) so every row's
+		// countdown starts at the same distance from the meter. Centring it
+		// horizontally shifted shorter times right and made the gap uneven;
+		// the column is already sized to the widest reset text.
+		container.New(layout.NewCustomPaddedLayout(0, 0, NormalResetLeadingInset, 0),
+			container.NewVBox(layout.NewSpacer(), reset, layout.NewSpacer())),
 	)
 	handles.row = object
 	handles.meterStack = meterWithPercent

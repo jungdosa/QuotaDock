@@ -119,7 +119,7 @@ const (
 	TitleVersionTextSize float32 = 11
 	LaneHeaderTextSize   float32 = 14
 	PlanChipTextSize     float32 = 9
-	CreditsTextSize      float32 = 9.5
+	CreditsTextSize      float32 = 10.5
 	PlanChipPaddingX     float32 = 5
 	PlanChipPaddingY     float32 = 1.5
 	LaneHeaderChipGap    float32 = 6
@@ -154,9 +154,13 @@ const (
 	// in the column the leftover opened as a gap on either side of the reset
 	// time. The ceiling keeps the old width as the limit, so a longer date
 	// format or a wider locale still fits.
-	NormalResetPadding  float32 = 8
-	NormalResetMinWidth float32 = 70
-	NormalResetMaxWidth float32 = 140
+	NormalResetPadding float32 = 8
+	// NormalResetLeadingInset keeps the left-aligned reset block off the
+	// meter's right end; the column grows by the same amount so the widest
+	// date still fits.
+	NormalResetLeadingInset float32 = 5
+	NormalResetMinWidth     float32 = 70
+	NormalResetMaxWidth     float32 = 140
 )
 
 var normalFixedColumns = []float32{0, NormalResetMaxWidth}
@@ -188,8 +192,8 @@ func normalRowColumnsWith(labelWidth, resetWidth float32) []float32 {
 // screen right now. Measuring live values would let the column breathe as a
 // countdown ticked from "4h 18m" to "4h 8m", moving the meters beside it.
 //
-// The block is centred in the column, so whatever the column has beyond its
-// contents opens as a gap on either side of every reset time.
+// The block is left-aligned after a fixed leading inset, so every row's reset
+// time starts the same distance from its meter.
 func (v *View) normalResetWidth() float32 {
 	maximum := float32(0)
 	// The countdown renders bold, but it is measured without: a theme is not
@@ -206,7 +210,7 @@ func (v *View) normalResetWidth() float32 {
 	if err == nil {
 		maximum = max(maximum, fyne.MeasureText(widest, NormalMetaTextSize, fyne.TextStyle{Monospace: true}).Width)
 	}
-	return min(NormalResetMaxWidth, max(NormalResetMinWidth, float32(math.Ceil(float64(maximum+NormalResetPadding)))))
+	return min(NormalResetMaxWidth, max(NormalResetMinWidth, float32(math.Ceil(float64(maximum+NormalResetPadding+NormalResetLeadingInset)))))
 }
 
 var normalRowColumns = normalRowColumnsFor(120)

@@ -153,3 +153,25 @@ func TestCJKEndonyms(t *testing.T) {
 		}
 	}
 }
+
+func TestFormatDecimalKeepsAtMostTwoPlaces(t *testing.T) {
+	for _, tc := range []struct {
+		value float64
+		want  string
+	}{
+		{62498.833005, "62498.83"},
+		{250, "250"},
+		{2.39, "2.39"},
+		{0.005, "0.01"},
+		{0.004, "0"},
+		{12.5, "12.5"},
+		{0.1 + 0.2, "0.3"},
+	} {
+		if got := FormatDecimal(English, tc.value); got != tc.want {
+			t.Errorf("FormatDecimal(%v) = %q, want %q", tc.value, got, tc.want)
+		}
+	}
+	if got := FormatDecimal(German, 62498.833005); got != "62498,83" {
+		t.Errorf("FormatDecimal(German) = %q, want 62498,83", got)
+	}
+}

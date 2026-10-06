@@ -5,6 +5,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -283,8 +284,11 @@ func MatchSystemLanguage(raw string) Language {
 	}
 }
 
+// FormatDecimal shows at most two decimal places: balances arrive with
+// float noise such as 62498.833005, and a cent is the finest unit any
+// provider bills in. Trailing zeros are dropped, so 250 stays "250".
 func FormatDecimal(language Language, value float64) string {
-	formatted := strconv.FormatFloat(value, 'f', -1, 64)
+	formatted := strconv.FormatFloat(math.Round(value*100)/100, 'f', -1, 64)
 	switch language {
 	case German, French, Italian, Indonesian, PortugueseBrazil, SpanishSpain, SpanishLatinAmerica:
 		return strings.Replace(formatted, ".", ",", 1)
