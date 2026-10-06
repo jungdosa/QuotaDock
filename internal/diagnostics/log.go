@@ -53,6 +53,7 @@ var appEvents = []string{
 	"window.resize",
 	"window.yield",
 	"window.monitor",
+	"window.uncloak",
 	"render.paint",
 	"render.blank",
 	"render.skip",

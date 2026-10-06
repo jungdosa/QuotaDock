@@ -192,6 +192,45 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	var dragging atomic.Bool
 	var dragStartScale float32
 	var monitorState monitorWatchState
+	var cloakState monitorCloakState
+	var releaseCloak func(bool)
+	releaseCloak = func(forced bool) {
+		if !cloakState.active {
+			return
+		}
+		if err := native.SetCloaked(false); err != nil {
+			slog.Warn("window could not be uncloaked", "error", err)
+			// A transient DWM failure must not leave the window hidden forever.
+			diagnostics.AfterFunc(50*time.Millisecond, "window_uncloak_retry", func() {
+				fyne.Do(func() { releaseCloak(true) })
+			})
+			return
+		}
+		elapsed, generations, _ := cloakState.finish(time.Now())
+		slog.Info("window.uncloak", "ms", elapsed.Milliseconds(), "forced", forced,
+			"generations", generations)
+	}
+	scheduleUncloak := func(generation, reservation uint64) {
+		diagnostics.AfterFunc(monitorUncloakDelay, "window_uncloak", func() {
+			fyne.Do(func() {
+				if cloakState.ready(time.Now(), generation, reservation) {
+					releaseCloak(false)
+				}
+			})
+		})
+	}
+	markCloakedResize := func(generation uint64) {
+		if generation == 0 {
+			return
+		}
+		if reservation, ok := cloakState.resized(time.Now(), generation); ok {
+			scheduleUncloak(generation, reservation)
+		}
+	}
+	hideWindow := func() {
+		releaseCloak(true)
+		shell.hide()
+	}
 	var scheduler provider.Scheduler
 	var view *ui.View
 	var tray *platform.Tray
@@ -242,7 +281,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	var widgetPositionRemembered bool
 	var restoreWidgetPosition platform.Rect
 	var restoreWidgetPositionOnResize bool
-	resizeWindowWithPosition := func(size fyne.Size, inPlace bool) {
+	resizeWindowWithPosition := func(size fyne.Size, inPlace bool, cloakGeneration uint64) {
 		// A fixed-size window has its OS size limits pinned to its current
 		// size, and Fyne's Resize asks GLFW for the new size without lifting
 		// them first — so a request to shrink is clamped to the old frame until
@@ -272,6 +311,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 			shell.fitToScreen()
 		}
 		applyPosition()
+		markCloakedResize(cloakGeneration)
 		// The window is fixed-size, so Fyne pins the OS size limits to the
 		// content's minimum — and it moves those limits on its next layout pass,
 		// not at the moment the content changes. A resize that shrinks the window
@@ -283,6 +323,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 			fyne.Do(func() {
 				w.Resize(size)
 				applyPosition()
+				markCloakedResize(cloakGeneration)
 				// What the window actually settled at, against what was asked
 				// for and what the content needs. A gap between the three is the
 				// OS frame disagreeing with the layout, which no unit test can
@@ -297,8 +338,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 			})
 		})
 	}
-	resizeWindow := func(size fyne.Size) { resizeWindowWithPosition(size, false) }
-	resizeWindowInPlace := func(size fyne.Size) { resizeWindowWithPosition(size, true) }
+	resizeWindow := func(size fyne.Size) { resizeWindowWithPosition(size, false, 0) }
 	// All paths reconcile on the UI thread, so a queued watch cannot apply
 	// an old observation after a drag has already corrected the window.
 	reconcileMonitor := func(trigger string) bool {
@@ -311,13 +351,33 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		if !changed {
 			return false
 		}
+		wasCloaked := cloakState.active
+		cloaked := wasCloaked
+		if !wasCloaked {
+			if cloakErr := native.SetCloaked(true); cloakErr != nil {
+				slog.Debug("window could not be cloaked", "error", cloakErr)
+			} else {
+				cloaked = true
+			}
+		}
+		generation, _ := cloakState.begin(time.Now(), cloaked)
+		if cloaked && !wasCloaked {
+			// This timer is independent of generations and later reservations.
+			diagnostics.AfterFunc(monitorCloakLimit, "window_uncloak_limit", func() {
+				fyne.Do(func() {
+					if cloakState.forceReady(time.Now()) {
+						releaseCloak(true)
+					}
+				})
+			})
+		}
 		slog.Info("window.monitor", "scale_from", previous.scale, "scale_to", next.scale,
 			"canvas_from", previous.canvasScale, "canvas_to", next.canvasScale,
-			"monitor_changed", next.monitor != previous.monitor, "trigger", trigger)
+			"monitor_changed", next.monitor != previous.monitor, "trigger", trigger, "cloaked", cloaked)
 		if trigger == "drag_cross" {
-			resizeWindowInPlace(view.MinimumSize(view.Screen()))
+			resizeWindowWithPosition(view.MinimumSize(view.Screen()), true, generation)
 		} else {
-			resizeWindow(view.MinimumSize(view.Screen()))
+			resizeWindowWithPosition(view.MinimumSize(view.Screen()), false, generation)
 		}
 		return true
 	}
@@ -577,9 +637,10 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		position.Y += ui.TitleBarHeight
 		widget.NewPopUpMenu(tray.Menu(), w.Canvas()).ShowAtPosition(position)
 	}, Refresh: refresh, ResizeWindow: resizeWindow, OpenSettings: func() { applyScreen(ui.SettingsScreen) }, Minimize: func() {
+		releaseCloak(true)
 		native.Minimize()
 		idleTrimmer.MarkTrimmed()
-	}, Close: shell.hide, CloseSettings: func() {
+	}, Close: hideWindow, CloseSettings: func() {
 		applyScreen(ui.ScreenForDisplayMode(cfg.DisplayMode))
 	}, ConfigChanged: applyConfig, Activity: markActivity,
 		Inspect:   func(id model.ProviderID) { runConnectionAction(id, false) },
@@ -614,8 +675,9 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	}
 	w.SetContent(view.Root)
 	applyScreen(ui.ScreenForDisplayMode(cfg.DisplayMode))
-	lifecycle = &platform.Lifecycle{Hide: func() { shell.savePosition(); shell.hide() }, Quit: func() {
+	lifecycle = &platform.Lifecycle{Hide: func() { shell.savePosition(); hideWindow() }, Quit: func() {
 		shell.savePosition()
+		releaseCloak(true)
 		cancel()
 		stopTrayPromotionRetries()
 		scheduler.Stop()
@@ -835,7 +897,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	}
 	shell.refreshCorners()
 	if hidden {
-		shell.hide()
+		hideWindow()
 	}
 	if !demo {
 		scheduler.Start(ctx, time.Duration(cfg.RefreshSeconds)*time.Second, scheduledRefresh)

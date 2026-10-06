@@ -28,6 +28,7 @@ const (
 	swpFrameChanged                = 0x0020
 	gwHwndNext                     = 2
 	dwmwaCloaked                   = 14
+	dwmwaCloak                     = 13
 	swMinimize                     = 6
 	monitorDefaultToNearest        = 2
 	defaultWindowDPI               = 96
@@ -107,6 +108,26 @@ func (c *WindowController) bound() error {
 		return nil
 	}
 	return c.Bind()
+}
+
+// SetCloaked keeps intermediate DPI resize frames out of the DWM composition.
+func (c *WindowController) SetCloaked(cloaked bool) error {
+	if err := c.bound(); err != nil {
+		return err
+	}
+	if err := dwmSetWindowAttribute.Find(); err != nil {
+		return fmt.Errorf("DwmSetWindowAttribute: %w", err)
+	}
+	var value uint32
+	if cloaked {
+		value = 1
+	}
+	result, _, _ := dwmSetWindowAttribute.Call(c.HWND, dwmwaCloak,
+		uintptr(unsafe.Pointer(&value)), unsafe.Sizeof(value))
+	if result != 0 {
+		return fmt.Errorf("DwmSetWindowAttribute(DWMWA_CLOAK): HRESULT 0x%08x", uint32(result))
+	}
+	return nil
 }
 func (c *WindowController) ConfigureFrameless() error {
 	if err := c.bound(); err != nil {
@@ -482,6 +503,7 @@ func (c *WindowController) Restore(saved Rect) error {
 	}
 	return nil
 }
+
 // syscall.NewCallback registrations are permanent and capped per process
 // (runtime.throw "too many callback functions" at around 2000), so the enum
 // callback is created exactly once and the collected areas flow through a

@@ -199,3 +199,80 @@ func TestNativeMonitorChangedIgnoresCanvasScale(t *testing.T) {
 		t.Fatal("a DPI change was missed")
 	}
 }
+
+func TestMonitorCloakLatestGenerationAndResize(t *testing.T) {
+	start := time.Unix(100, 0)
+	var state monitorCloakState
+	first, ok := state.begin(start, true)
+	if !ok {
+		t.Fatal("first crossing did not cloak")
+	}
+	firstReservation, _ := state.resized(start, first)
+	second, ok := state.begin(start.Add(80*time.Millisecond), true)
+	if !ok || second == first {
+		t.Fatal("second crossing did not advance the generation")
+	}
+	secondReservation, _ := state.resized(start.Add(80*time.Millisecond), second)
+	if state.ready(start.Add(170*time.Millisecond), first, firstReservation) {
+		t.Fatal("old generation uncloaked the latest crossing")
+	}
+	newReservation, _ := state.resized(start.Add(180*time.Millisecond), second)
+	if state.ready(start.Add(241*time.Millisecond), second, secondReservation) {
+		t.Fatal("reservation before the delayed resize was still current")
+	}
+	if !state.ready(start.Add(340*time.Millisecond), second, newReservation) {
+		t.Fatal("latest resize did not allow uncloak after 160ms")
+	}
+	elapsed, generations, finished := state.finish(start.Add(340 * time.Millisecond))
+	if !finished || elapsed != 340*time.Millisecond || generations != 2 {
+		t.Fatalf("finish = (%v, %d, %v)", elapsed, generations, finished)
+	}
+}
+
+func TestMonitorCloakForceLimitDoesNotExtend(t *testing.T) {
+	start := time.Unix(100, 0)
+	var state monitorCloakState
+	first, _ := state.begin(start, true)
+	state.resized(start, first)
+	second, _ := state.begin(start.Add(550*time.Millisecond), true)
+	reservation, _ := state.resized(start.Add(550*time.Millisecond), second)
+	if state.forceReady(start.Add(599 * time.Millisecond)) {
+		t.Fatal("force limit fired early")
+	}
+	if state.ready(start.Add(600*time.Millisecond), second, reservation) {
+		t.Fatal("normal reservation ignored the final resize delay")
+	}
+	if !state.forceReady(start.Add(600 * time.Millisecond)) {
+		t.Fatal("repeated crossing extended the 600ms limit")
+	}
+	state.finish(start.Add(600 * time.Millisecond))
+	if state.forceReady(start.Add(601 * time.Millisecond)) {
+		t.Fatal("completed cloak remained forceable")
+	}
+}
+
+func TestMonitorCloakFailureAndHideRestore(t *testing.T) {
+	start := time.Unix(100, 0)
+	var state monitorCloakState
+	if generation, ok := state.begin(start, false); ok || generation != 0 {
+		t.Fatal("failed native cloak was recorded as active")
+	}
+	if state.forceReady(start.Add(time.Second)) {
+		t.Fatal("failed cloak scheduled an uncloak")
+	}
+	if _, _, finished := state.finish(start); finished {
+		t.Fatal("failed cloak requested an uncloak on hide")
+	}
+	generation, _ := state.begin(start, true)
+	reservation, _ := state.resized(start, generation)
+	if _, generations, finished := state.finish(start.Add(20 * time.Millisecond)); !finished || generations != 1 {
+		t.Fatal("hide did not restore the cloaked window")
+	}
+	if _, _, finished := state.finish(start.Add(30 * time.Millisecond)); finished {
+		t.Fatal("quit tried to uncloak an already restored window")
+	}
+	if _, ok := state.begin(start.Add(40*time.Millisecond), true); !ok ||
+		state.ready(start.Add(time.Second), generation, reservation) {
+		t.Fatal("a timer from before hide reached a new cloak")
+	}
+}

@@ -9,7 +9,63 @@ import (
 const (
 	monitorWatchInterval   = 150 * time.Millisecond
 	monitorDragQuietPeriod = 250 * time.Millisecond
+	monitorUncloakDelay    = 160 * time.Millisecond
+	monitorCloakLimit      = 600 * time.Millisecond
 )
+
+// monitorCloakState is owned by the UI thread. The generation rejects old
+// crossings; the reservation rejects a timer superseded by a later resize.
+// started remains fixed across crossings so frequent movement cannot keep the
+// window cloaked beyond one limit interval.
+type monitorCloakState struct {
+	active      bool
+	started     time.Time
+	lastResize  time.Time
+	generation  uint64
+	reservation uint64
+	generations int
+}
+
+func (s *monitorCloakState) begin(now time.Time, cloakSucceeded bool) (uint64, bool) {
+	if !s.active {
+		if !cloakSucceeded {
+			return 0, false
+		}
+		s.active = true
+		s.started = now
+		s.generations = 0
+	}
+	s.generation++
+	s.generations++
+	return s.generation, true
+}
+
+func (s *monitorCloakState) resized(now time.Time, generation uint64) (uint64, bool) {
+	if !s.active || generation != s.generation {
+		return 0, false
+	}
+	s.lastResize = now
+	s.reservation++
+	return s.reservation, true
+}
+
+func (s *monitorCloakState) ready(now time.Time, generation, reservation uint64) bool {
+	return s.active && generation == s.generation && reservation == s.reservation &&
+		!now.Before(s.lastResize.Add(monitorUncloakDelay))
+}
+
+func (s *monitorCloakState) forceReady(now time.Time) bool {
+	return s.active && !now.Before(s.started.Add(monitorCloakLimit))
+}
+
+func (s *monitorCloakState) finish(now time.Time) (time.Duration, int, bool) {
+	if !s.active {
+		return 0, 0, false
+	}
+	elapsed, generations := now.Sub(s.started), s.generations
+	s.active = false
+	return elapsed, generations, true
+}
 
 type monitorSignature struct {
 	monitor     uintptr

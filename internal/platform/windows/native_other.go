@@ -33,3 +33,5 @@ func (*WindowController) SetTaskbarVisible(bool) error  { return nil }
 func (*WindowController) Position() (Rect, error)       { return Rect{}, errUnsupportedPlatform }
 func (*WindowController) Restore(Rect) error            { return nil }
 func MonitorWorkAreas() []Rect                          { return nil }
+
+func (*WindowController) SetCloaked(bool) error { return nil }
