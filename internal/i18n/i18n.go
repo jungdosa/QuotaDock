@@ -157,35 +157,56 @@ const (
 )
 
 const (
-	KeyConnectionMethodCLI         = "connection.method_cli"
-	KeyConnectionMethodAuth        = "connection.method_auth"
-	KeyConnectionMethodIDE         = "connection.method_ide"
-	KeyConnectionMethodOther       = "connection.method_other"
-	KeyConnectionStateActive       = "connection.state_active"
-	KeyConnectionStateAvailable    = "connection.state_available"
-	KeyConnectionStateMissing      = "connection.state_missing"
-	KeyConnectionStatePlanned      = "connection.state_planned"
-	KeyConnectionAccountLabel      = "connection.account_label"
-	KeyConnectionAccountLabelHint  = "connection.account_label_hint"
-	KeyConnectionAddAccount        = "connection.add_account"
-	KeyConnectionRemoveAccount     = "connection.remove_account"
-	KeyConnectionCLIInUse          = "connection.cli_in_use"
-	KeyConnectionSignIn            = "connection.sign_in"
-	KeyConnectionCodexAuthHint     = "connection.codex_auth_hint"
-	KeyConnectionCancelSignIn      = "connection.cancel_sign_in"
-	KeyConnectionAuthWebHint       = "connection.auth_web_hint"
-	KeyConnectionPanelInstallTitle = "connection.panel_install_title"
-	KeyConnectionInstallStep1      = "connection.install_step_1"
-	KeyConnectionInstallStep2      = "connection.install_step_2"
-	KeyConnectionInstallStep3      = "connection.install_step_3"
-	KeyConnectionSearchPaths       = "connection.search_paths"
-	KeyConnectionAutoDetect        = "connection.auto_detect"
-	KeyConnectionAuthPlanned       = "connection.auth_planned"
-	KeyConnectionEnvConfigured     = "connection.env_configured"
-	KeyConnectionEnvHint           = "connection.env_hint"
-	KeyConnectionPanelClose        = "connection.panel_close"
-	KeyRescan                      = "action.rescan"
-	KeyOpenInstallDocs             = "action.open_install_docs"
+	KeyConnectionMethodCLI            = "connection.method_cli"
+	KeyConnectionMethodAuth           = "connection.method_auth"
+	KeyConnectionMethodIDE            = "connection.method_ide"
+	KeyConnectionMethodOther          = "connection.method_other"
+	KeyConnectionStateActive          = "connection.state_active"
+	KeyConnectionStateAvailable       = "connection.state_available"
+	KeyConnectionStateMissing         = "connection.state_missing"
+	KeyConnectionStatePlanned         = "connection.state_planned"
+	KeyConnectionAccountLabel         = "connection.account_label"
+	KeyConnectionAccountLabelHint     = "connection.account_label_hint"
+	KeyConnectionAddAccount           = "connection.add_account"
+	KeyConnectionRemoveAccount        = "connection.remove_account"
+	KeyConnectionCLIInUse             = "connection.cli_in_use"
+	KeyConnectionSignIn               = "connection.sign_in"
+	KeyConnectionSignInAgain          = "connection.sign_in_again"
+	KeyConnectionAuthSignedIn         = "connection.auth_signed_in"
+	KeyConnectionCodexAuthHint        = "connection.codex_auth_hint"
+	KeyConnectionCodexAuthAlternative = "connection.codex_auth_alternative"
+	KeyConnectionCancelSignIn         = "connection.cancel_sign_in"
+	KeyConnectionAuthWebHint          = "connection.auth_web_hint"
+	KeyConnectionPanelInstallTitle    = "connection.panel_install_title"
+	KeyConnectionInstallStep1         = "connection.install_step_1"
+	KeyConnectionInstallStep2         = "connection.install_step_2"
+	KeyConnectionInstallStep3         = "connection.install_step_3"
+	KeyConnectionSearchPaths          = "connection.search_paths"
+	KeyConnectionAutoDetect           = "connection.auto_detect"
+	KeyConnectionAuthPlanned          = "connection.auth_planned"
+	KeyConnectionEnvConfigured        = "connection.env_configured"
+	KeyConnectionEnvHint              = "connection.env_hint"
+	KeyConnectionPanelClose           = "connection.panel_close"
+	KeyConnectionPanelSignInTitle     = "connection.panel_sign_in_title"
+	KeyConnectionPanelUpdateTitle     = "connection.panel_update_title"
+	KeyConnectionSignInStep1          = "connection.sign_in_step_1"
+	KeyConnectionSignInStep2          = "connection.sign_in_step_2"
+	KeyConnectionUpdateCommand        = "connection.update_command"
+	KeyConnectionCopy                 = "connection.copy"
+	KeyConnectionCopied               = "connection.copied"
+	KeyConnectionAuthAlternative      = "connection.auth_alternative"
+	KeyConnectionSignInWithAuth       = "connection.sign_in_with_auth"
+	KeyConnectionIDEGuide             = "connection.ide_guide"
+	KeyConnectionGuideShortcut        = "connection.guide_shortcut"
+	KeyFirstRunTitle                  = "first_run.title"
+	KeyFirstRunAllConnected           = "first_run.all_connected"
+	KeyFirstRunGuide                  = "first_run.guide"
+	KeyFirstRunInstallNeeded          = "first_run.install_needed"
+	KeyFirstRunSignInNeeded           = "first_run.sign_in_needed"
+	KeyFirstRunUpdateNeeded           = "first_run.update_needed"
+	KeyFirstRunCannotCheck            = "first_run.cannot_check"
+	KeyRescan                         = "action.rescan"
+	KeyOpenInstallDocs                = "action.open_install_docs"
 )
 
 var Supported = []Language{
@@ -380,8 +401,11 @@ var RequiredKeys = []string{
 	KeyConnectionRemoveAccount,
 	KeyConnectionCLIInUse,
 	KeyConnectionSignIn,
+	KeyConnectionSignInAgain,
+	KeyConnectionAuthSignedIn,
 	KeyConnectionAuthWebHint,
 	KeyConnectionCodexAuthHint,
+	KeyConnectionCodexAuthAlternative,
 	KeyConnectionCancelSignIn,
 	KeyConnectionPanelInstallTitle,
 	KeyConnectionInstallStep1,
@@ -393,6 +417,24 @@ var RequiredKeys = []string{
 	KeyConnectionEnvConfigured,
 	KeyConnectionEnvHint,
 	KeyConnectionPanelClose,
+	KeyConnectionPanelSignInTitle,
+	KeyConnectionPanelUpdateTitle,
+	KeyConnectionSignInStep1,
+	KeyConnectionSignInStep2,
+	KeyConnectionUpdateCommand,
+	KeyConnectionCopy,
+	KeyConnectionCopied,
+	KeyConnectionAuthAlternative,
+	KeyConnectionSignInWithAuth,
+	KeyConnectionIDEGuide,
+	KeyConnectionGuideShortcut,
+	KeyFirstRunTitle,
+	KeyFirstRunAllConnected,
+	KeyFirstRunGuide,
+	KeyFirstRunInstallNeeded,
+	KeyFirstRunSignInNeeded,
+	KeyFirstRunUpdateNeeded,
+	KeyFirstRunCannotCheck,
 	KeyRescan,
 	KeyOpenInstallDocs,
 	KeyClose,

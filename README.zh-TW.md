@@ -93,6 +93,8 @@ winget install jungdosa.QuotaDock
 2. 它會自動尋找你已經在用的官方工具並連線 —— Claude Code CLI、Codex CLI 與 Antigravity IDE。
 3. 已登入的供應商會在幾秒內開始顯示用量。
 
+初次執行時，小視窗會顯示一次已找到與未找到的工具，並為未找到的工具提供安裝與登入說明。
+
 若某一列提示缺少 CLI，請開啟 **設定 → 連線**，點一下該供應商的 `CLI` 按鈕。安裝說明會直接在
 卡片內展開 —— 要執行的指令、如何登入，以及 QuotaDock 的搜尋路徑。裝好後按 `重新搜尋` 即可，
 不必重新啟動。
@@ -107,6 +109,8 @@ QuotaDock 最多可並排顯示五個 Claude 帳號。在 **設定 → 連線** 
 | `CLI` | 這台電腦的 Claude Code 已保存的憑證 | 你在這台電腦上使用 Claude Code。CLI 只保存一個登入，所以**只能一個帳號**。 |
 | `Auth` | 在 QuotaDock 自帶的瀏覽器視窗完成的 Claude 登入 | 第二個帳號，或沒有 Claude Code 的電腦。 |
 | `其他` | 環境變數 `CLAUDE_CODE_OAUTH_TOKEN` | 你自己管理的長期權杖 —— 例如透過 SSH 登入的機器。 |
+
+每個 Codex 帳號也可選擇 `CLI`（這台電腦的 Codex CLI 登入，同時僅限一個帳號）或 `Auth`（從應用程式登入該帳號的獨立空間）。`Auth` 也需要安裝官方 Codex CLI。
 
 `其他` 沒有貼上欄位 —— 這是刻意的，QuotaDock 從不要求你輸入權杖。使用步驟：
 

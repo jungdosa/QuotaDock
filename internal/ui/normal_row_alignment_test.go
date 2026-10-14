@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
 	"github.com/jungdosa/QuotaDock/internal/i18n"
 	"github.com/jungdosa/QuotaDock/internal/model"
 	"github.com/jungdosa/QuotaDock/internal/settings"
@@ -103,6 +104,14 @@ func objectPosition(root *fyne.Container, target fyne.CanvasObject, offset fyne.
 		position := offset.Add(object.Position())
 		if object == target {
 			return position, true
+		}
+		// The settings body scrolls, so its content hangs off the scroller.
+		if scroll, ok := object.(*container.Scroll); ok {
+			position = position.Add(scroll.Content.Position())
+			object = scroll.Content
+			if object == target {
+				return position, true
+			}
 		}
 		if container, ok := object.(*fyne.Container); ok {
 			if found, yes := objectPosition(container, target, position); yes {

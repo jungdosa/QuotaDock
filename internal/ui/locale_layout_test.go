@@ -114,10 +114,17 @@ func TestEndonymLanguageSelectorHasSystemAndTwelveLocales(t *testing.T) {
 	config.Language = settings.Language(i18n.English)
 	view.SetConfig(config)
 
-	display := view.displaySettings().(*fyne.Container)
-	pair := display.Objects[0].(*fyne.Container)
-	languageRow := pair.Objects[0].(*fyne.Container)
-	selector := languageRow.Objects[1].(*widget.Select)
+	// The language select is the first one in the section, whether its row
+	// shares a line with the date format or sits above it.
+	var selector *widget.Select
+	walkCanvasObject(view.displaySettings(), func(object fyne.CanvasObject) {
+		if found, ok := object.(*widget.Select); ok && selector == nil {
+			selector = found
+		}
+	})
+	if selector == nil {
+		t.Fatal("display settings have no language select")
+	}
 	want := []string{
 		"System",
 		"English",
@@ -153,17 +160,28 @@ func TestDisplaySelectorsFitSettingsHalfRows(t *testing.T) {
 		config := view.config
 		config.Language = settings.Language(language)
 		view.SetConfig(config)
-		display := view.displaySettings().(*fyne.Container)
-		pair := display.Objects[0].(*fyne.Container)
-		for index, object := range pair.Objects {
-			row := object.(*fyne.Container)
-			rowLayout := row.Layout.(*SettingRowLayout)
-			if total := rowLayout.LabelWidth + rowLayout.Gap + rowLayout.ControlWidth; total > halfSettingRowWidth {
-				t.Errorf("%s display row %d width = %.1f, exceeds %.1f", language, index, total, halfSettingRowWidth)
+		// The two selects share a line where the section is wide enough and
+		// stack otherwise; either way each row has to fit the section.
+		index := 0
+		walkCanvasObject(view.displaySettings(), func(object fyne.CanvasObject) {
+			row, ok := object.(*fyne.Container)
+			if !ok {
+				return
+			}
+			rowLayout, ok := row.Layout.(*SettingRowLayout)
+			if !ok {
+				return
+			}
+			if total := rowLayout.LabelWidth + rowLayout.Gap + rowLayout.ControlWidth; total > settingsInnerWidth {
+				t.Errorf("%s display row %d width = %.1f, exceeds %.1f", language, index, total, settingsInnerWidth)
 			}
 			if labelWidth := row.Objects[0].MinSize().Width; labelWidth > rowLayout.LabelWidth {
 				t.Errorf("%s display row %d label width = %.1f, column %.1f", language, index, labelWidth, rowLayout.LabelWidth)
 			}
+			index++
+		})
+		if index != 2 {
+			t.Errorf("%s display section has %d rows, want the language and the date format", language, index)
 		}
 	}
 }

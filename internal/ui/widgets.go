@@ -90,7 +90,7 @@ var _ desktop.Hoverable = (*Toggle)(nil)
 
 func (t *Toggle) CreateRenderer() fyne.WidgetRenderer {
 	track := canvas.NewRectangle(t.Colors.Disconnected)
-	track.CornerRadius = 10
+	track.CornerRadius = ToggleHeight / 2
 	thumb := canvas.NewCircle(t.Colors.ControlThumb)
 	renderer := &toggleRenderer{toggle: t, track: track, thumb: thumb, objects: []fyne.CanvasObject{track, thumb}}
 	// Paint the checked state right away: without this first Refresh a toggle
@@ -108,16 +108,26 @@ type toggleRenderer struct {
 
 func (r *toggleRenderer) Destroy()                     {}
 func (r *toggleRenderer) Objects() []fyne.CanvasObject { return r.objects }
-func (r *toggleRenderer) MinSize() fyne.Size           { return fyne.NewSize(38, 20) }
+
+// The switch keeps the proportions it has always had, scaled down so a
+// settings row can be as low as the text beside it.
+const (
+	ToggleWidth  float32 = 30
+	ToggleHeight float32 = 16
+	toggleThumb  float32 = 11
+	toggleInset  float32 = (ToggleHeight - toggleThumb) / 2
+)
+
+func (r *toggleRenderer) MinSize() fyne.Size { return fyne.NewSize(ToggleWidth, ToggleHeight) }
 func (r *toggleRenderer) Layout(size fyne.Size) {
-	r.track.Resize(fyne.NewSize(38, 20))
-	r.track.Move(fyne.NewPos(0, (size.Height-20)/2))
-	x := float32(3)
+	r.track.Resize(fyne.NewSize(ToggleWidth, ToggleHeight))
+	r.track.Move(fyne.NewPos(0, (size.Height-ToggleHeight)/2))
+	x := toggleInset
 	if r.toggle.Checked {
-		x = 21
+		x = ToggleWidth - toggleThumb - toggleInset
 	}
-	r.thumb.Resize(fyne.NewSize(14, 14))
-	r.thumb.Move(fyne.NewPos(x, (size.Height-14)/2))
+	r.thumb.Resize(fyne.NewSize(toggleThumb, toggleThumb))
+	r.thumb.Move(fyne.NewPos(x, (size.Height-toggleThumb)/2))
 }
 func (r *toggleRenderer) Refresh() {
 	r.track.FillColor = r.toggle.Colors.Disconnected
@@ -434,7 +444,7 @@ func (b *ConnectionMethodButton) CreateRenderer() fyne.WidgetRenderer {
 	background.CornerRadius = 4
 	border := canvas.NewRectangle(color.Transparent)
 	border.CornerRadius = 4
-	label := textLabel(b.Label, SettingsTextSize, b.Colors.Text, true, false)
+	label := textLabel(b.Label, ConnectionMethodTextSize, b.Colors.Text, true, false)
 	dot := canvas.NewCircle(b.Colors.Disconnected)
 	dashes := make([]*canvas.Line, 12)
 	objects := []fyne.CanvasObject{background, border}

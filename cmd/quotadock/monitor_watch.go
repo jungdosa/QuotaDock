@@ -13,6 +13,17 @@ const (
 	monitorCloakLimit      = 600 * time.Millisecond
 )
 
+var monitorRepaintDelays = [...]time.Duration{500 * time.Millisecond, 2 * time.Second}
+
+// The surface can be recreated after the monitor event and after the first
+// resize. Refresh once now and twice more while Windows finishes reconnecting.
+func scheduleMonitorRepaint(refresh func(), after func(time.Duration, func())) {
+	refresh()
+	for _, delay := range monitorRepaintDelays {
+		after(delay, refresh)
+	}
+}
+
 // monitorCloakState is owned by the UI thread. The generation rejects old
 // crossings; the reservation rejects a timer superseded by a later resize.
 // started remains fixed across crossings so frequent movement cannot keep the
@@ -87,6 +98,10 @@ func scaledDragOffset(offset int, startScale, currentScale float32) int {
 func monitorSignatureChanged(previous, current monitorSignature) bool {
 	// The first valid observation establishes a baseline, not a move.
 	return previous.monitor != 0 && current.monitor != 0 && previous != current
+}
+
+func monitorScaleChanged(previous, current monitorSignature) bool {
+	return previous.scale != current.scale || previous.canvasScale != current.canvasScale
 }
 
 func monitorDragQuiet(now time.Time, lastMove int64) bool {

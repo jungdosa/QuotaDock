@@ -154,16 +154,22 @@ func TestSettingsToggleColumnLeavesRightMargin(t *testing.T) {
 	}
 }
 
+// Settings rows pair up in two columns where the widget's width allows it,
+// which Korean's short labels do, the two drop-downs of the display section
+// included.
 func TestSettingsUsesRequiredTwoColumnRows(t *testing.T) {
 	v, w := newTestView(t)
 	defer w.Close()
+	cfg := v.config
+	cfg.Language = settings.Language(i18n.Korean)
+	v.SetConfig(cfg)
 	assertPair := func(name string, object fyne.CanvasObject) {
 		t.Helper()
 		pair, ok := object.(*fyne.Container)
 		if !ok || len(pair.Objects) != 2 {
 			t.Fatalf("%s is not a two-column row", name)
 		}
-		pair.Resize(fyne.NewSize(560, 30))
+		pair.Resize(fyne.NewSize(settingsInnerWidth, 30))
 		pair.Layout.Layout(pair.Objects, pair.Size())
 		if pair.Objects[0].Position().X != 0 || pair.Objects[1].Position().X <= pair.Objects[0].Position().X {
 			t.Fatalf("%s columns overlap: left=%v right=%v", name, pair.Objects[0].Position(), pair.Objects[1].Position())
@@ -193,9 +199,12 @@ func TestSettingsUsesRequiredTwoColumnRows(t *testing.T) {
 
 	display := v.displaySettings().(*fyne.Container)
 	if len(display.Objects) != 1 {
-		t.Fatalf("display rows=%d, want 1", len(display.Objects))
+		t.Fatalf("display rows=%d, want language beside date/time", len(display.Objects))
 	}
 	assertPair("display language and date/time", display.Objects[0])
+	if width := display.MinSize().Width; width > settingsInnerWidth {
+		t.Fatalf("display row needs %.1f, more than the section's %.1f", width, settingsInnerWidth)
+	}
 }
 
 func TestTitlebarDragRegionsDoNotOverlapButtons(t *testing.T) {
@@ -417,7 +426,19 @@ func TestCanvasClickTargetsReachTitlebarAndSettingsControls(t *testing.T) {
 	v.Show(SettingsScreen)
 	w.Resize(v.MinimumSize(SettingsScreen))
 	before := v.config.ShowClaude
-	test.TapCanvas(w.Canvas(), fyne.NewPos(168, 107))
+	// The first switch on the screen is the Claude one; tap its centre
+	// wherever the layout has put it.
+	var firstToggle *Toggle
+	walkCanvasObject(v.Settings, func(object fyne.CanvasObject) {
+		if toggle, ok := object.(*Toggle); ok && firstToggle == nil {
+			firstToggle = toggle
+		}
+	})
+	if firstToggle == nil {
+		t.Fatal("settings have no switch")
+	}
+	origin := fyne.CurrentApp().Driver().AbsolutePositionForObject(firstToggle)
+	test.TapCanvas(w.Canvas(), fyne.NewPos(origin.X+firstToggle.Size().Width/2, origin.Y+firstToggle.Size().Height/2))
 	if v.config.ShowClaude == before || clicks["config"] == 0 {
 		t.Fatal("settings toggle did not receive the canvas click")
 	}
@@ -1105,9 +1126,14 @@ func TestSettingsHeaderHelpAndProviderColorsMovedToMeters(t *testing.T) {
 	for _, text := range []string{
 		"Usage display guide",
 		"Each service connects independently. If one service fails, usage for the others continues to be displayed.",
-		"Selecting Claude sign-in opens an authorized Claude login window. After sign-in, usage is queried through the web session, so you never need to enter a password or token directly in the app. Choosing Other reads a token from the CLAUDE_CODE_OAUTH_TOKEN environment variable instead: run claude setup-token, store the result in that variable, then restart QuotaDock.",
+		// The Claude copy is split into paragraphs, one text per line break.
+		"Choosing CLI reads the Claude Code sign-in on this PC (one account). If Claude Code is not installed, use Auth.",
+		"Selecting Claude sign-in opens an authorized Claude login window.",
+		"After sign-in, usage is queried through the web session, so you never need to enter a password or token directly in the app.",
+		"Choosing Other reads a token from the CLAUDE_CODE_OAUTH_TOKEN environment variable instead: run claude setup-token, store the result in that variable, then restart QuotaDock.",
 		"If the session expires and 'Sign in required' appears, sign in to Claude again.",
-		"The official Codex CLI must be installed and signed in. The app automatically detects the installed CLI and local app-server and never asks for an authentication token.",
+		"The official Codex CLI must be installed.",
+		"Choose CLI to read this PC's Codex CLI login (one account). Choose Auth to sign in from the app to a separate space for this account using the official Codex CLI.",
 		"Check codex --version in a terminal. If it is not detected, complete Codex CLI sign-in and reconnect.",
 		"Antigravity IDE must be running and signed in. QuotaDock connects only to the local LSP to read Gemini and Claude usage.",
 		"If 'Not found' appears, start Antigravity IDE and reconnect.",
@@ -1152,6 +1178,8 @@ func walkCanvasObject(object fyne.CanvasObject, visit func(fyne.CanvasObject)) {
 			walkCanvasObject(child, visit)
 		}
 	case *container.Scroll:
+		walkCanvasObject(value.Content, visit)
+	case *container.ThemeOverride:
 		walkCanvasObject(value.Content, visit)
 	}
 }
@@ -2336,8 +2364,10 @@ func TestConnectionCardActionsHelpAndInstallLinks(t *testing.T) {
 			}
 		})
 		_, descriptionKey, retryKey := connectionHelpKeys(id)
-		if !texts[v.text(descriptionKey)] || !texts[v.text(retryKey)] {
-			t.Fatalf("%s card help did not reuse provider-specific i18n text", id)
+		for _, paragraph := range strings.Split(v.text(descriptionKey)+"\n"+v.text(retryKey), "\n") {
+			if !texts[paragraph] {
+				t.Fatalf("%s card help did not reuse provider-specific i18n text: missing %q", id, paragraph)
+			}
 		}
 		v.helpPopup.Hide()
 		v.helpPopup = nil

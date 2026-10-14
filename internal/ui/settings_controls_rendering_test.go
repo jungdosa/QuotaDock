@@ -9,7 +9,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/test"
-	"fyne.io/fyne/v2/theme"
 	"github.com/jungdosa/QuotaDock/internal/i18n"
 	"github.com/jungdosa/QuotaDock/internal/settings"
 )
@@ -26,14 +25,20 @@ func TestSettingsLayoutMetrics(t *testing.T) {
 	defer w.Close()
 	v.Show(SettingsScreen)
 
+	// Korean labels are short enough for two columns at the widget's width,
+	// which is the layout whose column alignment is checked here. A language
+	// whose labels are too long stacks the same rows instead.
+	cfg := v.config
+	cfg.Language = settings.Language(i18n.Korean)
+	v.SetConfig(cfg)
 	usage := v.usageSettings().(*fyne.Container)
 	if len(usage.Objects) != 5 {
-		t.Fatalf("usage rows=%d, want 5 compact rows", len(usage.Objects))
+		t.Fatalf("usage rows=%d, want 5 two-column rows", len(usage.Objects))
 	}
 	controlStarts := make([][2]float32, 0, 4)
 	for rowIndex := 0; rowIndex < 4; rowIndex++ {
 		pair := usage.Objects[rowIndex].(*fyne.Container)
-		pair.Resize(fyne.NewSize(560, 28))
+		pair.Resize(fyne.NewSize(settingsInnerWidth, settingsRowHeight))
 		pair.Layout.Layout(pair.Objects, pair.Size())
 		starts := [2]float32{}
 		for columnIndex, object := range pair.Objects {
@@ -48,21 +53,34 @@ func TestSettingsLayoutMetrics(t *testing.T) {
 		controlStarts = append(controlStarts, starts)
 	}
 	for rowIndex, starts := range controlStarts {
-		want := [2]float32{120, 120}
-		if starts != want {
-			t.Fatalf("usage row %d control starts=%v, want %v", rowIndex, starts, want)
+		if starts[0] != starts[1] || starts != controlStarts[0] {
+			t.Fatalf("usage row %d control starts=%v, want every control on the column line %v", rowIndex, starts, controlStarts[0])
 		}
 	}
-	rightColumnStart := usage.Objects[3].(*fyne.Container).Objects[1].Position().X + controlStarts[3][1]
-	t.Logf("control start x: left=%.1f right=%.1f (560px pair), local starts=%v", controlStarts[0][0], rightColumnStart, controlStarts)
+	for _, language := range []i18n.Language{i18n.English, i18n.German} {
+		cfg = v.config
+		cfg.Language = settings.Language(language)
+		v.SetConfig(cfg)
+		if width := v.usageSettings().MinSize().Width; width > settingsInnerWidth {
+			t.Fatalf("%s usage settings need %.1f, more than the section's %.1f", language, width, settingsInnerWidth)
+		}
+	}
 
-	cfg := v.config
+	cfg = v.config
 	cfg.Language = settings.Language(i18n.Korean)
 	v.SetConfig(cfg)
-	display := v.displaySettings().(*fyne.Container)
-	displayPair := display.Objects[0].(*fyne.Container)
-	languageLayout := displayPair.Objects[0].(*fyne.Container).Layout.(*SettingRowLayout)
-	dateLayout := displayPair.Objects[1].(*fyne.Container).Layout.(*SettingRowLayout)
+	var selects []*SettingRowLayout
+	walkCanvasObject(v.displaySettings(), func(object fyne.CanvasObject) {
+		if row, ok := object.(*fyne.Container); ok {
+			if rowLayout, ok := row.Layout.(*SettingRowLayout); ok {
+				selects = append(selects, rowLayout)
+			}
+		}
+	})
+	if len(selects) != 2 {
+		t.Fatalf("display section has %d select rows, want language and date/time", len(selects))
+	}
+	languageLayout, dateLayout := selects[0], selects[1]
 	if languageLayout.LabelWidth+languageLayout.Gap != dateLayout.LabelWidth+dateLayout.Gap {
 		t.Fatalf("select starts differ: language=%.1f date=%.1f", languageLayout.LabelWidth+languageLayout.Gap, dateLayout.LabelWidth+dateLayout.Gap)
 	}
@@ -70,11 +88,10 @@ func TestSettingsLayoutMetrics(t *testing.T) {
 		t.Fatalf("date select width did not shrink: %.1f", dateLayout.ControlWidth)
 	}
 	for name, rowLayout := range map[string]*SettingRowLayout{"language": languageLayout, "date/time": dateLayout} {
-		if total := rowLayout.LabelWidth + rowLayout.Gap + rowLayout.ControlWidth; total > halfSettingRowWidth {
-			t.Fatalf("%s select row width %.1f exceeds half-row %.1f", name, total, halfSettingRowWidth)
+		if total := rowLayout.LabelWidth + rowLayout.Gap + rowLayout.ControlWidth; total > settingsInnerWidth {
+			t.Fatalf("%s select row width %.1f exceeds the section's %.1f", name, total, settingsInnerWidth)
 		}
 	}
-	t.Logf("select start x=%.1f; widths language %.1f->%.1f (nine endonyms), date/time %.1f->%.1f", languageLayout.LabelWidth+languageLayout.Gap, phase3SLegacyLanguageWidth, languageLayout.ControlWidth, phase3SLegacyDateWidth, dateLayout.ControlWidth)
 
 	cfg = v.config
 	cfg.WarningsEnabled = true
@@ -84,23 +101,15 @@ func TestSettingsLayoutMetrics(t *testing.T) {
 	cfg.WarningsEnabled = false
 	v.SetConfig(cfg)
 	warningOff := v.MinimumSize(SettingsScreen).Height
-	legacyDelta := phase3SLegacyWarningOnHeight - phase3SLegacyWarningOffHeight
-	// Grok postdates the frozen 3S heights and adds exactly two rows to this
-	// screen: its visibility toggle and its CONNECTIONS entry. Both are
-	// measured here rather than folded into the constant, so the guard still
-	// catches growth that is not one of them, and so a fifth provider has to
-	// extend this allowance deliberately instead of silently.
-	grokAllowance := usage.Objects[2].MinSize().Height + theme.Padding() + 0.5
-	if rows := v.connectionsBody.Objects; len(rows) > 0 {
-		grokAllowance += rows[len(rows)-1].MinSize().Height + theme.Padding()
+	// The window never asks for more than the height where it starts to
+	// scroll, and switching warnings on costs the two threshold rows only.
+	if warningOn > SettingsMaxHeight || warningOff >= warningOn {
+		t.Fatalf("settings height with warnings on/off = %.1f/%.1f, cap %.1f", warningOn, warningOff, SettingsMaxHeight)
 	}
-	// The inline Claude account-label input is intentionally eight pixels
-	// taller than the former detail-only row, while keeping the card compact.
-	accountLabelAllowance := float32(8)
-	if warningOn > phase3SLegacyWarningOffHeight+legacyDelta/2+grokAllowance+accountLabelAllowance {
-		t.Fatalf("warning-on height %.1f exceeds half-expansion target %.1f", warningOn, phase3SLegacyWarningOffHeight+legacyDelta/2+grokAllowance+accountLabelAllowance)
+	if expansion := warningOn - warningOff; expansion > phase3SLegacyWarningOnHeight-phase3SLegacyWarningOffHeight {
+		t.Fatalf("warnings add %.1f of height, more than the %.1f they used to", expansion, phase3SLegacyWarningOnHeight-phase3SLegacyWarningOffHeight)
 	}
-	t.Logf("warning height on %.1f->%.1f, off %.1f->%.1f, expansion %.1f->%.1f", phase3SLegacyWarningOnHeight, warningOn, phase3SLegacyWarningOffHeight, warningOff, legacyDelta, warningOn-warningOff)
+	t.Logf("settings height: warnings on %.1f, off %.1f", warningOn, warningOff)
 
 	for name, colors := range map[string]BrandColors{"light": LightBrandColors, "dark": DarkBrandColors} {
 		unselected := wcagContrastRatio(colors.RadioBorder, colors.Card)

@@ -68,42 +68,46 @@ func TestThresholdDisplayAndConnectionGeometry(t *testing.T) {
 	v.Show(SettingsScreen)
 	window.Resize(v.MinimumSize(SettingsScreen))
 
-	usage := v.usageSettings().(*fyne.Container)
-	thresholdPair := usage.Objects[4].(*fyne.Container)
-	thresholdStack := thresholdPair.Objects[1].(*fyne.Container)
-	stackLayout, ok := thresholdStack.Layout.(*CompactRowsLayout)
-	if !ok || stackLayout.Gap != 0 || len(thresholdStack.Objects) != 2 {
-		t.Fatalf("threshold stack layout=%T gap/rows=%v/%d", thresholdStack.Layout, stackLayout, len(thresholdStack.Objects))
-	}
-	for index, object := range thresholdStack.Objects {
-		row := object.(*fyne.Container)
-		rowLayout := row.Layout.(*GapColumnLayout)
+	// Warning and danger each have a row of five fixed columns: name,
+	// slider, number box, percent sign and colour dot.
+	thresholdRows := 0
+	walkCanvasObject(v.usageSettings(), func(object fyne.CanvasObject) {
+		row, ok := object.(*fyne.Container)
+		if !ok {
+			return
+		}
+		rowLayout, ok := row.Layout.(*GapColumnLayout)
+		if !ok || len(rowLayout.Widths) != 5 {
+			return
+		}
+		thresholdRows++
 		wantWidths := []float32{48, 76, 34, 10, 22}
-		wantGaps := []float32{6, 8, 2, 8}
+		wantGaps := []float32{4, 6, 2, 6}
 		for column, want := range wantWidths {
 			if rowLayout.Widths[column] != want {
-				t.Fatalf("threshold %d width %d=%.1f, want %.1f", index, column, rowLayout.Widths[column], want)
+				t.Fatalf("threshold %d width %d=%.1f, want %.1f", thresholdRows, column, rowLayout.Widths[column], want)
 			}
 		}
 		for gap, want := range wantGaps {
 			if rowLayout.Gaps[gap] != want {
-				t.Fatalf("threshold %d gap %d=%.1f, want %.1f", index, gap, rowLayout.Gaps[gap], want)
+				t.Fatalf("threshold %d gap %d=%.1f, want %.1f", thresholdRows, gap, rowLayout.Gaps[gap], want)
 			}
 		}
+	})
+	if thresholdRows != 2 {
+		t.Fatalf("usage settings have %d threshold rows, want warning and danger", thresholdRows)
 	}
 
-	display := v.displaySettings().(*fyne.Container)
-	if len(display.Objects) != 1 {
-		t.Fatalf("display rows=%d, want one two-column row", len(display.Objects))
-	}
-	displayPair := display.Objects[0].(*fyne.Container)
-	if len(displayPair.Objects) != 2 {
-		t.Fatalf("display columns=%d, want language/date-time", len(displayPair.Objects))
-	}
-	for index, object := range displayPair.Objects {
-		if _, ok := object.(*fyne.Container).Layout.(*SettingRowLayout); !ok {
-			t.Fatalf("display column %d layout=%T", index, object.(*fyne.Container).Layout)
+	displayRows := 0
+	walkCanvasObject(v.displaySettings(), func(object fyne.CanvasObject) {
+		if row, ok := object.(*fyne.Container); ok {
+			if _, ok := row.Layout.(*SettingRowLayout); ok {
+				displayRows++
+			}
 		}
+	})
+	if displayRows != 2 {
+		t.Fatalf("display rows=%d, want language and date-time", displayRows)
 	}
 
 	var actionRight float32

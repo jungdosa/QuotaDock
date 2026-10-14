@@ -47,11 +47,23 @@ const (
 	// CompactWidth grew with the reset column: the previous 260 budget is
 	// preserved for icon/label/meter/percent and the measured reset column plus
 	// one extra column gap is added on top, so meters keep their old width.
-	CompactWidth           float32 = 312
-	NanoWidth              float32 = 360
-	NanoCellMinimumWidth   float32 = 90
-	SettingsWidth          float32 = 620
-	SettingsHeight         float32 = 680
+	CompactWidth         float32 = 312
+	NanoWidth            float32 = 360
+	NanoCellMinimumWidth float32 = 90
+	// SettingsWidth matches the normal widget so opening settings never
+	// changes the window's width; everything inside is laid out to fit it.
+	SettingsWidth float32 = NormalWidth
+	// The widths left inside the page padding, a section card, a connection
+	// card and a connection panel, in that order. Rows that could outgrow
+	// them wrap or stack instead of widening the window.
+	settingsInnerWidth        float32 = SettingsWidth - 60
+	connectionCardInnerWidth  float32 = settingsInnerWidth - 3 - 4 - 14
+	connectionPanelInnerWidth float32 = connectionCardInnerWidth - 16
+	connectionPanelTextWidth  float32 = connectionPanelInnerWidth - 8
+	SettingsHeight            float32 = 680
+	// SettingsMaxHeight is where the settings window stops growing and its
+	// body starts to scroll; it fits a 1080p work area at 100% scaling.
+	SettingsMaxHeight      float32 = 900
 	WindowCornerRadius     float32 = 8
 	CompactIconWidth       float32 = 16
 	CompactColumnGap       float32 = 2
@@ -130,6 +142,8 @@ const (
 	CompactLabelTextSize float32 = 12
 	SettingsTextSize     float32 = 11
 	ThresholdTextSize    float32 = 9
+	// ThresholdLabelTextSize is the warning and danger names beside their sliders.
+	ThresholdLabelTextSize float32 = 10
 	// ButtonLabelPadding keeps translated button labels from touching the border.
 	ButtonLabelPadding float32 = 9
 	// The percentage sits in a band directly above the meter, flush with its right end.
@@ -239,6 +253,7 @@ type Actions struct {
 	Activity               func()
 	AppVersion             string
 	DemoMode               bool
+	FirstRun               bool
 	TrayPromotionSupported bool
 	// WebAuthAvailable reports whether the embedded browser sign-in can run,
 	// so the Claude Auth method reads as available instead of planned.
@@ -264,6 +279,10 @@ type View struct {
 	// Header wraps hold the full-width caption strips: the strip sits
 	// outside the padded body so its titlebar tone reaches both window edges.
 	normalHeaderWrap    *fyne.Container
+	normalIntro         *fyne.Container
+	firstRunEligible    bool
+	firstRunDismissed   bool
+	rescanStarted       map[model.ProviderID]time.Time
 	compactHeaderWrap   *fyne.Container
 	nanoBody            *fyne.Container
 	lastRefreshText     *canvas.Text
@@ -308,7 +327,7 @@ type View struct {
 
 func NewView(c fyne.Canvas, catalog *i18n.Catalog, systemLanguage i18n.Language, config settings.Config, actions Actions) *View {
 	validated := config.Validated()
-	v := &View{Canvas: c, Catalog: catalog, SystemLanguage: systemLanguage, Actions: actions, config: validated, colors: currentBrandColors(validated.Theme), state: defaultViewState()}
+	v := &View{Canvas: c, Catalog: catalog, SystemLanguage: systemLanguage, Actions: actions, config: validated, colors: currentBrandColors(validated.Theme), state: defaultViewState(), firstRunEligible: actions.FirstRun && !actions.DemoMode && ScreenForDisplayMode(validated.DisplayMode) == NormalScreen}
 	v.build()
 	// Start on the screen the settings ask for. Starting on the normal screen
 	// and switching afterwards asked the window for the normal size first, so
@@ -855,6 +874,7 @@ func (v *View) roundedScreen(background color.Color, content fyne.CanvasObject) 
 func (v *View) buildNormal() *fyne.Container {
 	v.normalBody = container.New(&CompactRowsLayout{Gap: NormalBodyRowGap})
 	v.normalHeaderWrap = container.NewStack()
+	v.normalIntro = container.NewVBox()
 	v.renderNormalBody()
 	// The reorder surface is stacked directly on the body, not on the padded
 	// wrapper, so a drag position and a row position are the same number.
@@ -863,7 +883,8 @@ func (v *View) buildNormal() *fyne.Container {
 	v.lastRefreshText = textLabel(v.lastRefreshLabel(), 9.5, v.colors.Text, false, true)
 	v.lastRefreshText.Alignment = fyne.TextAlignTrailing
 	footer := container.New(layout.NewCustomPaddedLayout(0, 6, 12, 12), v.lastRefreshText)
-	body := container.NewBorder(v.normalHeaderWrap, footer, nil, nil, padded)
+	top := container.NewBorder(v.normalIntro, nil, nil, nil, v.normalHeaderWrap)
+	body := container.NewBorder(top, footer, nil, nil, padded)
 	return v.roundedScreen(v.colors.Background, container.NewBorder(v.windowTitle(settings.ModeNormal), nil, nil, nil, body))
 }
 func (v *View) buildCompact() *fyne.Container {
@@ -901,7 +922,10 @@ func (v *View) buildNano() *fyne.Container {
 	v.nanoBar = nil
 	return v.roundedScreen(v.colors.Background, container.NewBorder(v.windowTitle(settings.ModeNano), nil, nil, nil, body))
 }
-func (v *View) renderNormalBody()  { v.syncNormalBody() }
+func (v *View) renderNormalBody() {
+	v.syncFirstRunCard()
+	v.syncNormalBody()
+}
 func (v *View) renderCompactBody() { v.syncCompactBody() }
 func (v *View) renderNanoBody()    { v.syncNanoBody() }
 func (v *View) lastRefreshLabel() string {
@@ -939,16 +963,12 @@ func (v *View) laneOrder() []string {
 	return settings.NormalizeLaneOrder(v.config.LaneOrder)
 }
 
-// claudeLaneVisibility answers which of the two Claude lanes are drawn, and
-// whether both are, which is what decides between the plain "Claude" label and
-// the per-account names.
 // claudeAccountsShown reports which Claude accounts are drawn and whether
 // more than one is, which is what decides between the plain "Claude" label
 // and the per-account names. An account is drawn when it exists, Claude is
 // shown, and it is within the configured count. The first account is the one
-// exception: when the CLI is absent it falls back to the same browser
-// sign-in the second account reads, so with a second account enabled that
-// duplicate is hidden rather than drawn twice.
+// exception: its Auto fallback shares the second account's browser profile,
+// so that duplicate is hidden. Explicit Auth uses its own profile.
 func claudeAccountsShown(lanes map[model.ProviderID]LaneState, config settings.Config) (shown map[model.ProviderID]bool, several bool) {
 	shown = make(map[model.ProviderID]bool, settings.MaxClaudeAccounts)
 	count := 0
@@ -957,7 +977,7 @@ func claudeAccountsShown(lanes map[model.ProviderID]LaneState, config settings.C
 		if !present || !config.ShowClaude || model.ClaudeAccountIndex(id) > claudeAccountCount(config) {
 			continue
 		}
-		if id == model.ProviderClaude && claudeAccountCount(config) >= 2 && lane.Source == model.SourceWebSignIn {
+		if id == model.ProviderClaude && claudeAccountCount(config) >= 2 && lane.Source == model.SourceWebSignIn && config.ConnectionMethods[string(id)] != settings.ConnectionMethodAuth {
 			continue
 		}
 		shown[id] = true
@@ -1558,11 +1578,12 @@ func (v *View) buildSettings() *fyne.Container {
 	bar := v.settingsTitleBar(back, v.Actions.AppVersion, closeSettings)
 	page := canvas.NewRectangle(v.colors.SettingsBackground)
 	page.CornerRadius = WindowCornerRadius
+	// More accounts or a longer translation can make the settings taller
+	// than a display. Past SettingsMaxHeight the title stays fixed and
+	// everything below it scrolls; shorter settings show whole, unscrolled.
 	var settingsBody fyne.CanvasObject = content
-	// Extra Codex cards can exceed the display height. Keep the title fixed and
-	// all settings reachable through one vertical scroll surface.
 	v.settingsScroll = nil
-	if v.config.CodexAccounts > 1 {
+	if content.MinSize().Height+bar.MinSize().Height+12+theme.Padding() > SettingsMaxHeight {
 		v.settingsScroll = container.NewVScroll(content)
 		settingsBody = v.settingsScroll
 	}
@@ -1618,6 +1639,39 @@ func helpRichText(text string, colorName fyne.ThemeColorName, bold bool, width, 
 	return container.NewGridWrap(fyne.NewSize(width, height), content)
 }
 
+// helpParagraphs lays out help copy at a fixed width and as tall as the text
+// needs once wrapped. Each line break in the text starts a paragraph of its
+// own, so a translation that runs longer grows the card instead of spilling
+// over the line below it.
+func helpParagraphs(text string, colorName fyne.ThemeColorName, bold bool, width float32) fyne.CanvasObject {
+	paragraphs := container.NewVBox()
+	for _, paragraph := range strings.Split(text, "\n") {
+		if strings.TrimSpace(paragraph) == "" {
+			continue
+		}
+		content := widget.NewRichText(&widget.TextSegment{
+			Style: widget.RichTextStyle{
+				ColorName: colorName,
+				Inline:    true,
+				TextStyle: fyne.TextStyle{Bold: bold},
+			},
+			Text: paragraph,
+		})
+		content.Wrapping = fyne.TextWrapWord
+		// A wrapped text only knows its height after it has been given a width.
+		content.Resize(fyne.NewSize(width, content.MinSize().Height))
+		paragraphs.Add(container.NewGridWrap(fyne.NewSize(width, content.MinSize().Height), content))
+	}
+	return paragraphs
+}
+
+// A help popup sits inside the settings window, so it is sized from the same
+// width: the popup, then the text column inside its card padding.
+const (
+	helpPopupWidth    float32 = SettingsWidth - 24
+	helpCardTextWidth float32 = helpPopupWidth - 32 - 4 - 4 - 20 - 20
+)
+
 func (v *View) helpProviderCard(title, description, retry string, accent color.Color) fyne.CanvasObject {
 	background := canvas.NewRectangle(v.colors.Card)
 	background.CornerRadius = 7
@@ -1629,8 +1683,8 @@ func (v *View) helpProviderCard(title, description, retry string, accent color.C
 	providerBorder.SetMinSize(fyne.NewSize(4, 1))
 	text := container.NewVBox(
 		textLabel(title, 13, v.colors.Text, true, false),
-		helpRichText(description, theme.ColorNameForeground, false, 498, 48),
-		helpRichText(retry, theme.ColorNameDisabled, false, 498, 34),
+		helpParagraphs(description, theme.ColorNameForeground, false, helpCardTextWidth),
+		helpParagraphs(retry, theme.ColorNameForeground, false, helpCardTextWidth),
 	)
 	content := container.New(layout.NewCustomPaddedLayout(8, 8, 10, 10), text)
 	bordered := container.NewBorder(nil, nil, providerBorder, nil, content)
@@ -1658,12 +1712,12 @@ func (v *View) showHelp() {
 	privacy := container.NewStack(
 		privacyBackground,
 		container.New(layout.NewCustomPaddedLayout(6, 6, 10, 10),
-			helpRichText(v.text(i18n.KeyHelpCredentials), theme.ColorNameDisabled, false, 506, 32),
+			helpParagraphs(v.text(i18n.KeyHelpCredentials), theme.ColorNameDisabled, false, helpCardTextWidth),
 		),
 	)
 	body := container.NewVBox(
 		textLabel(v.text(i18n.KeyHelpTitle), 15, v.colors.Text, true, false),
-		helpRichText(v.text(i18n.KeyHelpIntro), theme.ColorNameForeground, false, 526, 42),
+		helpParagraphs(v.text(i18n.KeyHelpIntro), theme.ColorNameForeground, false, helpCardTextWidth+20),
 		v.helpProviderCard(
 			v.text(i18n.KeyHelpClaudeTitle),
 			v.text(i18n.KeyHelpClaude),
@@ -1691,7 +1745,7 @@ func (v *View) showHelp() {
 	background.StrokeWidth = 1
 	card := container.NewStack(background, container.New(layout.NewCustomPaddedLayout(16, 16, 16, 16), body))
 	v.helpPopup = widget.NewModalPopUp(card, v.Canvas)
-	v.helpPopup.Resize(fyne.NewSize(580, 620))
+	v.helpPopup.Resize(fyne.NewSize(helpPopupWidth, card.MinSize().Height))
 	v.helpPopup.Show()
 }
 
@@ -1725,7 +1779,7 @@ func (v *View) showConnectionHelp(id model.ProviderID) {
 	background.StrokeWidth = 1
 	card := container.NewStack(background, container.New(layout.NewCustomPaddedLayout(14, 14, 14, 14), body))
 	v.helpPopup = widget.NewModalPopUp(card, v.Canvas)
-	v.helpPopup.Resize(fyne.NewSize(550, 190))
+	v.helpPopup.Resize(fyne.NewSize(helpPopupWidth, card.MinSize().Height))
 	v.helpPopup.Show()
 }
 
@@ -1747,21 +1801,91 @@ func (v *View) section(title string, body fyne.CanvasObject) fyne.CanvasObject {
 	card.StrokeColor = v.colors.CardBorder
 	card.StrokeWidth = 1
 	heading := textLabel(trackedUpper(title), 11, v.colors.Accent, true, false)
-	return container.NewStack(card, container.New(layout.NewCustomPaddedLayout(9, 10, 10, 10), container.NewVBox(heading, body)))
+	return container.NewStack(card, container.New(layout.NewCustomPaddedLayout(6, 7, 10, 10), container.NewVBox(heading, body)))
 }
 func (v *View) settingRow(label string, control fyne.CanvasObject, width float32) fyne.CanvasObject {
 	return v.settingRowSized(label, control, 122, 10, width)
 }
 func (v *View) settingRowSized(label string, control fyne.CanvasObject, labelWidth, gap, controlWidth float32) fyne.CanvasObject {
-	return container.New(&SettingRowLayout{LabelWidth: labelWidth, Gap: gap, ControlWidth: controlWidth, Height: 28}, textLabel(label, SettingsTextSize, v.colors.Label, true, false), control)
+	height := settingsRowHeight
+	if _, dropDown := control.(*widget.Select); dropDown {
+		height = settingsSelectRowHeight
+		// A drop-down draws its value at the theme's text size, a step above
+		// the labels beside it; here it is set to match them.
+		control = container.NewThemeOverride(control, settingsControlTheme{Theme: fyne.CurrentApp().Settings().Theme(), text: SettingsTextSize, innerPadding: settingsSelectPadding})
+	}
+	return container.New(&SettingRowLayout{LabelWidth: labelWidth, Gap: gap, ControlWidth: controlWidth, Height: height}, textLabel(label, SettingsTextSize, v.colors.Label, true, false), control)
 }
-func settingsPair(left, right fyne.CanvasObject) fyne.CanvasObject {
-	return container.NewGridWithColumns(2, left, right)
+
+// The settings screen keeps its rows close: the window is only as wide as the
+// widget, so height is what it has to spend carefully.
+const (
+	settingsRowHeight float32 = 22
+	settingsRowGap    float32 = 2
+	// A row holding a drop-down keeps the height the drop-down needs.
+	settingsSelectRowHeight float32 = 22
+	// settingsSelectPadding is the padding inside a drop-down's box.
+	settingsSelectPadding float32 = 5
+	// thresholdBoxHeight is the warning and danger number boxes' height.
+	thresholdBoxHeight float32 = 24
+)
+
+// settingsControlTheme is the app theme adjusted for one settings control:
+// its text at a given size and the padding inside its box tightened, so the
+// box can be lower without clipping what it holds. A zero field keeps the
+// app theme's value.
+type settingsControlTheme struct {
+	fyne.Theme
+	text         float32
+	innerPadding float32
+}
+
+func (t settingsControlTheme) Size(name fyne.ThemeSizeName) float32 {
+	switch {
+	case name == theme.SizeNameText && t.text > 0:
+		return t.text
+	case name == theme.SizeNameInnerPadding && t.innerPadding > 0:
+		return t.innerPadding
+	}
+	return t.Theme.Size(name)
+}
+
+// settingsPairRow is two settings that share a line when the section is wide
+// enough for two columns.
+type settingsPairRow struct{ left, right fyne.CanvasObject }
+
+func settingsPair(left, right fyne.CanvasObject) settingsPairRow {
+	return settingsPairRow{left: left, right: right}
+}
+
+// settingsRows lays a section's pairs out in two columns, or one under the
+// other when any pair is too wide for half the section. The whole section
+// switches together so its controls stay on one vertical line either way.
+func settingsRows(pairs ...settingsPairRow) fyne.CanvasObject {
+	stacked := false
+	for _, pair := range pairs {
+		if 2*max(pair.left.MinSize().Width, pair.right.MinSize().Width)+theme.Padding() > settingsInnerWidth {
+			stacked = true
+			break
+		}
+	}
+	rows := make([]fyne.CanvasObject, 0, 2*len(pairs))
+	for _, pair := range pairs {
+		if !stacked {
+			rows = append(rows, container.NewGridWithColumns(2, pair.left, pair.right))
+			continue
+		}
+		for _, object := range []fyne.CanvasObject{pair.left, pair.right} {
+			if _, spacer := object.(*layout.Spacer); !spacer {
+				rows = append(rows, object)
+			}
+		}
+	}
+	return container.New(layout.NewCustomPaddedVBoxLayout(settingsRowGap), rows...)
 }
 
 const (
 	halfSettingGap      float32 = 8
-	halfSettingRowWidth float32 = 280
 	thresholdTrackWidth float32 = 76
 	// settingLabelGap is the breathing room kept between the longest settings
 	// label and its control.
@@ -1791,11 +1915,11 @@ func (v *View) settingLabelWidth() float32 {
 }
 
 func (v *View) halfToggleRow(key string, value bool, labelWidth float32, set func(*settings.Config, bool)) fyne.CanvasObject {
-	return v.settingRowSized(v.text(key), NewToggle(value, func(on bool) { cfg := v.config; set(&cfg, on); v.SetConfig(cfg) }, v.colors), labelWidth, 8, 38)
+	return v.settingRowSized(v.text(key), NewToggle(value, func(on bool) { cfg := v.config; set(&cfg, on); v.SetConfig(cfg) }, v.colors), labelWidth, 8, ToggleWidth)
 }
 func (v *View) halfTooltipToggleRow(key, tooltipKey string, value bool, labelWidth float32, set func(*settings.Config, bool)) fyne.CanvasObject {
 	toggle := NewTooltipToggle(value, v.text(tooltipKey), func(on bool) { cfg := v.config; set(&cfg, on); v.SetConfig(cfg) }, v.colors)
-	return v.settingRowSized(v.text(key), v.bindToggle(toggle), labelWidth, 8, 38)
+	return v.settingRowSized(v.text(key), v.bindToggle(toggle), labelWidth, 8, ToggleWidth)
 }
 
 // showWithCreditsRow is a provider-visibility row with a second, smaller
@@ -1805,11 +1929,11 @@ func (v *View) showWithCreditsRow(key string, shown bool, setShown func(*setting
 	creditsLabel := textLabel(v.text(i18n.KeyCreditsToggle), SettingsTextSize, v.colors.Label, false, false)
 	creditsToggle := NewToggle(creditsOn, func(on bool) { cfg := v.config; setCredits(&cfg, on); v.SetConfig(cfg) }, v.colors)
 	labelWidth := float32(math.Ceil(float64(fyne.MeasureText(v.text(i18n.KeyCreditsToggle), SettingsTextSize, fyne.TextStyle{}).Width))) + 2
-	control := container.New(NewGapColumnLayout([]float32{38, labelWidth, 38}, []float32{16, 6}, 28), showToggle, creditsLabel, creditsToggle)
+	control := container.New(NewGapColumnLayout([]float32{ToggleWidth, labelWidth, ToggleWidth}, []float32{16, 6}, settingsRowHeight), showToggle, creditsLabel, creditsToggle)
 	return v.settingRowSized(v.text(key), control, v.settingLabelWidth(), 8, 0)
 }
 func (v *View) toggleRow(key string, value bool, set func(*settings.Config, bool)) fyne.CanvasObject {
-	return v.settingRow(v.text(key), NewToggle(value, func(on bool) { cfg := v.config; set(&cfg, on); v.SetConfig(cfg) }, v.colors), 38)
+	return v.settingRow(v.text(key), NewToggle(value, func(on bool) { cfg := v.config; set(&cfg, on); v.SetConfig(cfg) }, v.colors), ToggleWidth)
 }
 func (v *View) usageSettings() fyne.CanvasObject {
 	remainingLabel := v.text(i18n.KeyUsageRemaining)
@@ -1836,7 +1960,7 @@ func (v *View) usageSettings() fyne.CanvasObject {
 		codexRow = v.showWithCreditsRow(i18n.KeyShowCodex, v.config.ShowCodex, func(c *settings.Config, b bool) { c.ShowCodex = b },
 			v.config.ShowCodexCredits, func(c *settings.Config, b bool) { c.ShowCodexCredits = b })
 	}
-	rows := []fyne.CanvasObject{
+	rows := []settingsPairRow{
 		settingsPair(claudeRow, codexRow),
 		settingsPair(
 			v.halfToggleRow(i18n.KeyShowAGGemini, v.config.ShowAGGemini, v.settingLabelWidth(), func(c *settings.Config, b bool) { c.ShowAGGemini = b }),
@@ -1863,19 +1987,19 @@ func (v *View) usageSettings() fyne.CanvasObject {
 		),
 	}
 	if v.config.WarningsEnabled {
-		thresholds := container.New(
-			&CompactRowsLayout{Gap: 0},
+		// Warning and danger sit side by side, one in each column, when the
+		// section has two columns; in a stacked section they follow suit.
+		rows = append(rows, settingsPair(
 			v.thresholdSliderControl(i18n.KeyWarningThreshold, v.config.WarningPercent, v.config.WarningColor, true),
 			v.thresholdSliderControl(i18n.KeyDangerThreshold, v.config.DangerPercent, v.config.DangerColor, false),
-		)
-		rows = append(rows, settingsPair(layout.NewSpacer(), thresholds))
+		))
 	} else {
 		v.warningEntry = nil
 		v.dangerEntry = nil
 		v.warningSlider = nil
 		v.dangerSlider = nil
 	}
-	return container.NewVBox(rows...)
+	return settingsRows(rows...)
 }
 
 func (v *View) thresholdSliderControl(key string, value float64, colorID string, warning bool) fyne.CanvasObject {
@@ -1916,14 +2040,24 @@ func (v *View) thresholdSliderControl(key string, value float64, colorID string,
 		v.dangerEntry = entry
 		v.dangerSlider = slider
 	}
-	entryControl := container.NewGridWrap(fyne.NewSize(34, 28), entry)
+	// The two threshold names share a column, sized for the wider of them so
+	// neither row's slider starts further in than the other's.
+	thresholdLabel := textLabel(shortThresholdLabel(v.text(key)), ThresholdLabelTextSize, v.colors.Label, true, false)
+	thresholdLabelWidth := float32(48)
+	for _, name := range []string{i18n.KeyWarningThreshold, i18n.KeyDangerThreshold} {
+		measured := fyne.MeasureText(shortThresholdLabel(v.text(name)), ThresholdLabelTextSize, fyne.TextStyle{Bold: true}).Width
+		thresholdLabelWidth = max(thresholdLabelWidth, float32(math.Ceil(float64(measured)))+2)
+	}
+	// Tighter padding lets the number sit in a lower box without scrolling.
+	entryControl := container.NewGridWrap(fyne.NewSize(34, thresholdBoxHeight),
+		container.NewThemeOverride(entry, settingsControlTheme{Theme: fyne.CurrentApp().Settings().Theme(), text: SettingsTextSize, innerPadding: 4}))
 	controls := container.New(
 		NewGapColumnLayout(
-			[]float32{48, thresholdTrackWidth, 34, 10, 22},
-			[]float32{6, 8, 2, 8},
-			28,
+			[]float32{thresholdLabelWidth, thresholdTrackWidth, 34, 10, 22},
+			[]float32{4, 6, 2, 6},
+			thresholdBoxHeight,
 		),
-		textLabel(shortThresholdLabel(v.text(key)), ThresholdTextSize, v.colors.Label, true, false),
+		thresholdLabel,
 		slider,
 		entryControl,
 		textLabel("%", ThresholdTextSize, v.colors.Label, true, false),
@@ -1998,7 +2132,7 @@ func (v *View) behaviorSettings() fyne.CanvasObject {
 			c.PromoteTrayIcon = b
 		})
 	}
-	return container.NewVBox(
+	return settingsRows(
 		settingsPair(
 			v.halfToggleRow(i18n.KeyAutoStart, v.config.AutoStart, v.settingLabelWidth(), func(c *settings.Config, b bool) { c.AutoStart = b }),
 			v.settingRowSized(v.text(i18n.KeyRefreshInterval), refresh, v.settingLabelWidth(), halfSettingGap, 110),
@@ -2073,8 +2207,18 @@ func (v *View) displaySettings() fyne.CanvasObject {
 	}
 	languageWidth := selectWidth(languages)
 	dateWidth := selectWidth(examples)
-	displayLabelWidth := min(v.settingLabelWidth(), halfSettingRowWidth-halfSettingGap-max(languageWidth, dateWidth))
-	return container.NewVBox(
+	// The two drop-downs share a line when their own labels and the wider
+	// of the two fit half the section; the labels then take only the room
+	// they need. Otherwise they stack on the column the other sections use.
+	displayLabelWidth := float32(0)
+	for _, key := range []string{i18n.KeyLanguage, i18n.KeyDateTime} {
+		displayLabelWidth = max(displayLabelWidth, fyne.MeasureText(v.text(key), SettingsTextSize, fyne.TextStyle{Bold: true}).Width)
+	}
+	displayLabelWidth = float32(math.Ceil(float64(displayLabelWidth))) + 2
+	if 2*(displayLabelWidth+halfSettingGap+max(languageWidth, dateWidth))+theme.Padding() > settingsInnerWidth {
+		displayLabelWidth = v.settingLabelWidth()
+	}
+	return settingsRows(
 		settingsPair(
 			v.settingRowSized(v.text(i18n.KeyLanguage), language, displayLabelWidth, halfSettingGap, languageWidth),
 			v.settingRowSized(v.text(i18n.KeyDateTime), dateSelect, displayLabelWidth, halfSettingGap, dateWidth),
@@ -2085,9 +2229,10 @@ func (v *View) displaySettings() fyne.CanvasObject {
 func selectWidth(options []string) float32 {
 	maximum := float32(0)
 	for _, option := range options {
-		maximum = max(maximum, fyne.MeasureText(option, theme.TextSize(), fyne.TextStyle{}).Width)
+		maximum = max(maximum, fyne.MeasureText(option, SettingsTextSize, fyne.TextStyle{}).Width)
 	}
-	chrome := theme.IconInlineSize() + theme.InnerPadding()*4
+	// The arrow, and the box's tightened padding around the text and it.
+	chrome := theme.IconInlineSize() + settingsSelectPadding*4
 	return float32(math.Ceil(float64(maximum + chrome)))
 }
 func (v *View) connectionSettings() fyne.CanvasObject {
@@ -2122,8 +2267,12 @@ func (v *View) MinimumSize(screen Screen) fyne.Size {
 		}
 		return fyne.NewSize(width, TitleBarHeight+NanoBodyHeight)
 	case SettingsScreen:
+		// As tall as its content, or the cap once the body scrolls.
 		height := SettingsHeight
-		if v.Settings != nil && v.Settings.MinSize().Height > height {
+		switch {
+		case v.settingsScroll != nil:
+			height = SettingsMaxHeight
+		case v.Settings != nil:
 			height = v.Settings.MinSize().Height
 		}
 		return fyne.NewSize(SettingsWidth, height)

@@ -204,3 +204,170 @@ func TestRemovingAnAccountCancelsLoginAndAllowsReadd(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestAccountRoutesShareCLIAndKeepSnapshotIDs(t *testing.T) {
+	cli := workingTransport(t)
+	firstAuth := workingTransport(t)
+	secondAuth := workingTransport(t)
+	firstAuth.responses["account/rateLimits/read"] = json.RawMessage(`{"rateLimits":{"primary":{"usedPercent":31,"windowDurationMins":300}}}`)
+	secondAuth.responses["account/rateLimits/read"] = json.RawMessage(`{"rateLimits":{"primary":{"usedPercent":42,"windowDurationMins":300}}}`)
+	set := &Accounts{Provider: New(cli, ""), extra: make(map[model.ProviderID]*Account)}
+	set.extra[model.ProviderCodex] = &Account{id: model.ProviderCodex, provider: New(firstAuth, ""), parent: set}
+	set.extra[model.ProviderCodex2] = &Account{id: model.ProviderCodex2, provider: New(secondAuth, ""), parent: set}
+	set.SetAccountCount(2)
+	ctx := context.Background()
+
+	first, err := set.Refresh(ctx)
+	if err != nil || first.Provider != model.ProviderCodex || len(cli.calls) == 0 || len(firstAuth.calls) != 0 {
+		t.Fatalf("default first route: snapshot=%+v err=%v", first, err)
+	}
+	second, err := set.extra[model.ProviderCodex2].Refresh(ctx)
+	if err != nil || second.Provider != model.ProviderCodex2 || second.Limits[0].UsedPercent != 42 || len(secondAuth.calls) == 0 {
+		t.Fatalf("default second route: snapshot=%+v err=%v", second, err)
+	}
+	if !set.SetSourceMode(model.ProviderCodex, "auth") {
+		t.Fatal("first route did not change")
+	}
+	waitAccountReset(t, set.extra[model.ProviderCodex])
+	first, err = set.Refresh(ctx)
+	if err != nil || first.Provider != model.ProviderCodex || first.Limits[0].UsedPercent != 31 {
+		t.Fatalf("first Auth route: snapshot=%+v err=%v", first, err)
+	}
+	if !set.SetSourceMode(model.ProviderCodex2, "cli") {
+		t.Fatal("second route did not change")
+	}
+	waitAccountReset(t, set.extra[model.ProviderCodex2])
+	second, err = set.extra[model.ProviderCodex2].Refresh(ctx)
+	if err != nil || second.Provider != model.ProviderCodex2 || second.Limits[0].UsedPercent == 42 {
+		t.Fatalf("second CLI route: snapshot=%+v err=%v", second, err)
+	}
+	if got := set.Inspect(ctx); got.Status != model.StatusConnected {
+		t.Fatalf("first Auth state=%+v", got)
+	}
+	cliCloses := cli.closed
+	if !set.SetSourceMode(model.ProviderCodex, "cli") {
+		t.Fatal("first route did not return to CLI")
+	}
+	waitAccountReset(t, set.extra[model.ProviderCodex])
+	if cli.closed != cliCloses {
+		t.Fatal("switching first account closed CLI used by second")
+	}
+	if _, err := set.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !set.SetSourceMode(model.ProviderCodex2, "invalid") {
+		t.Fatal("invalid second route did not restore Auth default")
+	}
+	waitAccountReset(t, set.extra[model.ProviderCodex2])
+	if cli.closed != cliCloses {
+		t.Fatal("switching second account closed CLI used by first")
+	}
+	if set.SetSourceMode(model.ProviderCodex, "") || set.extra[model.ProviderCodex].sourceMode() != accountModeCLI {
+		t.Fatal("empty first route did not keep CLI default")
+	}
+}
+
+func waitAccountReset(t *testing.T, account *Account) {
+	t.Helper()
+	deadline := time.After(3 * time.Second)
+	for account.resetPending.Load() {
+		select {
+		case <-deadline:
+			t.Fatal("source reset did not finish")
+		case <-time.After(time.Millisecond):
+		}
+	}
+}
+
+func TestFirstAccountAuthSignInAndCLIRejection(t *testing.T) {
+	transport := &waitingLoginTransport{fakeTransport: workingTransport(t), entered: make(chan struct{})}
+	set := &Accounts{Provider: New(workingTransport(t), ""), extra: make(map[model.ProviderID]*Account)}
+	set.extra[model.ProviderCodex] = &Account{id: model.ProviderCodex, provider: New(transport, ""), parent: set}
+	set.SetAccountCount(1)
+	if err := set.SignIn(context.Background(), model.ProviderCodex, nil); err == nil {
+		t.Fatal("CLI route accepted app sign-in")
+	}
+	set.SetSourceMode(model.ProviderCodex, "auth")
+	waitAccountReset(t, set.extra[model.ProviderCodex])
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- set.SignIn(ctx, model.ProviderCodex, nil) }()
+	select {
+	case <-transport.entered:
+	case <-ctx.Done():
+		t.Fatal("first Auth sign-in did not start")
+	}
+	set.CancelSignIn(model.ProviderCodex)
+	select {
+	case <-done:
+	case <-ctx.Done():
+		t.Fatal("first Auth sign-in did not cancel")
+	}
+}
+
+func TestAllCodexAccountsHaveIsolatedHomes(t *testing.T) {
+	root := t.TempDir()
+	set := NewAccounts(root, nil)
+	defer set.Close()
+	for _, id := range model.CodexAccountIDs() {
+		account := set.extra[id]
+		transport, ok := account.provider.transport.(*AppServerTransport)
+		if !ok || transport.home != filepath.Join(root, string(id)) {
+			t.Fatalf("%s has no isolated home", id)
+		}
+	}
+	if _, included := set.AdditionalProviders()[model.ProviderCodex]; included {
+		t.Fatal("first account exposed as an additional lane")
+	}
+}
+
+func TestMissingIsolationRootCannotReadDefaultProfileAsAuth(t *testing.T) {
+	set := NewAccounts("", nil)
+	defer set.Close()
+	set.SetSourceMode(model.ProviderCodex, "auth")
+	waitAccountReset(t, set.extra[model.ProviderCodex])
+	if _, err := set.Refresh(context.Background()); err == nil {
+		t.Fatal("Auth read fell back to default CLI profile")
+	}
+	if err := set.SignIn(context.Background(), model.ProviderCodex, func(string) error { return nil }); err == nil {
+		t.Fatal("Auth login without an isolated home was accepted")
+	}
+}
+
+func TestTwoCodexAccountsCanReadSharedCLIConcurrently(t *testing.T) {
+	set := &Accounts{Provider: New(workingTransport(t), ""), extra: make(map[model.ProviderID]*Account)}
+	set.extra[model.ProviderCodex] = &Account{id: model.ProviderCodex, provider: New(workingTransport(t), ""), parent: set}
+	set.extra[model.ProviderCodex2] = &Account{id: model.ProviderCodex2, provider: New(workingTransport(t), ""), parent: set}
+	set.SetAccountCount(2)
+	set.SetSourceMode(model.ProviderCodex2, "cli")
+	waitAccountReset(t, set.extra[model.ProviderCodex2])
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	type result struct {
+		id  model.ProviderID
+		err error
+	}
+	results := make(chan result, 2)
+	for _, account := range []*Account{set.extra[model.ProviderCodex], set.extra[model.ProviderCodex2]} {
+		go func(account *Account) {
+			snapshot, err := account.Refresh(ctx)
+			results <- result{id: snapshot.Provider, err: err}
+		}(account)
+	}
+	seen := make(map[model.ProviderID]bool)
+	for range 2 {
+		select {
+		case got := <-results:
+			if got.err != nil {
+				t.Fatal(got.err)
+			}
+			seen[got.id] = true
+		case <-ctx.Done():
+			t.Fatal("shared CLI read deadlocked")
+		}
+	}
+	if !seen[model.ProviderCodex] || !seen[model.ProviderCodex2] {
+		t.Fatalf("shared CLI snapshots have wrong IDs: %v", seen)
+	}
+}

@@ -128,6 +128,8 @@ There is no setup wizard, no login screen, and nothing to paste.
    Claude Code CLI, Codex CLI, and the Antigravity IDE.
 3. Providers you are signed in to start showing usage within a few seconds.
 
+On first launch, the widget shows the tools it found and could not find once, with installation and sign-in guidance for missing tools.
+
 If a row reports a missing CLI, open **Settings → Connections** and click that provider's
 `CLI` button. Install guidance expands inside the card — the command to run, how to sign in,
 and where QuotaDock looks. Press `Rescan` when you are done; no restart needed.
@@ -143,6 +145,8 @@ display name and colour. Every Claude card offers three connection methods. Pick
 | `CLI` | The credential Claude Code already keeps on this PC | You use Claude Code here. One account only — the CLI holds one login. |
 | `Auth` | A Claude login made inside QuotaDock's own browser window | A second account, or a PC without Claude Code. |
 | `Other` | The `CLAUDE_CODE_OAUTH_TOKEN` environment variable | A long-lived token you manage yourself, for example on a machine you sign in to over SSH. |
+
+Every Codex account also offers `CLI` (this PC's Codex CLI login, for one account at a time) or `Auth` (sign in from the app to that account's isolated profile; the official Codex CLI must be installed).
 
 `Other` has no box to paste into — by design, QuotaDock never asks you to type a token.
 To use it:

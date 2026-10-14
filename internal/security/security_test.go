@@ -16,7 +16,7 @@ func TestSensitiveLogMasking(t *testing.T) {
 }
 
 func TestURLAllowlist(t *testing.T) {
-	for _, value := range []string{"https://openai.com/", "https://auth.openai.com/login", "https://claude.ai/", "https://code.claude.com/docs/en/quickstart", "https://developers.openai.com/codex/cli/", "https://github.com/jungdosa/QuotaDock/releases/latest"} {
+	for _, value := range []string{"https://openai.com/", "https://auth.openai.com/login", "https://claude.ai/", "https://code.claude.com/docs/en/quickstart", "https://developers.openai.com/codex/cli/", "https://docs.x.ai/docs/grok-build", "https://github.com/jungdosa/QuotaDock/releases/latest"} {
 		if !IsAllowedExternalURL(value) {
 			t.Errorf("expected allowed: %s", value)
 		}

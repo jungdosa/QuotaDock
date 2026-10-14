@@ -276,3 +276,24 @@ func TestMonitorCloakFailureAndHideRestore(t *testing.T) {
 		t.Fatal("a timer from before hide reached a new cloak")
 	}
 }
+
+func TestMonitorScaleChangedIgnoresReconnectedMonitor(t *testing.T) {
+	before := monitorSignature{monitor: 1, scale: 1.5, canvasScale: 1.5}
+	if monitorScaleChanged(before, monitorSignature{monitor: 2, scale: 1.5, canvasScale: 1.5}) {
+		t.Fatal("a monitor that came back at the same scale must not cloak the widget")
+	}
+	if !monitorScaleChanged(before, monitorSignature{monitor: 2, scale: 1, canvasScale: 1.5}) {
+		t.Fatal("a DPI change was missed")
+	}
+	if !monitorScaleChanged(before, monitorSignature{monitor: 1, scale: 1.5, canvasScale: 1}) {
+		t.Fatal("a canvas scale change was missed")
+	}
+}
+
+func TestScheduleMonitorRepaintRunsNowAndTwiceLater(t *testing.T) {
+	now, later := 0, []time.Duration{}
+	scheduleMonitorRepaint(func() { now++ }, func(delay time.Duration, _ func()) { later = append(later, delay) })
+	if now != 1 || len(later) != 2 || later[0] != 500*time.Millisecond || later[1] != 2*time.Second {
+		t.Fatalf("repaint schedule: immediate=%d delayed=%v", now, later)
+	}
+}

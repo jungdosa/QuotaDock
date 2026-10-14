@@ -46,16 +46,67 @@ func TestAThirdAccountReadsThroughItsOwnFetcherAndReportsAsItself(t *testing.T) 
 	}
 }
 
-// The first two accounts share the root provider's profile through SetWebAuth
-// and are refused here, so no path can hand them a second profile by mistake.
-func TestTheFirstTwoAccountsAreNotGivenProfilesOfTheirOwn(t *testing.T) {
+// The first account accepts an own profile without becoming another lane.
+// The second account and unrelated provider ids cannot claim one here.
+func TestOnlyTheFirstClaudeAccountCanAttachWithoutAddingALane(t *testing.T) {
 	provider := newProvider(&fakeClient{versionErr: shared.ErrNotInstalled}, nil, "2.0.0")
 	fetcher := fakeOAuthFetcher{available: true}
 	provider.SetAccountWebAuth(model.ProviderClaude, fetcher)
+	if provider.ownWebAuth == nil {
+		t.Fatal("first account fetcher was not attached")
+	}
 	provider.SetAccountWebAuth(model.ProviderClaudeAuth, fetcher)
 	provider.SetAccountWebAuth(model.ProviderCodex, fetcher)
 	if additional := provider.AdditionalProviders(); additional != nil {
-		t.Fatalf("accounts were created for ids that must not have their own profile: %v", additional)
+		t.Fatalf("first, second, or unrelated ids created extra lanes: %v", additional)
+	}
+	provider.SetAccountWebAuth(model.ProviderClaude, nil)
+	if provider.ownWebAuth != nil {
+		t.Fatal("first account fetcher was not detached")
+	}
+}
+
+func TestFirstClaudeAuthAndSecondClaudeAuthReadSeparateProfiles(t *testing.T) {
+	provider := newProvider(&fakeClient{versionErr: shared.ErrNotInstalled}, nil, "2.0.0")
+	provider.SetWebAuth(fakeOAuthFetcher{available: true, result: oauthResult{raw: json.RawMessage(`{"five_hour":{"utilization":12}}`)}})
+	provider.SetAccountWebAuth(model.ProviderClaude, fakeOAuthFetcher{available: true, result: oauthResult{raw: json.RawMessage(`{"five_hour":{"utilization":77}}`)}})
+	provider.SetSourceMode(string(SourceModeAuth))
+	first, err := provider.Refresh(context.Background())
+	if err != nil || len(first.Limits) != 1 || first.Limits[0].UsedPercent != 77 {
+		t.Fatalf("first account read %+v (%v), want own 77", first.Limits, err)
+	}
+	second, err := provider.AdditionalProviders()[model.ProviderClaudeAuth].Refresh(context.Background())
+	if err != nil || len(second.Limits) != 1 || second.Limits[0].UsedPercent != 12 {
+		t.Fatalf("second account read %+v (%v), want shared 12", second.Limits, err)
+	}
+}
+
+func TestFirstClaudeAuthWithoutSignInDoesNotBorrowSharedProfile(t *testing.T) {
+	provider := newProvider(&fakeClient{versionErr: shared.ErrNotInstalled}, nil, "2.0.0")
+	provider.SetWebAuth(fakeOAuthFetcher{available: true, result: oauthResult{raw: json.RawMessage(`{"five_hour":{"utilization":12}}`)}})
+	provider.SetAccountWebAuth(model.ProviderClaude, fakeOAuthFetcher{available: false})
+	provider.SetSourceMode(string(SourceModeAuth))
+	if state := provider.Inspect(context.Background()); state.Status != model.StatusLoggedOut || state.Error != model.ErrNotLoggedIn {
+		t.Fatalf("unsigned-in first account inspected as %+v", state)
+	}
+	if _, err := provider.Refresh(context.Background()); err == nil {
+		t.Fatal("unsigned-in first account borrowed the shared profile")
+	}
+	if state := provider.Inspect(context.Background()); state.Status != model.StatusLoggedOut || state.Error != model.ErrNotLoggedIn {
+		t.Fatalf("unsigned-in first account refreshed as %+v", state)
+	}
+}
+
+func TestFirstClaudeAutoFallbackStillReadsSharedProfile(t *testing.T) {
+	provider := newProvider(&fakeClient{versionErr: shared.ErrNotInstalled}, nil, "2.0.0")
+	provider.SetWebAuth(fakeOAuthFetcher{available: true, result: oauthResult{raw: json.RawMessage(`{"five_hour":{"utilization":12}}`)}})
+	provider.SetAccountWebAuth(model.ProviderClaude, fakeOAuthFetcher{available: true, result: oauthResult{raw: json.RawMessage(`{"five_hour":{"utilization":77}}`)}})
+	if state := provider.Inspect(context.Background()); state.Status != model.StatusConnected || state.Source != model.SourceWebSignIn {
+		t.Fatalf("Auto fallback inspected as %+v", state)
+	}
+	snapshot, err := provider.Refresh(context.Background())
+	if err != nil || len(snapshot.Limits) != 1 || snapshot.Limits[0].UsedPercent != 12 {
+		t.Fatalf("Auto fallback read %+v (%v), want shared 12", snapshot.Limits, err)
 	}
 }
 

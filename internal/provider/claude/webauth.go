@@ -182,10 +182,17 @@ func webResponseError(response webview.FetchResult, stage string) error {
 		return errOAuthInvalidResponse
 	}
 	if stage == "usage" {
-		// Only the web path rejects an empty measurement. OAuth normalization
-		// remains compatible with its existing callers.
-		snapshot, err := NormalizeOAuthUsage(json.RawMessage(response.Body), "", "", time.Time{})
-		if err != nil || len(snapshot.Limits) == 0 {
+		// A successful response can have no measurement windows, but an error
+		// envelope must not be mistaken for an empty successful account.
+		var envelope struct {
+			Error json.RawMessage `json:"error"`
+			Type  string          `json:"type"`
+		}
+		if err := json.Unmarshal([]byte(response.Body), &envelope); err != nil || (len(envelope.Error) > 0 && string(envelope.Error) != "null") || envelope.Type == "error" {
+			return errOAuthInvalidResponse
+		}
+		_, err := NormalizeOAuthUsage(json.RawMessage(response.Body), "", "", time.Time{})
+		if err != nil {
 			return errOAuthInvalidResponse
 		}
 	}

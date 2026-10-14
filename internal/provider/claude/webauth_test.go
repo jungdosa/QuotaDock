@@ -332,7 +332,11 @@ func TestWebAuthHTTPClassificationAtBothStages(t *testing.T) {
 			{"rate-limit", 429, "", `{"error":"rate limited"}`, errOAuthUnavailable},
 			{"unavailable", 503, "", "<html>temporarily unavailable</html>", errOAuthUnavailable},
 			{"invalid-json", 200, "", "<html>signed out</html>", errOAuthInvalidResponse},
-			{"empty-json", 200, "", `{}`, errOAuthInvalidResponse},
+			{"empty-json", 200, "", `{}`, nil},
+			{"null-error", 200, "", `{"error":null}`, nil},
+			{"error-envelope", 200, "", `{"type":"error","error":{"message":"unavailable"}}`, errOAuthInvalidResponse},
+			{"error-key", 200, "", `{"error":"denied"}`, errOAuthInvalidResponse},
+			{"error-type", 200, "", `{"type":"error"}`, errOAuthInvalidResponse},
 			{"legacy-html", 0, "", "<html>signed out</html>", errOAuthReauthentication},
 			{"legacy-ok", 0, "", "", nil},
 		} {
@@ -349,7 +353,7 @@ func TestWebAuthHTTPClassificationAtBothStages(t *testing.T) {
 					session.replies[index] = tc.body
 				}
 				want := tc.want
-				if stage == "organizations" && (tc.name == "invalid-json" || tc.name == "empty-json") {
+				if stage == "organizations" && (tc.name == "invalid-json" || tc.name == "empty-json" || tc.name == "null-error" || tc.name == "error-envelope" || tc.name == "error-key" || tc.name == "error-type") {
 					want = errOAuthReauthentication
 				}
 				fetcher := &WebAuthFetcher{newSession: func(string) webSession { return session }}
@@ -357,8 +361,14 @@ func TestWebAuthHTTPClassificationAtBothStages(t *testing.T) {
 				if !errors.Is(err, want) {
 					t.Fatalf("error = %v, want %v", err, want)
 				}
-				if want == nil && string(result.raw) != webUsageJSON {
-					t.Fatal("normal usage was lost")
+				if want == nil {
+					wantRaw := webUsageJSON
+					if stage == "usage" && (tc.name == "empty-json" || tc.name == "null-error") {
+						wantRaw = tc.body
+					}
+					if string(result.raw) != wantRaw {
+						t.Fatal("normal usage was lost")
+					}
 				}
 				if want != nil {
 					record, ok := events.find("webauth.fetch")
@@ -398,6 +408,25 @@ func TestWebAuthLegacyEmptyUsageRemainsCompatible(t *testing.T) {
 	fetcher := &WebAuthFetcher{newSession: func(string) webSession { return session }}
 	if result, err := fetcher.Fetch(context.Background()); err != nil || string(result.raw) != `{}` {
 		t.Fatal("status-zero usage interpretation changed")
+	}
+}
+
+func TestWebAuthEmptyUsageKeepsTheLaneConnected(t *testing.T) {
+	session := &stubWebSession{
+		replies:  []string{`[{"uuid":"org-test","capabilities":["chat"]}]`, `{}`},
+		statuses: []int{200, 200},
+	}
+	fetcher := &WebAuthFetcher{userDataDir: t.TempDir(), newSession: func(string) webSession { return session }}
+	provider := newProvider(&fakeClient{versionErr: shared.ErrNotInstalled}, nil, "2.0.0")
+	provider.SetWebAuth(fetcher)
+	lane := provider.AdditionalProviders()[model.ProviderClaudeAuth]
+	snapshot, err := lane.Refresh(context.Background())
+	if err != nil || len(snapshot.Limits) != 0 {
+		t.Fatalf("empty usage = %+v, error = %v", snapshot.Limits, err)
+	}
+	state := lane.Inspect(context.Background())
+	if state.Status != model.StatusConnected || state.Error != model.ErrNone {
+		t.Fatalf("empty usage lane state = %+v", state)
 	}
 }
 

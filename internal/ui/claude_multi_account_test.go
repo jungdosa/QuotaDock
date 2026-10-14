@@ -121,6 +121,20 @@ func TestClaudeWebFallbackIsNotRenderedTwice(t *testing.T) {
 	}
 }
 
+func TestExplicitClaudeAuthShowsBothBrowserAccountsEvenWhenLoggedOut(t *testing.T) {
+	config := settings.Default()
+	config.ShowClaudeAuth = true
+	config.ConnectionMethods = map[string]string{"claude": settings.ConnectionMethodAuth}
+	view := &View{config: config, state: ViewState{Lanes: []LaneState{
+		{Provider: model.ProviderClaude, Name: "Claude", Status: model.StatusLoggedOut, Source: model.SourceWebSignIn},
+		{Provider: model.ProviderClaudeAuth, Name: "Claude Auth", Status: model.StatusConnected, Source: model.SourceWebSignIn},
+	}}}
+	lanes := view.visibleLanes()
+	if len(lanes) != 2 || lanes[0].Provider != model.ProviderClaude || lanes[1].Provider != model.ProviderClaudeAuth {
+		t.Fatalf("explicit first Auth profile was hidden: %+v", lanes)
+	}
+}
+
 func TestClaudeAuthUsesClaudeVisualIdentity(t *testing.T) {
 	row := UsageRowState{Label: "Fable 7 day"}
 	lane := LaneState{Provider: model.ProviderClaudeAuth}

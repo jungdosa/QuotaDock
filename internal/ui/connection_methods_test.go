@@ -18,8 +18,8 @@ func TestConnectionMethodCountsByProvider(t *testing.T) {
 
 	want := map[model.ProviderID]int{
 		model.ProviderClaude:      3,
-		model.ProviderCodex:       1,
-		model.ProviderAntigravity: 1,
+		model.ProviderCodex:       2,
+		model.ProviderAntigravity: 2,
 		model.ProviderGrok:        1,
 	}
 	for _, row := range v.connectionCache {
@@ -149,4 +149,33 @@ func connectionPanelText(row *connectionView) string {
 		}
 	})
 	return strings.Join(values, "\n")
+}
+
+// Antigravity picks its own route, so its two chips report which one is
+// serving the lane instead of both lighting up on any connection.
+func TestAntigravityChipsShowTheRouteInUse(t *testing.T) {
+	v, window := newTestView(t)
+	defer window.Close()
+	for _, test := range []struct {
+		name     string
+		lane     LaneState
+		cli, ide connectionMethodState
+	}{
+		{"served by the CLI", LaneState{Provider: model.ProviderAntigravity, Status: model.StatusConnected, Source: "CLI"}, connectionMethodActive, connectionMethodMissing},
+		{"served by the IDE", LaneState{Provider: model.ProviderAntigravity, Status: model.StatusConnected, Source: "Local LSP"}, connectionMethodMissing, connectionMethodActive},
+		{"not connected", LaneState{Provider: model.ProviderAntigravity, Status: model.StatusUnavailable, Source: "CLI"}, connectionMethodMissing, connectionMethodMissing},
+	} {
+		if got := v.connectionMethodState(test.lane, connectionMethodCLI); got != test.cli {
+			t.Errorf("%s: CLI chip = %v, want %v", test.name, got, test.cli)
+		}
+		if got := v.connectionMethodState(test.lane, connectionMethodIDE); got != test.ide {
+			t.Errorf("%s: IDE chip = %v, want %v", test.name, got, test.ide)
+		}
+	}
+	// Tapping a chip never stores a choice: there is nothing to choose.
+	before := len(v.config.ConnectionMethods)
+	v.setConnectionMethod(model.ProviderAntigravity, connectionMethodCLI)
+	if len(v.config.ConnectionMethods) != before {
+		t.Fatalf("an Antigravity chip stored a method: %v", v.config.ConnectionMethods)
+	}
 }

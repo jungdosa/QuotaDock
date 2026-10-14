@@ -2,6 +2,7 @@ package webview
 
 import (
 	"encoding/json"
+	"errors"
 	"net/url"
 	"strings"
 	"time"
@@ -68,6 +69,13 @@ func originOf(raw string) string {
 	}
 	return parsed.Scheme + "://" + parsed.Host + "/"
 }
+
+// A sign-in window that ends without reaching a signed-in page reports one of
+// these, so the caller can tell a closed window from a blocked navigation.
+var (
+	ErrSignInCancelled = errors.New("sign-in was cancelled")
+	ErrSignInBlocked   = errors.New("sign-in left the allowed sites")
+)
 
 // SignedInAt reports whether a URL looks like the signed-in application rather
 // than the login flow. It is deliberately conservative: only a known

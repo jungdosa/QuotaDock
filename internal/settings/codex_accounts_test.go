@@ -2,6 +2,7 @@ package settings
 
 import (
 	"github.com/jungdosa/QuotaDock/internal/model"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -17,6 +18,23 @@ func TestCodexAccountsMigrateWithoutChangingExistingPreferences(t *testing.T) {
 	}
 	if cfg.SchemaVersion != 8 || !slices.Equal(cfg.LaneOrder[:6], []string{"grok", "codex", "codex-2", "codex-3", "codex-4", "codex-5"}) {
 		t.Fatalf("migration order=%v", cfg.LaneOrder)
+	}
+}
+
+func TestCodexConnectionMethodsRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	cfg := Default()
+	cfg.CodexAccounts = 2
+	cfg.ConnectionMethods = map[string]string{"codex": ConnectionMethodAuth, "codex-2": ConnectionMethodCLI}
+	if err := Save(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.ConnectionMethods["codex"] != ConnectionMethodAuth || loaded.ConnectionMethods["codex-2"] != ConnectionMethodCLI {
+		t.Fatalf("Codex methods did not round-trip: %v", loaded.ConnectionMethods)
 	}
 }
 

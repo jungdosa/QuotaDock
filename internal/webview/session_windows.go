@@ -374,10 +374,10 @@ func (s *Session) SignIn(ctx context.Context, startURL string, ready func(url st
 		mu.Lock()
 		defer mu.Unlock()
 		if blocked {
-			return errors.New("sign-in left the allowed sites")
+			return ErrSignInBlocked
 		}
 		if !signedIn {
-			return errors.New("sign-in was cancelled")
+			return ErrSignInCancelled
 		}
 		return nil
 	case <-ctx.Done():

@@ -219,7 +219,7 @@ func TestStoredConnectionMethodIsHonoredWhenAvailable(t *testing.T) {
 // row with no active route at all.
 func TestUnavailableStoredMethodFallsBackToDefault(t *testing.T) {
 	config := settings.Default()
-	config.ConnectionMethods = map[string]string{"codex": "auth", "grok": "ide"}
+	config.ConnectionMethods = map[string]string{"codex": "other", "grok": "ide"}
 	config = config.Validated()
 	if got := selectedConnectionMethod(config, model.ProviderCodex); got != connectionMethodCLI {
 		t.Fatalf("Codex fallback = %q, want cli", got)
@@ -261,8 +261,41 @@ func TestOnlySelectedMethodReadsAsActive(t *testing.T) {
 func TestSelectingAnUnofferedMethodIsIgnored(t *testing.T) {
 	view := &View{config: settings.Default()}
 	view.state = ViewState{Lanes: []LaneState{{Provider: model.ProviderCodex, Status: model.StatusConnected}}}
-	view.setConnectionMethod(model.ProviderCodex, connectionMethodAuth)
+	view.setConnectionMethod(model.ProviderCodex, connectionMethodOther)
 	if view.config.ConnectionMethods["codex"] != "" {
 		t.Fatalf("unoffered method was stored: %v", view.config.ConnectionMethods)
+	}
+}
+
+func TestCodexFamilyOffersBothMethodsAndReservesCLI(t *testing.T) {
+	view, window := newTestView(t)
+	defer window.Close()
+	cfg := view.config
+	cfg.CodexAccounts = 2
+	view.SetConfig(cfg)
+	view.Show(SettingsScreen)
+	for _, id := range []model.ProviderID{model.ProviderCodex, model.ProviderCodex2} {
+		methods := connectionMethodsFor(id)
+		if len(methods) != 2 || methods[0] != connectionMethodCLI || methods[1] != connectionMethodAuth {
+			t.Fatalf("%s methods=%v", id, methods)
+		}
+		if len(connectionRowForTest(t, view, id).methods) != 2 {
+			t.Fatalf("%s card is missing a method chip", id)
+		}
+	}
+	if defaultConnectionMethod(model.ProviderCodex) != connectionMethodCLI || defaultConnectionMethod(model.ProviderCodex2) != connectionMethodAuth {
+		t.Fatal("Codex defaults changed")
+	}
+	second := connectionRowForTest(t, view, model.ProviderCodex2)
+	if !view.accountMethodOccupiedByOther(model.ProviderCodex2, connectionMethodCLI) || second.methods[0].button.State != connectionMethodOccupied {
+		t.Fatal("second Codex account can take occupied CLI")
+	}
+	view.setConnectionMethod(model.ProviderCodex, connectionMethodAuth)
+	view.setConnectionMethod(model.ProviderCodex2, connectionMethodCLI)
+	if got := view.selectedConnectionMethod(model.ProviderCodex2); got != connectionMethodCLI {
+		t.Fatalf("second Codex method=%q", got)
+	}
+	if !view.accountMethodOccupiedByOther(model.ProviderCodex, connectionMethodCLI) {
+		t.Fatal("first Codex account can take occupied CLI")
 	}
 }

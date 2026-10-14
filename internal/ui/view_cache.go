@@ -114,11 +114,15 @@ type nanoUsageState struct {
 }
 
 type connectionView struct {
-	id           model.ProviderID
-	name         *canvas.Text
-	status       *canvas.Text
-	dot          *canvas.Circle
-	detail       *canvas.Text
+	id     model.ProviderID
+	name   *canvas.Text
+	status *canvas.Text
+	dot    *canvas.Circle
+	detail *canvas.Text
+	// detailMore is the second detail line, shown only when the facts do
+	// not fit one; detailWidth is the room the lines were given.
+	detailMore   *canvas.Text
+	detailWidth  float32
 	methods      []connectionMethodView
 	methodRow    *fyne.Container
 	panel        *fyne.Container
@@ -159,6 +163,8 @@ type connectionPanelView struct {
 	rescanButton *SmallButton
 	docsButton   *SmallButton
 	closeButton  *SmallButton
+	copyButtons  []*SmallButton
+	authButton   *SmallButton
 }
 
 const (
@@ -301,6 +307,9 @@ func (v *View) normalBodySignature(lanes []LaneState, now time.Time) string {
 	for _, lane := range lanes {
 		hasPlan := lane.Plan != model.PlanUnknown && lane.Plan != ""
 		fmt.Fprintf(&signature, "lane:%q:plan=%t:credits=%t:rows=%d|", lane.Provider, hasPlan, v.laneCreditsVisible(lane), len(lane.Rows))
+		if len(lane.Rows) == 0 {
+			fmt.Fprintf(&signature, "connected=%t|", lane.Status == model.StatusConnected)
+		}
 		for _, row := range lane.Rows {
 			_, resetAt := resetStrings(row, now, v.config, v.SystemLanguage)
 			resetLines := wrapMonospace(resetAt, normalRowColumns[2], NormalMetaTextSize)
@@ -418,12 +427,82 @@ func (v *View) updateNormalHeader(handles normalHeaderView, lane LaneState) {
 
 func (v *View) makeNormalStatusRow(lane LaneState) (fyne.CanvasObject, *canvas.Text) {
 	status := textLabel(v.laneStatusText(lane), NormalLabelTextSize, v.colors.Secondary, false, false)
+	var guide fyne.CanvasObject = layout.NewSpacer()
+	if lane.Status != model.StatusConnected {
+		button := NewOutlinedSmallButton(v.text(i18n.KeyConnectionGuideShortcut), v.text(i18n.KeyConnectionGuideShortcut), func() { v.openConnectionGuide(lane.Provider) }, v.colors)
+		guide = container.NewHBox(connectionButton(button, 112), layout.NewSpacer())
+	}
 	return container.New(
 		NewColumnLayout(normalRowColumns, NormalRowGap, NormalRowHeight),
 		status,
-		layout.NewSpacer(),
+		guide,
 		layout.NewSpacer(),
 	), status
+}
+
+func (v *View) openConnectionGuide(id model.ProviderID) {
+	v.Show(SettingsScreen)
+	v.openConnectionPanel = connectionPanelSelection{provider: id, method: v.selectedConnectionMethod(id)}
+	v.syncConnectionPanels()
+	v.resizeCurrentWidget()
+}
+
+func (v *View) syncFirstRunCard() {
+	if v.normalIntro == nil {
+		return
+	}
+	if !v.firstRunEligible || v.firstRunDismissed || v.state.LastRefresh.IsZero() {
+		v.normalIntro.Objects = nil
+		v.normalIntro.Refresh()
+		return
+	}
+	lanes := v.visibleLanes()
+	content := []fyne.CanvasObject{textLabel(v.text(i18n.KeyFirstRunTitle), SettingsTextSize, v.colors.Text, true, false)}
+	allConnected := true
+	for _, lane := range lanes {
+		if lane.Status != model.StatusConnected {
+			allConnected = false
+			break
+		}
+	}
+	if allConnected {
+		content = append(content, textLabel(v.text(i18n.KeyFirstRunAllConnected), 9.5, v.colors.Secondary, false, false))
+	} else {
+		for _, lane := range lanes {
+			icon := container.NewGridWrap(fyne.NewSize(18, 18), NewProviderIcon(laneIconKind(lane), v.config.Theme))
+			row := []fyne.CanvasObject{icon, textLabel(lane.Name, 9.5, v.colors.Text, true, false), textLabel(v.firstRunStatusText(lane), 9.5, v.colors.Secondary, false, false)}
+			if lane.Status != model.StatusConnected {
+				id := lane.Provider
+				button := NewOutlinedSmallButton(v.text(i18n.KeyFirstRunGuide), v.text(i18n.KeyFirstRunGuide), func() { v.openConnectionGuide(id) }, v.colors)
+				row = append(row, connectionButton(button, 46))
+			}
+			content = append(content, container.NewHBox(row...))
+		}
+	}
+	closeButton := NewOutlinedSmallButton(v.text(i18n.KeyConnectionPanelClose), v.text(i18n.KeyConnectionPanelClose), func() {
+		v.firstRunDismissed = true
+		v.normalIntro.Objects = nil
+		v.normalIntro.Refresh()
+		v.resizeCurrentWidget()
+	}, v.colors)
+	card := v.connectionPanelCard(content, []fyne.CanvasObject{connectionButton(closeButton, 54)})
+	v.normalIntro.Objects = []fyne.CanvasObject{container.New(layout.NewCustomPaddedLayout(4, 4, 12, 12), card)}
+	v.normalIntro.Refresh()
+}
+
+func (v *View) firstRunStatusText(lane LaneState) string {
+	switch {
+	case lane.Status == model.StatusConnected:
+		return v.text(i18n.KeyConnected)
+	case lane.Error == model.ErrCLINotInstalled:
+		return v.text(i18n.KeyFirstRunInstallNeeded)
+	case lane.Error == model.ErrNotLoggedIn || lane.Status == model.StatusLoggedOut:
+		return v.text(i18n.KeyFirstRunSignInNeeded)
+	case lane.Error == model.ErrCLIOutdated || lane.Status == model.StatusOutdated:
+		return v.text(i18n.KeyFirstRunUpdateNeeded)
+	default:
+		return v.text(i18n.KeyFirstRunCannotCheck)
+	}
 }
 
 // rowVisual carries every mode-independent visual decision for a usage row:
@@ -1120,7 +1199,7 @@ func (v *View) syncConnections() {
 		}
 		setCanvasText(handles.status, v.connectionStatusText(lane), statusColor)
 		setCircleFill(handles.dot, dotColor)
-		setCanvasText(handles.detail, v.connectionDetailText(lane), v.colors.Secondary)
+		v.setConnectionDetail(handles, lane)
 		for _, method := range handles.methods {
 			state := v.connectionMethodState(lane, method.method)
 			method.button.SetPresentation(state, v.connectionMethodTooltip(method.button.Label, state))
@@ -1172,12 +1251,25 @@ func (v *View) buildConnectionRows() {
 		var addButton, removeButton *SmallButton
 		testButton.SetDisabled(v.signingIn[id])
 		reconnect.SetDisabled(v.signingIn[id])
-		actionWidths := []float32{buttonWidthFor(testButton, 92), buttonWidthFor(reconnect, 74)}
-		actions := []fyne.CanvasObject{connectionButton(testButton, 92), connectionButton(reconnect, 74)}
+		actionWidths := []float32{tightButtonWidth(testButton), tightButtonWidth(reconnect)}
+		actions := []fyne.CanvasObject{tightConnectionButton(testButton), tightConnectionButton(reconnect)}
 		// The last Claude card carries the account controls: add another while
 		// there is room, and take the last one away again while there is more
 		// than one. Both change the count; validation keeps the older flag in
-		// step so a build that only knows two accounts still agrees.
+		// step so a build that only knows two accounts still agrees. Once the
+		// card has a second row for the display name they sit at its end, clear
+		// of the connection actions; a single-account card has no such row and
+		// keeps them in the header.
+		var accountActions []fyne.CanvasObject
+		accountControlsBelow := accountLabelsVisible(v.config, id)
+		placeAccountControl := func(button *SmallButton) {
+			if accountControlsBelow {
+				accountActions = append(accountActions, connectionButton(button, 24))
+				return
+			}
+			actionWidths = append(actionWidths, 24)
+			actions = append(actions, connectionButton(button, 24))
+		}
 		if model.AccountFamily(id) != "" && model.AccountIndex(id) == accountCount(v.config, id) {
 			if accountCount(v.config, id) < settings.MaxClaudeAccounts {
 				addButton = v.bindTitleButton(NewOutlinedSmallButton("+", v.text(i18n.KeyConnectionAddAccount), func() {
@@ -1185,8 +1277,7 @@ func (v *View) buildConnectionRows() {
 					adjustAccountCount(&cfg, id, 1)
 					v.SetConfig(cfg)
 				}, v.colors))
-				actionWidths = append(actionWidths, 24)
-				actions = append(actions, connectionButton(addButton, 24))
+				placeAccountControl(addButton)
 			}
 			if accountCount(v.config, id) >= 2 {
 				removeButton = v.bindTitleButton(NewOutlinedSmallButton("−", v.text(i18n.KeyConnectionRemoveAccount), func() {
@@ -1194,8 +1285,7 @@ func (v *View) buildConnectionRows() {
 					adjustAccountCount(&cfg, id, -1)
 					v.SetConfig(cfg)
 				}, v.colors))
-				actionWidths = append(actionWidths, 24)
-				actions = append(actions, connectionButton(removeButton, 24))
+				placeAccountControl(removeButton)
 			}
 		}
 		if removeButton != nil {
@@ -1245,9 +1335,21 @@ func (v *View) buildConnectionRows() {
 			methodWidths = append(methodWidths, width)
 		}
 		methodRow := container.New(NewGapColumnLayout(methodWidths, methodGaps, SmallButtonHeight), methodObjects...)
-		header := container.NewBorder(nil, nil, container.NewHBox(identity, methodRow), actionRow)
-		detail := textLabel(v.connectionDetailText(lane), 9.5, v.colors.Secondary, false, false)
+		header := container.New(&ConnectionHeaderLayout{Width: connectionCardInnerWidth, Gap: theme.Padding()}, identity, methodRow, actionRow)
+		// A Claude card has one short fact, so the display-name entry shares
+		// its line. A Codex card lists the CLI path, version and credits, so
+		// there the facts keep the whole width and the entry goes below.
+		detailWidth := connectionCardInnerWidth
+		detailAboveLabel := model.IsCodexAccount(id)
+		firstDetail, secondDetail := v.connectionDetailLines(lane, detailWidth)
+		detail := textLabel(firstDetail, 9.5, v.colors.Secondary, false, false)
+		detailMore := textLabel(secondDetail, 9.5, v.colors.Secondary, false, false)
+		if secondDetail == "" {
+			detailMore.Hide()
+		}
+		// Hidden while empty: an empty row would still cost the card a gap.
 		panel := container.NewStack()
+		panel.Hide()
 
 		accent := canvas.NewRectangle(v.colors.PaletteColor(v.config.ProviderColors[connectionColorKey(id)]))
 		accent.CornerRadius = 2
@@ -1257,7 +1359,8 @@ func (v *View) buildConnectionRows() {
 		background.StrokeColor = v.colors.CardBorder
 		background.StrokeWidth = 1
 		contentObjects := []fyne.CanvasObject{header}
-		var detailObject fyne.CanvasObject = detail
+		detailLines := container.NewVBox(detail, detailMore)
+		var detailObject fyne.CanvasObject = detailLines
 		var labelText *canvas.Text
 		var labelEntry *widget.Entry
 		var labelRow *fyne.Container
@@ -1274,13 +1377,31 @@ func (v *View) buildConnectionRows() {
 				nil,
 				labelEntry,
 			)
-			detailObject = container.NewBorder(nil, nil, detail, nil, labelRow)
+			detailObject = container.NewBorder(nil, nil, detailLines, nil, labelRow)
+			if detailAboveLabel {
+				detailObject = container.NewVBox(detailLines, labelRow)
+			}
+		}
+		if len(accountActions) > 0 {
+			accountWidths := make([]float32, len(accountActions))
+			accountGaps := make([]float32, len(accountActions)-1)
+			for index := range accountWidths {
+				accountWidths[index] = 24
+			}
+			for index := range accountGaps {
+				accountGaps[index] = 6
+			}
+			accountRow := container.New(layout.NewCustomPaddedLayout(0, 0, 6, 0), container.New(NewGapColumnLayout(accountWidths, accountGaps, SmallButtonHeight), accountActions...))
+			detailObject = container.NewBorder(nil, nil, detailLines, accountRow, labelRow)
+			if detailAboveLabel {
+				detailObject = container.NewVBox(detailLines, container.NewBorder(nil, nil, nil, accountRow, labelRow))
+			}
 		}
 		contentObjects = append(contentObjects, detailObject, panel)
-		content := container.NewVBox(contentObjects...)
+		content := container.New(layout.NewCustomPaddedVBoxLayout(settingsRowGap), contentObjects...)
 		card := container.NewStack(background, container.NewBorder(nil, nil, accent, nil, container.New(layout.NewCustomPaddedLayout(4, 4, 7, 7), content)))
 		objects = append(objects, card)
-		v.connectionCache = append(v.connectionCache, &connectionView{id: id, name: name, status: status, dot: dot, detail: detail, methods: methodViews, methodRow: methodRow, panel: panel, testButton: testButton, reconnect: reconnect, helpButton: helpButton, addButton: addButton, removeButton: removeButton, labelText: labelText, labelEntry: labelEntry, labelRow: labelRow, actionRow: actionRow})
+		v.connectionCache = append(v.connectionCache, &connectionView{id: id, name: name, status: status, dot: dot, detail: detail, detailMore: detailMore, detailWidth: detailWidth, methods: methodViews, methodRow: methodRow, panel: panel, testButton: testButton, reconnect: reconnect, helpButton: helpButton, addButton: addButton, removeButton: removeButton, labelText: labelText, labelEntry: labelEntry, labelRow: labelRow, actionRow: actionRow})
 	}
 	v.connectionsBody.Objects = objects
 	v.connectionsBody.Refresh()
@@ -1288,16 +1409,18 @@ func (v *View) buildConnectionRows() {
 }
 
 func connectionMethodsFor(id model.ProviderID) []connectionMethod {
-	if model.CodexAccountIndex(id) >= 2 {
-		return []connectionMethod{connectionMethodAuth}
+	switch model.AccountFamily(id) {
+	case model.ProviderClaude:
+		return []connectionMethod{connectionMethodCLI, connectionMethodAuth, connectionMethodOther}
+	case model.ProviderCodex:
+		return []connectionMethod{connectionMethodCLI, connectionMethodAuth}
 	}
 	switch id {
-	case model.ProviderClaude, model.ProviderClaudeAuth, model.ProviderClaude3, model.ProviderClaude4, model.ProviderClaude5:
-		return []connectionMethod{connectionMethodCLI, connectionMethodAuth, connectionMethodOther}
-	case model.ProviderCodex, model.ProviderCodex2, model.ProviderCodex3, model.ProviderCodex4, model.ProviderCodex5:
-		return []connectionMethod{connectionMethodCLI}
 	case model.ProviderAntigravity:
-		return []connectionMethod{connectionMethodIDE}
+		// Both routes are listed so the card can show which one is serving
+		// the lane. The provider picks between them itself; see
+		// antigravityMethodState.
+		return []connectionMethod{connectionMethodCLI, connectionMethodIDE}
 	case model.ProviderGrok:
 		return []connectionMethod{connectionMethodCLI}
 	default:
@@ -1306,12 +1429,14 @@ func connectionMethodsFor(id model.ProviderID) []connectionMethod {
 }
 
 // defaultConnectionMethod is what a provider uses when the user has not chosen
-// anything — the first method it offers, which is the CLI everywhere a CLI
-// exists. Configs written before the selector shipped land here unchanged.
+// anything. Configs written before the selector shipped land here unchanged.
 func defaultConnectionMethod(id model.ProviderID) connectionMethod {
-	// Every Claude account past the first starts on the browser sign-in.
-	if model.AccountIndex(id) >= 2 {
+	if model.AccountFamily(id) != "" && model.AccountIndex(id) >= 2 {
 		return connectionMethodAuth
+	}
+	// Antigravity stored "ide" before its card listed both routes.
+	if id == model.ProviderAntigravity {
+		return connectionMethodIDE
 	}
 	methods := connectionMethodsFor(id)
 	if len(methods) == 0 {
@@ -1344,7 +1469,11 @@ func (v *View) selectedConnectionMethod(id model.ProviderID) connectionMethod {
 // setConnectionMethod records the user's choice. Selecting a method the
 // provider does not offer is ignored so a stray call cannot corrupt settings.
 func (v *View) setConnectionMethod(id model.ProviderID, method connectionMethod) {
-	if v.claudeMethodOccupiedByOther(id, method) {
+	// Antigravity routes itself; its chips have nothing to store.
+	if id == model.ProviderAntigravity {
+		return
+	}
+	if v.accountMethodOccupiedByOther(id, method) {
 		return
 	}
 	available := false
@@ -1365,7 +1494,7 @@ func (v *View) setConnectionMethod(id model.ProviderID, method connectionMethod)
 	methods[string(id)] = string(method)
 	config.ConnectionMethods = methods
 	v.SetConfig(config)
-	if model.ClaudeAccountIndex(id) >= 2 && v.Actions.Refresh != nil {
+	if model.AccountIndex(id) >= 2 && v.Actions.Refresh != nil {
 		v.Actions.Refresh()
 	}
 }
@@ -1404,20 +1533,28 @@ func (v *View) connectionAccountName(id model.ProviderID) string {
 	}
 }
 
-// claudeMethodOccupiedByOther reports whether another shown Claude account
-// already holds a route only one account can hold.
-func (v *View) claudeMethodOccupiedByOther(id model.ProviderID, method connectionMethod) bool {
+// accountMethodOccupiedByOther reports whether another shown account in the
+// same family already holds the exclusive CLI route.
+func (v *View) accountMethodOccupiedByOther(id model.ProviderID, method connectionMethod) bool {
 	// Only the CLI is exclusive: it keeps one sign-in. The browser sign-in
 	// has a profile per account, and the token variable may serve any number
 	// of accounts the user cares to point at it.
 	if method != connectionMethodCLI {
 		return false
 	}
-	if !model.IsClaudeAccount(id) {
+	family := model.AccountFamily(id)
+	if family == "" {
 		return false
 	}
-	for _, other := range model.ClaudeAccountIDs() {
-		if other == id || model.ClaudeAccountIndex(other) > claudeAccountCount(v.config) {
+	var ids []model.ProviderID
+	switch family {
+	case model.ProviderClaude:
+		ids = model.ClaudeAccountIDs()
+	case model.ProviderCodex:
+		ids = model.CodexAccountIDs()
+	}
+	for _, other := range ids {
+		if other == id || model.AccountIndex(other) > accountCount(v.config, other) {
 			continue
 		}
 		if selectedConnectionMethod(v.config, other) == method {
@@ -1427,8 +1564,9 @@ func (v *View) claudeMethodOccupiedByOther(id model.ProviderID, method connectio
 	return false
 }
 
-func (v *View) claudeCLIOccupiedByOther(id model.ProviderID) bool {
-	return v.claudeMethodOccupiedByOther(id, connectionMethodCLI)
+// Keep the old test helper while Claude and Codex use the same rule.
+func (v *View) claudeMethodOccupiedByOther(id model.ProviderID, method connectionMethod) bool {
+	return v.accountMethodOccupiedByOther(id, method)
 }
 
 func connectionMethodLabelKey(method connectionMethod) string {
@@ -1463,17 +1601,42 @@ func (v *View) connectionMethodTooltip(label string, state connectionMethodState
 	return label + " · " + v.text(connectionMethodStateKey(state))
 }
 
+// antigravitySourceCLI is the source the Antigravity provider reports while
+// the agy CLI is serving the lane; anything else is the IDE's local server.
+const antigravitySourceCLI = "CLI"
+
+// antigravityMethodState marks the route that is actually serving the lane.
+// Antigravity chooses between the CLI and the IDE on its own, CLI first, so
+// the chips report rather than select: only the route in use reads as active.
+func antigravityMethodState(lane LaneState, method connectionMethod) connectionMethodState {
+	if lane.Status != model.StatusConnected {
+		return connectionMethodMissing
+	}
+	servedByCLI := lane.Source == antigravitySourceCLI
+	if (method == connectionMethodCLI) == servedByCLI {
+		return connectionMethodActive
+	}
+	return connectionMethodMissing
+}
+
 func (v *View) connectionMethodState(lane LaneState, method connectionMethod) connectionMethodState {
-	if model.CodexAccountIndex(lane.Provider) >= 2 {
-		if lane.Status == model.StatusConnected {
+	if lane.Provider == model.ProviderAntigravity {
+		return antigravityMethodState(lane, method)
+	}
+	if v.accountMethodOccupiedByOther(lane.Provider, method) {
+		return connectionMethodOccupied
+	}
+	switch model.AccountFamily(lane.Provider) {
+	case model.ProviderCodex:
+		selected := v.selectedConnectionMethod(lane.Provider)
+		if selected == method && lane.Status == model.StatusConnected {
 			return connectionMethodActive
 		}
-		return connectionMethodAvailable
-	}
-	if model.IsClaudeAccount(lane.Provider) {
-		if v.claudeMethodOccupiedByOther(lane.Provider, method) {
-			return connectionMethodOccupied
+		if selected == method && method == connectionMethodCLI {
+			return connectionMethodMissing
 		}
+		return connectionMethodAvailable
+	case model.ProviderClaude:
 		selected := v.selectedConnectionMethod(lane.Provider)
 		switch method {
 		case connectionMethodAuth:
@@ -1545,15 +1708,19 @@ func connectionMethodBaseState(lane LaneState, method connectionMethod, envConfi
 		}
 		return connectionMethodMissing
 	}
-	if (method == connectionMethodCLI || method == connectionMethodIDE) && !connectionNeedsInstall(lane) {
+	if (method == connectionMethodCLI || method == connectionMethodIDE) && lane.Status == model.StatusConnected {
 		return connectionMethodActive
 	}
 	return connectionMethodMissing
 }
 
+// ConnectionMethodTextSize is the method chips' label size: a step below the
+// card's own text so three chips and the actions share one line.
+const ConnectionMethodTextSize float32 = 9.5
+
 func connectionMethodButtonWidth(label string) float32 {
-	measured := fyne.MeasureText(label, SettingsTextSize, fyne.TextStyle{Bold: true}).Width
-	return max(38, measured+connectionMethodDotGap+12)
+	measured := fyne.MeasureText(label, ConnectionMethodTextSize, fyne.TextStyle{Bold: true}).Width
+	return max(34, measured+connectionMethodDotGap+12)
 }
 
 func (v *View) toggleConnectionPanel(id model.ProviderID, method connectionMethod) {
@@ -1591,12 +1758,13 @@ func (v *View) syncConnectionPanels() {
 			handles.panelOpen = false
 			handles.panelView = connectionPanelView{}
 			handles.panel.Objects = nil
-			handles.panel.Refresh()
+			handles.panel.Hide()
 			continue
 		}
 		handles.panelOpen = true
 		handles.panelView = v.connectionPanel(v.connectionLane(handles.id), v.openConnectionPanel.method)
 		handles.panel.Objects = []fyne.CanvasObject{handles.panelView.object}
+		handles.panel.Show()
 		handles.panel.Refresh()
 	}
 	if v.connectionsBody != nil {
@@ -1608,6 +1776,45 @@ func (v *View) syncConnectionPanels() {
 // clipped. The caller's width acts as a minimum, not a fixed size.
 func connectionButton(button *SmallButton, width float32) fyne.CanvasObject {
 	return container.NewGridWrap(fyne.NewSize(buttonWidthFor(button, width), SmallButtonHeight), button)
+}
+
+// tightButtonPadding is the side padding of the card's two text actions. They
+// sit on the busiest line of the card, so they hug their labels.
+const tightButtonPadding float32 = 5
+
+func tightButtonWidth(button *SmallButton) float32 {
+	return buttonWidthFor(button, 0) - 2*ButtonLabelPadding + 2*tightButtonPadding
+}
+
+func tightConnectionButton(button *SmallButton) fyne.CanvasObject {
+	return container.NewGridWrap(fyne.NewSize(tightButtonWidth(button), SmallButtonHeight), button)
+}
+
+// flowRows puts objects on one line and starts another whenever the next one
+// would pass width, so a row of buttons wraps instead of widening its card.
+func flowRows(objects []fyne.CanvasObject, width float32) fyne.CanvasObject {
+	rows := container.NewVBox()
+	current := container.NewHBox()
+	used := float32(0)
+	for _, object := range objects {
+		needed := object.MinSize().Width
+		if len(current.Objects) > 0 {
+			if used+theme.Padding()+needed > width {
+				rows.Add(current)
+				current = container.NewHBox()
+				used = 0
+			} else {
+				used += theme.Padding()
+			}
+		}
+		used += needed
+		current.Add(object)
+	}
+	if len(rows.Objects) == 0 {
+		return current
+	}
+	rows.Add(current)
+	return rows
 }
 
 // buttonWidthFor measures a button's label at its own font size and adds
@@ -1655,7 +1862,7 @@ func (v *View) connectionStatusText(lane LaneState) string {
 	}
 }
 
-func (v *View) connectionDetailText(lane LaneState) string {
+func (v *View) connectionDetailParts(lane LaneState) []string {
 	lastRefresh := v.formatTimestamp(v.state.LastRefresh)
 	details := make([]string, 0, 3)
 	if model.IsCodexAccount(lane.Provider) {
@@ -1677,7 +1884,55 @@ func (v *View) connectionDetailText(lane LaneState) string {
 		details = append(details, fmt.Sprintf(v.text(i18n.KeySource), source))
 	}
 	details = append(details, fmt.Sprintf(v.text(i18n.KeyLastRefresh), lastRefresh))
-	return strings.Join(details, "  ·  ")
+	return details
+}
+
+const connectionDetailSeparator = "  ·  "
+
+func (v *View) connectionDetailText(lane LaneState) string {
+	return strings.Join(v.connectionDetailParts(lane), connectionDetailSeparator)
+}
+
+// connectionDetailLines splits the detail facts over two lines when one
+// would run past width. A fact is never cut in the middle.
+func (v *View) connectionDetailLines(lane LaneState, width float32) (first, second string) {
+	parts := v.connectionDetailParts(lane)
+	fits := func(text string) bool {
+		return fyne.MeasureText(text, 9.5, fyne.TextStyle{}).Width <= width
+	}
+	split := len(parts)
+	for split > 1 && !fits(strings.Join(parts[:split], connectionDetailSeparator)) {
+		split--
+	}
+	return strings.Join(parts[:split], connectionDetailSeparator), strings.Join(parts[split:], connectionDetailSeparator)
+}
+
+// connectionDetailLabels is the same facts as a panel's body.
+func (v *View) connectionDetailLabels(lane LaneState) []fyne.CanvasObject {
+	first, second := v.connectionDetailLines(lane, connectionPanelInnerWidth)
+	labels := []fyne.CanvasObject{textLabel(first, 9.5, v.colors.Secondary, false, false)}
+	if second != "" {
+		labels = append(labels, textLabel(second, 9.5, v.colors.Secondary, false, false))
+	}
+	return labels
+}
+
+// setConnectionDetail fills the two detail lines, hiding the second while it
+// has nothing to say.
+func (v *View) setConnectionDetail(handles *connectionView, lane LaneState) {
+	first, second := v.connectionDetailLines(lane, handles.detailWidth)
+	setCanvasText(handles.detail, first, v.colors.Secondary)
+	setCanvasText(handles.detailMore, second, v.colors.Secondary)
+	if (second == "") == handles.detailMore.Visible() {
+		if second == "" {
+			handles.detailMore.Hide()
+		} else {
+			handles.detailMore.Show()
+		}
+		if v.connectionsBody != nil {
+			v.connectionsBody.Refresh()
+		}
+	}
 }
 
 func compactConnectionPath(path string) string {
@@ -1689,12 +1944,25 @@ func compactConnectionPath(path string) string {
 	return string(runes[:18]) + "…" + string(runes[len(runes)-(maximum-19):])
 }
 
-func connectionNeedsInstall(lane LaneState) bool {
-	switch lane.Provider {
-	case model.ProviderClaude, model.ProviderClaudeAuth, model.ProviderClaude3, model.ProviderClaude4, model.ProviderClaude5, model.ProviderCodex, model.ProviderCodex2, model.ProviderCodex3, model.ProviderCodex4, model.ProviderCodex5, model.ProviderAntigravity, model.ProviderGrok:
-		return lane.Status != model.StatusConnected
+type connectionGuideState uint8
+
+const (
+	connectionGuideUnknown connectionGuideState = iota
+	connectionGuideInstall
+	connectionGuideSignIn
+	connectionGuideUpdate
+)
+
+func connectionGuideFor(lane LaneState) connectionGuideState {
+	switch {
+	case lane.Error == model.ErrCLINotInstalled || lane.Status == model.StatusUnavailable && lane.Error == "":
+		return connectionGuideInstall
+	case lane.Error == model.ErrNotLoggedIn || lane.Status == model.StatusLoggedOut:
+		return connectionGuideSignIn
+	case lane.Error == model.ErrCLIOutdated || lane.Status == model.StatusOutdated:
+		return connectionGuideUpdate
 	default:
-		return false
+		return connectionGuideUnknown
 	}
 }
 
@@ -1705,9 +1973,14 @@ func (v *View) connectionPanel(lane LaneState, method connectionMethod) connecti
 	var actions []fyne.CanvasObject
 
 	switch {
-	case model.CodexAccountIndex(lane.Provider) >= 2 && method == connectionMethodAuth:
-		content = []fyne.CanvasObject{helpRichText(v.text(i18n.KeyConnectionCodexAuthHint), theme.ColorNameDisabled, false, 510, 54)}
-		signIn := NewOutlinedSmallButton(v.text(i18n.KeyConnectionSignIn), v.text(i18n.KeyConnectionSignIn), func() {
+	case model.AccountFamily(lane.Provider) == model.ProviderCodex && method == connectionMethodAuth:
+		content = []fyne.CanvasObject{helpParagraphs(v.text(i18n.KeyConnectionCodexAuthHint), theme.ColorNameDisabled, false, connectionPanelTextWidth)}
+		signInLabel := v.text(i18n.KeyConnectionSignIn)
+		if v.authSignedIn(lane) {
+			content = append([]fyne.CanvasObject{v.authSignedInNotice()}, content...)
+			signInLabel = v.text(i18n.KeyConnectionSignInAgain)
+		}
+		signIn := NewOutlinedSmallButton(signInLabel, signInLabel, func() {
 			if v.Actions.SignIn != nil {
 				v.Actions.SignIn(lane.Provider)
 			}
@@ -1727,37 +2000,61 @@ func (v *View) connectionPanel(lane LaneState, method connectionMethod) connecti
 			}, v.colors)
 			actions = append(actions, connectionButton(cancel, 80))
 		}
-	case model.IsClaudeAccount(lane.Provider) && method == connectionMethodAuth:
+	case model.AccountFamily(lane.Provider) == model.ProviderClaude && method == connectionMethodAuth:
 		if !v.Actions.WebAuthAvailable {
 			content = []fyne.CanvasObject{textLabel(v.text(i18n.KeyConnectionAuthPlanned), 9.5, v.colors.Secondary, false, false)}
 			break
 		}
-		content = []fyne.CanvasObject{helpRichText(v.text(i18n.KeyConnectionAuthWebHint), theme.ColorNameDisabled, false, 510, 40)}
-		signIn := NewOutlinedSmallButton(v.text(i18n.KeyConnectionSignIn), v.text(i18n.KeyConnectionSignIn), func() {
-			v.closeConnectionPanel()
+		content = []fyne.CanvasObject{helpParagraphs(v.text(i18n.KeyConnectionAuthWebHint), theme.ColorNameDisabled, false, connectionPanelTextWidth)}
+		signInLabel := v.text(i18n.KeyConnectionSignIn)
+		if v.authSignedIn(lane) {
+			content = append([]fyne.CanvasObject{v.authSignedInNotice()}, content...)
+			signInLabel = v.text(i18n.KeyConnectionSignInAgain)
+		}
+		// The panel stays open through the sign-in so the result shows here.
+		signIn := NewOutlinedSmallButton(signInLabel, signInLabel, func() {
 			if v.Actions.SignIn != nil {
 				// The account that asked signs in to its own profile.
 				v.Actions.SignIn(lane.Provider)
 			}
 		}, v.colors)
 		actions = append(actions, connectionButton(signIn, 80))
-	case model.IsClaudeAccount(lane.Provider) && method == connectionMethodOther:
+	case model.AccountFamily(lane.Provider) == model.ProviderClaude && method == connectionMethodOther:
 		_, configured := os.LookupEnv(claudeOAuthTokenEnv)
 		message := v.text(i18n.KeyConnectionEnvConfigured)
 		if !configured {
 			message = fmt.Sprintf(v.text(i18n.KeyConnectionEnvHint), claudeOAuthTokenEnv)
 		}
-		content = []fyne.CanvasObject{helpRichText(message, theme.ColorNameDisabled, false, 510, 28)}
-	case method == connectionMethodCLI && connectionNeedsInstall(lane):
-		return v.connectionInstallPanel(lane.Provider, closeButton)
-	case method == connectionMethodIDE && connectionNeedsInstall(lane):
-		_, descriptionKey, retryKey := connectionHelpKeys(lane.Provider)
+		content = []fyne.CanvasObject{helpParagraphs(message, theme.ColorNameDisabled, false, connectionPanelTextWidth)}
+	case lane.Provider == model.ProviderAntigravity && lane.Status != model.StatusConnected:
+		// One guide covers both routes: either a signed-in agy CLI or a
+		// running IDE connects the lane.
 		content = []fyne.CanvasObject{
-			helpRichText(v.text(descriptionKey), theme.ColorNameDisabled, false, 510, 40),
-			helpRichText(v.text(retryKey), theme.ColorNameDisabled, false, 510, 34),
+			helpParagraphs(v.text(i18n.KeyConnectionIDEGuide), theme.ColorNameDisabled, false, connectionPanelTextWidth),
 		}
+		rescanButton := v.connectionRescanButton(lane.Provider)
+		actions = append(actions, connectionButton(rescanButton, 74))
+		result.rescanButton = rescanButton
+	case method == connectionMethodCLI && lane.Status != model.StatusConnected:
+		switch connectionGuideFor(lane) {
+		case connectionGuideInstall:
+			return v.connectionInstallPanel(lane.Provider, closeButton)
+		case connectionGuideSignIn:
+			return v.connectionSignInPanel(lane.Provider, closeButton)
+		case connectionGuideUpdate:
+			return v.connectionUpdatePanel(lane, closeButton)
+		}
+		content = v.connectionDetailLabels(lane)
+		actions = append(actions, connectionButton(v.connectionRescanButton(lane.Provider), 74))
+	case method == connectionMethodIDE && lane.Status != model.StatusConnected:
+		content = []fyne.CanvasObject{
+			helpParagraphs(v.text(i18n.KeyConnectionIDEGuide), theme.ColorNameDisabled, false, connectionPanelTextWidth),
+		}
+		rescanButton := v.connectionRescanButton(lane.Provider)
+		actions = append(actions, connectionButton(rescanButton, 74))
+		result.rescanButton = rescanButton
 	default:
-		content = []fyne.CanvasObject{textLabel(v.connectionDetailText(lane), 9.5, v.colors.Secondary, false, false)}
+		content = v.connectionDetailLabels(lane)
 	}
 	actions = append(actions, connectionButton(closeButton, 54))
 	result.object = v.connectionPanelCard(content, actions)
@@ -1767,33 +2064,200 @@ func (v *View) connectionPanel(lane LaneState, method connectionMethod) connecti
 func (v *View) connectionInstallPanel(id model.ProviderID, closeButton *SmallButton) connectionPanelView {
 	name, installCommand, signIn, verify, searchPaths := connectionInstallDetails(id)
 	title := textLabel(fmt.Sprintf(v.text(i18n.KeyConnectionPanelInstallTitle), name), SettingsTextSize, v.colors.Text, true, false)
+	installStep, installCopy := v.connectionCommandRow("1. "+fmt.Sprintf(v.text(i18n.KeyConnectionInstallStep1), installCommand), installCommand, id)
+	signInStep, signInCopy := v.connectionCommandRow("2. "+fmt.Sprintf(v.text(i18n.KeyConnectionInstallStep2), signIn), connectionSignInCommand(id), id)
+	verifyStep, verifyCopy := v.connectionCommandRow("3. "+fmt.Sprintf(v.text(i18n.KeyConnectionInstallStep3), verify), verify, id)
 	steps := []fyne.CanvasObject{
-		textLabel("1. "+fmt.Sprintf(v.text(i18n.KeyConnectionInstallStep1), installCommand), 9.5, v.colors.Secondary, false, false),
-		textLabel("2. "+fmt.Sprintf(v.text(i18n.KeyConnectionInstallStep2), signIn), 9.5, v.colors.Secondary, false, false),
-		textLabel("3. "+fmt.Sprintf(v.text(i18n.KeyConnectionInstallStep3), verify), 9.5, v.colors.Secondary, false, false),
-		helpRichText(fmt.Sprintf(v.text(i18n.KeyConnectionSearchPaths), searchPaths)+" — "+v.text(i18n.KeyConnectionAutoDetect), theme.ColorNameDisabled, false, 510, 34),
+		installStep, signInStep, verifyStep,
+		helpParagraphs(fmt.Sprintf(v.text(i18n.KeyConnectionSearchPaths), searchPaths)+" — "+v.text(i18n.KeyConnectionAutoDetect), theme.ColorNameDisabled, false, connectionPanelTextWidth),
 	}
-	rescanButton := NewOutlinedSmallButton(v.text(i18n.KeyRescan), v.text(i18n.KeyRescan), func() {
-		if v.Actions.Inspect != nil {
-			v.Actions.Inspect(id)
-		}
-	}, v.colors)
-	docsButton := NewOutlinedSmallButton(v.text(i18n.KeyOpenInstallDocs), v.text(i18n.KeyOpenInstallDocs), func() {
-		if v.Actions.OpenURL != nil {
-			_ = v.Actions.OpenURL(connectionInstallURL(id))
-		}
-	}, v.colors)
+	hint, authButton := v.accountAuthAlternative(id, false)
+	if hint != nil {
+		steps = append(steps, hint)
+	}
+	rescanButton := v.connectionRescanButton(id)
+	docsButton := v.connectionDocsButton(id)
 	actions := []fyne.CanvasObject{
 		connectionButton(rescanButton, 74),
 		connectionButton(docsButton, 104),
 		connectionButton(closeButton, 54),
+	}
+	if authButton != nil {
+		actions = append(actions, connectionButton(authButton, 100))
 	}
 	return connectionPanelView{
 		object:       v.connectionPanelCard(append([]fyne.CanvasObject{title}, steps...), actions),
 		rescanButton: rescanButton,
 		docsButton:   docsButton,
 		closeButton:  closeButton,
+		copyButtons:  []*SmallButton{installCopy, signInCopy, verifyCopy},
+		authButton:   authButton,
 	}
+}
+
+// rescanFeedback is how long a rescan button stays marked as working. A rescan
+// that finds nothing new changes nothing else on the card, so without the mark
+// the button looks dead.
+const rescanFeedback = 1500 * time.Millisecond
+
+// settleRescan clears the mark once it has run its course. Tests replace it so
+// no timer outlives the view it would redraw.
+var settleRescan = func(redraw func()) {
+	time.AfterFunc(rescanFeedback, func() { fyne.Do(redraw) })
+}
+
+// authSignedIn reports whether the account is being read through its Auth
+// sign-in right now, which is when the Auth panel says so and offers to sign
+// in again instead of for the first time.
+func (v *View) authSignedIn(lane LaneState) bool {
+	return lane.Status == model.StatusConnected && v.selectedConnectionMethod(lane.Provider) == connectionMethodAuth
+}
+
+func (v *View) authSignedInNotice() fyne.CanvasObject {
+	return textLabel("✓ "+v.text(i18n.KeyConnectionAuthSignedIn), SettingsTextSize, v.colors.Connected, true, false)
+}
+
+func (v *View) connectionRescanButton(id model.ProviderID) *SmallButton {
+	label := v.text(i18n.KeyRescan)
+	busy := time.Since(v.rescanStarted[id]) < rescanFeedback
+	if busy {
+		label += " …"
+	}
+	button := NewOutlinedSmallButton(label, v.text(i18n.KeyRescan), func() {
+		if v.rescanStarted == nil {
+			v.rescanStarted = make(map[model.ProviderID]time.Time)
+		}
+		v.rescanStarted[id] = time.Now()
+		v.syncConnectionPanels()
+		settleRescan(v.syncConnectionPanels)
+		if v.Actions.Inspect != nil {
+			v.Actions.Inspect(id)
+		}
+	}, v.colors)
+	button.SetDisabled(busy)
+	return button
+}
+
+func (v *View) connectionDocsButton(id model.ProviderID) *SmallButton {
+	return NewOutlinedSmallButton(v.text(i18n.KeyOpenInstallDocs), v.text(i18n.KeyOpenInstallDocs), func() {
+		if v.Actions.OpenURL != nil {
+			_ = v.Actions.OpenURL(connectionInstallURL(id))
+		}
+	}, v.colors)
+}
+
+func (v *View) connectionSignInPanel(id model.ProviderID, closeButton *SmallButton) connectionPanelView {
+	name, _, _, _, _ := connectionInstallDetails(id)
+	command, copyButton := v.connectionCommandRow("1. "+fmt.Sprintf(v.text(i18n.KeyConnectionSignInStep1), connectionSignInCommand(id)), connectionSignInCommand(id), id)
+	content := []fyne.CanvasObject{
+		textLabel(fmt.Sprintf(v.text(i18n.KeyConnectionPanelSignInTitle), name), SettingsTextSize, v.colors.Text, true, false),
+		command,
+		textLabel("2. "+v.text(i18n.KeyConnectionSignInStep2), 9.5, v.colors.Secondary, false, false),
+	}
+	panel := v.connectionGuidePanel(id, content, closeButton, true)
+	panel.copyButtons = []*SmallButton{copyButton}
+	return panel
+}
+
+func (v *View) accountAuthAlternative(id model.ProviderID, cliInstalled bool) (fyne.CanvasObject, *SmallButton) {
+	switch model.AccountFamily(id) {
+	case model.ProviderClaude:
+		if !v.Actions.WebAuthAvailable {
+			return nil, nil
+		}
+	case model.ProviderCodex:
+		if !cliInstalled {
+			return nil, nil
+		}
+	default:
+		return nil, nil
+	}
+	hintKey := i18n.KeyConnectionAuthAlternative
+	if model.AccountFamily(id) == model.ProviderCodex {
+		hintKey = i18n.KeyConnectionCodexAuthAlternative
+	}
+	hint := textLabel(v.text(hintKey), 9.5, v.colors.Secondary, false, false)
+	button := NewOutlinedSmallButton(v.text(i18n.KeyConnectionSignInWithAuth), v.text(i18n.KeyConnectionSignInWithAuth), func() {
+		v.setConnectionMethod(id, connectionMethodAuth)
+		if v.Actions.SignIn != nil {
+			v.Actions.SignIn(id)
+		}
+	}, v.colors)
+	button.SetDisabled(v.Actions.DemoMode || v.Actions.SignIn == nil)
+	return hint, button
+}
+
+func (v *View) connectionUpdatePanel(lane LaneState, closeButton *SmallButton) connectionPanelView {
+	name, installCommand, _, _, _ := connectionInstallDetails(lane.Provider)
+	content := []fyne.CanvasObject{textLabel(fmt.Sprintf(v.text(i18n.KeyConnectionPanelUpdateTitle), name), SettingsTextSize, v.colors.Text, true, false)}
+	if lane.CLIVersion != "" {
+		content = append(content, textLabel(fmt.Sprintf(v.text(i18n.KeyCLIVersion), lane.CLIVersion), 9.5, v.colors.Secondary, false, false))
+	}
+	command, copyButton := v.connectionCommandRow(fmt.Sprintf(v.text(i18n.KeyConnectionUpdateCommand), installCommand), installCommand, lane.Provider)
+	content = append(content, command)
+	panel := v.connectionGuidePanel(lane.Provider, content, closeButton, false)
+	panel.copyButtons = []*SmallButton{copyButton}
+	return panel
+}
+
+// connectionSignInCommand is the official CLI's own sign-in command. The bare
+// program name would start an interactive session instead, which tells the
+// user nothing about signing in.
+func connectionSignInCommand(id model.ProviderID) string {
+	if model.IsClaudeAccount(id) {
+		return "claude auth login"
+	}
+	if id == model.ProviderGrok {
+		return "grok login"
+	}
+	return "codex login"
+}
+
+func copyConnectionCommand(command string) {
+	if app := fyne.CurrentApp(); app != nil {
+		app.Clipboard().SetContent(command)
+	}
+}
+
+func (v *View) connectionCommandRow(label, command string, id model.ProviderID) (fyne.CanvasObject, *SmallButton) {
+	var copyButton *SmallButton
+	copyButton = NewOutlinedSmallButton(v.text(i18n.KeyConnectionCopy), v.text(i18n.KeyConnectionCopy), func() {
+		copyConnectionCommand(command)
+		copyButton.Label = v.text(i18n.KeyConnectionCopied)
+		copyButton.Refresh()
+		time.AfterFunc(1500*time.Millisecond, func() {
+			fyne.Do(func() {
+				for _, row := range v.connectionCache {
+					if row.id != id || !row.panelOpen {
+						continue
+					}
+					for _, current := range row.panelView.copyButtons {
+						if current == copyButton {
+							copyButton.Label = v.text(i18n.KeyConnectionCopy)
+							copyButton.Refresh()
+							return
+						}
+					}
+				}
+			})
+		})
+	}, v.colors)
+	return flowRows([]fyne.CanvasObject{textLabel(label, 9.5, v.colors.Secondary, false, false), connectionButton(copyButton, 46)}, connectionPanelInnerWidth), copyButton
+}
+
+func (v *View) connectionGuidePanel(id model.ProviderID, content []fyne.CanvasObject, closeButton *SmallButton, showAuth bool) connectionPanelView {
+	rescanButton := v.connectionRescanButton(id)
+	docsButton := v.connectionDocsButton(id)
+	actions := []fyne.CanvasObject{connectionButton(rescanButton, 74), connectionButton(docsButton, 104), connectionButton(closeButton, 54)}
+	var authButton *SmallButton
+	if showAuth {
+		if hint, button := v.accountAuthAlternative(id, true); hint != nil {
+			authButton = button
+			content = append(content, hint)
+			actions = append(actions, connectionButton(authButton, 100))
+		}
+	}
+	return connectionPanelView{object: v.connectionPanelCard(content, actions), rescanButton: rescanButton, docsButton: docsButton, closeButton: closeButton, authButton: authButton}
 }
 
 func (v *View) connectionPanelCard(content, actions []fyne.CanvasObject) fyne.CanvasObject {
@@ -1802,7 +2266,7 @@ func (v *View) connectionPanelCard(content, actions []fyne.CanvasObject) fyne.Ca
 	background.StrokeColor = v.colors.CardBorder
 	background.StrokeWidth = 1
 	bodyObjects := append([]fyne.CanvasObject(nil), content...)
-	bodyObjects = append(bodyObjects, container.NewHBox(actions...))
+	bodyObjects = append(bodyObjects, flowRows(actions, connectionPanelInnerWidth))
 	body := container.NewVBox(bodyObjects...)
 	return container.NewStack(background, container.New(layout.NewCustomPaddedLayout(6, 6, 8, 8), body))
 }
@@ -1810,11 +2274,11 @@ func (v *View) connectionPanelCard(content, actions []fyne.CanvasObject) fyne.Ca
 func connectionInstallDetails(id model.ProviderID) (name, installCommand, signIn, verify, searchPaths string) {
 	switch id {
 	case model.ProviderClaude, model.ProviderClaudeAuth, model.ProviderClaude3, model.ProviderClaude4, model.ProviderClaude5:
-		return "Claude CLI", claudeInstallCommand, "claude → Claude", "claude --version", claudeSearchPaths
+		return "Claude CLI", claudeInstallCommand, "claude auth login", "claude --version", claudeSearchPaths
 	case model.ProviderGrok:
-		return "Grok CLI", grokInstallCommand, "grok → x.ai", "grok --version", grokSearchPaths
+		return "Grok CLI", grokInstallCommand, "grok login", "grok --version", grokSearchPaths
 	}
-	return "Codex CLI", codexInstallCommand, "codex → ChatGPT", "codex --version", codexSearchPaths
+	return "Codex CLI", codexInstallCommand, "codex login", "codex --version", codexSearchPaths
 }
 
 func connectionInstallURL(id model.ProviderID) string {

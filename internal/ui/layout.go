@@ -160,6 +160,82 @@ type SettingRowLayout struct {
 	Height       float32
 }
 
+// ConnectionHeaderLayout arranges a connection card's identity, method chips
+// and actions inside a fixed width. Everything shares one line when it fits.
+// Otherwise the chips drop to a second line; when even the identity and the
+// actions cannot share one, the actions join the chips below; and when those
+// two are too wide together, each of the three takes a line of its own. The
+// width is a constant of the screen, so the height it asks for is known up
+// front.
+type ConnectionHeaderLayout struct {
+	Width float32
+	Gap   float32
+}
+
+func (l *ConnectionHeaderLayout) arrangement(objects []fyne.CanvasObject) (lines int, actionsBelow bool) {
+	identity, methods, actions := objects[0].MinSize().Width, objects[1].MinSize().Width, objects[2].MinSize().Width
+	switch {
+	case identity+methods+actions+2*l.Gap <= l.Width:
+		return 1, false
+	case identity+actions+l.Gap <= l.Width:
+		return 2, false
+	case methods+actions+l.Gap <= l.Width:
+		return 2, true
+	default:
+		return 3, true
+	}
+}
+
+func (l *ConnectionHeaderLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	if len(objects) != 3 {
+		return
+	}
+	identity, methods, actions := objects[0], objects[1], objects[2]
+	lines, actionsBelow := l.arrangement(objects)
+	height := max(identity.MinSize().Height, methods.MinSize().Height, actions.MinSize().Height)
+	place := func(object fyne.CanvasObject, x, y float32) {
+		minimum := object.MinSize()
+		object.Resize(minimum)
+		object.Move(fyne.NewPos(x, y+(height-minimum.Height)/2))
+	}
+	right := size.Width - actions.MinSize().Width
+	place(identity, 0, 0)
+	if lines == 1 {
+		place(methods, identity.MinSize().Width+l.Gap, 0)
+		place(actions, right, 0)
+		return
+	}
+	second := height + l.Gap
+	place(methods, 0, second)
+	switch {
+	case lines == 3:
+		place(actions, right, 2*second)
+	case actionsBelow:
+		place(actions, right, second)
+	default:
+		place(actions, right, 0)
+	}
+}
+
+func (l *ConnectionHeaderLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	if len(objects) != 3 {
+		return fyne.NewSize(0, 0)
+	}
+	identity, methods, actions := objects[0].MinSize(), objects[1].MinSize(), objects[2].MinSize()
+	height := max(identity.Height, methods.Height, actions.Height)
+	lines, actionsBelow := l.arrangement(objects)
+	switch {
+	case lines == 1:
+		return fyne.NewSize(identity.Width+methods.Width+actions.Width+2*l.Gap, height)
+	case lines == 3:
+		return fyne.NewSize(max(identity.Width, methods.Width, actions.Width), 3*height+2*l.Gap)
+	case actionsBelow:
+		return fyne.NewSize(max(identity.Width, methods.Width+l.Gap+actions.Width), 2*height+l.Gap)
+	default:
+		return fyne.NewSize(max(identity.Width+l.Gap+actions.Width, methods.Width), 2*height+l.Gap)
+	}
+}
+
 type CompactRowsLayout struct {
 	Gap float32
 }

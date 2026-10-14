@@ -112,6 +112,8 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		return fmt.Errorf("locate user config: %w", err)
 	}
 	settingsPath := filepath.Join(configDir, "QuotaDock", "settings.json")
+	_, settingsStatErr := os.Stat(settingsPath)
+	firstRun := errors.Is(settingsStatErr, os.ErrNotExist)
 	cfg := loadSettings(settingsPath, !demo)
 	if demo {
 		cfg = ui.DemoConfig(cfg)
@@ -138,17 +140,20 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	// absolute CLI paths. Structured provider events below are the safe record.
 	processLog := func(string) {}
 	claudeProvider := claudeprovider.New(claudeprovider.NewCLIClient(processLog), claudeprovider.MinimumCLIVersion)
-	// The embedded-browser sign-in stores its session under the local data
-	// folder, beside the diagnostics logs. It is a fallback: the Claude
-	// provider only consults it when the CLI path is unavailable.
+	// The shared browser profile serves the second Claude account and the
+	// first account's Auto fallback when the CLI path is unavailable.
 	var claudeWebAuth *claudeprovider.WebAuthFetcher
-	// The third Claude account onward each get a browser profile folder of
-	// their own beside the first: a profile takes one writer, and a browser
-	// session is one account, so two accounts cannot share a folder.
+	// Explicit Auth for the first account and all accounts from the third
+	// onward use separate profiles, since each profile holds one sign-in.
 	accountWebAuth := make(map[model.ProviderID]*claudeprovider.WebAuthFetcher)
 	if dataDir, dirErr := diagnostics.LocalDataDirectory(); dirErr == nil {
+		moved, migrateErr := migrateFirstClaudeProfile(dataDir, cfg)
+		slog.Info("webauth.profile_migrate", "moved", moved, "ok", migrateErr == nil)
 		claudeWebAuth = claudeprovider.NewWebAuthFetcher(filepath.Join(dataDir, webview.DefaultUserDataDir))
 		claudeProvider.SetWebAuth(claudeWebAuth)
+		first := claudeprovider.NewWebAuthFetcher(filepath.Join(dataDir, fmt.Sprintf("%s-%d", webview.DefaultUserDataDir, 1)))
+		accountWebAuth[model.ProviderClaude] = first
+		claudeProvider.SetAccountWebAuth(model.ProviderClaude, first)
 		for _, id := range model.ClaudeAccountIDs() {
 			if index := model.ClaudeAccountIndex(id); index >= 3 {
 				fetcher := claudeprovider.NewWebAuthFetcher(filepath.Join(dataDir, fmt.Sprintf("%s-%d", webview.DefaultUserDataDir, index)))
@@ -163,6 +168,9 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		codexRoot = filepath.Join(dataDir, "codex-accounts")
 	}
 	codexAccounts := codexprovider.NewAccounts(codexRoot, processLog)
+	for _, id := range model.CodexAccountIDs() {
+		codexAccounts.SetSourceMode(id, cfg.ConnectionMethods[string(id)])
+	}
 	coordinator := provider.Coordinator{Providers: map[model.ProviderID]model.Provider{
 		model.ProviderClaude:      claudeProvider,
 		model.ProviderCodex:       codexAccounts,
@@ -193,6 +201,18 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	var dragStartScale float32
 	var monitorState monitorWatchState
 	var cloakState monitorCloakState
+	requestMonitorRepaint := func() {
+		fyne.Do(func() {
+			if ctx.Err() == nil && w.Content() != nil {
+				w.Canvas().Refresh(w.Content())
+			}
+		})
+	}
+	repaintAfterDisplayChange := func() {
+		scheduleMonitorRepaint(requestMonitorRepaint, func(delay time.Duration, refresh func()) {
+			diagnostics.AfterFunc(delay, "monitor_repaint", refresh)
+		})
+	}
 	var releaseCloak func(bool)
 	releaseCloak = func(forced bool) {
 		if !cloakState.active {
@@ -209,6 +229,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		elapsed, generations, _ := cloakState.finish(time.Now())
 		slog.Info("window.uncloak", "ms", elapsed.Milliseconds(), "forced", forced,
 			"generations", generations)
+		repaintAfterDisplayChange()
 	}
 	scheduleUncloak := func(generation, reservation uint64) {
 		diagnostics.AfterFunc(monitorUncloakDelay, "window_uncloak", func() {
@@ -353,7 +374,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		}
 		wasCloaked := cloakState.active
 		cloaked := wasCloaked
-		if !wasCloaked {
+		if monitorScaleChanged(previous, next) && !wasCloaked {
 			if cloakErr := native.SetCloaked(true); cloakErr != nil {
 				slog.Debug("window could not be cloaked", "error", cloakErr)
 			} else {
@@ -378,6 +399,9 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 			resizeWindowWithPosition(view.MinimumSize(view.Screen()), true, generation)
 		} else {
 			resizeWindowWithPosition(view.MinimumSize(view.Screen()), false, generation)
+		}
+		if next.monitor != previous.monitor {
+			repaintAfterDisplayChange()
 		}
 		return true
 	}
@@ -432,7 +456,11 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		})
 	}
 	scheduledRefresh := func(context.Context) {
+		previousAreas := shell.workAreas
 		shell.checkDisplayChange()
+		if !platform.WorkAreasEqual(previousAreas, shell.workAreas) {
+			repaintAfterDisplayChange()
+		}
 		refresh()
 	}
 	applyConfig := func(next settings.Config) {
@@ -440,7 +468,17 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		cfg = next.Validated()
 		claudeSourceChanged := cfg.ConnectionMethods[string(model.ProviderClaude)] != previous.ConnectionMethods[string(model.ProviderClaude)]
 		claudeProvider.SetSourceMode(cfg.ConnectionMethods[string(model.ProviderClaude)])
+		codexSourceChanged := false
+		for _, id := range model.CodexAccountIDs() {
+			if codexAccounts.SetSourceMode(id, cfg.ConnectionMethods[string(id)]) {
+				codexSourceChanged = true
+				controller.ResetAccount(id)
+			}
+		}
 		controller.SetConfig(cfg)
+		if codexSourceChanged {
+			view.SetState(controller.State())
+		}
 		a.Settings().SetTheme(ui.NewBrandTheme(cfg.Theme))
 		_ = native.SetAlwaysOnTop(cfg.AlwaysOnTop)
 		alwaysOnTop.Store(cfg.AlwaysOnTop)
@@ -475,7 +513,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		if !demo {
 			scheduler.Start(ctx, time.Duration(cfg.RefreshSeconds)*time.Second, scheduledRefresh)
 		}
-		if claudeSourceChanged && !demo {
+		if (claudeSourceChanged || codexSourceChanged) && !demo {
 			refresh()
 		}
 	}
@@ -487,7 +525,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 	var codexSigningIn atomic.Bool
 	var codexSignInCancel context.CancelFunc
 	runSignIn := func(id model.ProviderID) {
-		if model.CodexAccountIndex(id) >= 2 && !demo {
+		if model.IsCodexAccount(id) && !demo {
 			if !codexSigningIn.CompareAndSwap(false, true) {
 				return
 			}
@@ -532,10 +570,10 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		if demo || !model.IsClaudeAccount(id) {
 			return
 		}
-		// The first two accounts sign in to the shared profile; every later
-		// one opens the window on its own.
+		// Explicit Auth for the first account uses its own profile. Auto and
+		// the second account keep signing in to the shared profile.
 		fetcher := claudeWebAuth
-		if own, ok := accountWebAuth[id]; ok {
+		if own, ok := accountWebAuth[id]; ok && (id != model.ProviderClaude || cfg.ConnectionMethods[string(id)] == settings.ConnectionMethodAuth) {
 			fetcher = own
 		}
 		if fetcher == nil {
@@ -547,8 +585,12 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 			signInCtx, stop := context.WithTimeout(ctx, 5*time.Minute)
 			defer stop()
 			err := fetcher.SignIn(signInCtx)
-			slog.Info("web.signin", "provider", string(id), "ok", err == nil)
-			if err == nil {
+			slog.Info("web.signin", "provider", string(id), "ok", err == nil, "reason", signInOutcome(err))
+			// The window can end without reporting a signed-in page although
+			// the session was established: the site may land on a page the
+			// detector does not know, or the user may close the window once
+			// signed in. Reading usage right away settles it either way.
+			if ctx.Err() == nil {
 				refresh()
 			}
 		})
@@ -584,7 +626,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 			refresh()
 		})
 	}
-	actions := ui.Actions{AppVersion: version, TrayPromotionSupported: trayPromotionSupported, BeginWindowDrag: func() (int, int, error) {
+	actions := ui.Actions{AppVersion: version, FirstRun: firstRun, TrayPromotionSupported: trayPromotionSupported, BeginWindowDrag: func() (int, int, error) {
 		cursorX, cursorY, cursorErr := native.CursorPos()
 		if cursorErr != nil {
 			return 0, 0, cursorErr
@@ -764,6 +806,7 @@ func run(args []string, diagnosticRuntime *diagnostics.Runtime) error {
 		"mode", string(cfg.DisplayMode),
 		"language", string(effectiveLanguage),
 	)
+	startRuntimeStats(ctx, time.Now())
 	diagnostics.Go("idle_trimmer", func() {
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()

@@ -57,7 +57,7 @@ func isModulePath(match string) bool {
 
 // External URL matching is boundary-aware suffix matching, so allowing
 // github.com also allows its *.github.com subdomains.
-var officialDomains = []string{"anthropic.com", "claude.ai", "claude.com", "openai.com", "chatgpt.com", "google.com", "github.com"}
+var officialDomains = []string{"anthropic.com", "claude.ai", "claude.com", "openai.com", "chatgpt.com", "google.com", "github.com", "x.ai"}
 var providerRequestHosts = map[string]struct{}{
 	"api.anthropic.com":   {},
 	"grok.com":            {},

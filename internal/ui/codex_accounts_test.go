@@ -55,7 +55,7 @@ func TestCodexAccountsControlsBoundedAndSeparateFromClaude(t *testing.T) {
 	}
 	for _, id := range model.CodexAccountIDs()[1:] {
 		row := connectionRowForTest(t, v, id)
-		if len(row.methods) != 1 || row.methods[0].method != connectionMethodAuth || row.methods[0].button.State == connectionMethodPlanned || row.labelEntry == nil {
+		if len(row.methods) != 2 || row.methods[0].method != connectionMethodCLI || row.methods[1].method != connectionMethodAuth || row.methods[1].button.State == connectionMethodPlanned || row.labelEntry == nil {
 			t.Fatalf("incomplete account controls: %s", id)
 		}
 	}
@@ -68,8 +68,8 @@ func TestCodexAccountsControlsBoundedAndSeparateFromClaude(t *testing.T) {
 	if connectionRowForTest(t, v, model.ProviderCodex5).name.Text != "Spare" {
 		t.Fatal("re-add lost alias")
 	}
-	if v.MinimumSize(SettingsScreen).Height != SettingsHeight {
-		t.Fatal("multi-account settings exceed fixed scroll viewport")
+	if height := v.MinimumSize(SettingsScreen).Height; height > SettingsMaxHeight {
+		t.Fatalf("multi-account settings ask for %.0f, past the %.0f where they scroll", height, SettingsMaxHeight)
 	}
 }
 
@@ -178,6 +178,20 @@ func TestAccountIdentityResetRejectsAnInflightOldReading(t *testing.T) {
 			t.Fatal("old identity was republished")
 		}
 	}
+}
+
+func TestConnectionMethodResetShowsUninspectedState(t *testing.T) {
+	c := NewController(provider.Coordinator{}, settings.Default())
+	c.ResetAccount(model.ProviderCodex)
+	for _, lane := range c.State().Lanes {
+		if lane.Provider == model.ProviderCodex {
+			if lane.Status != model.StatusInitializing || len(lane.Rows) != 0 {
+				t.Fatalf("method reset retained a reading or sign-in state: %+v", lane)
+			}
+			return
+		}
+	}
+	t.Fatal("Codex lane missing")
 }
 
 func TestCodexAccountRenderCaptures(t *testing.T) {

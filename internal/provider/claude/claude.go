@@ -47,17 +47,19 @@ const (
 )
 
 type Provider struct {
-	client         Client
-	oauth          oauthUsageFetcher
-	webAuth        oauthUsageFetcher
+	client  Client
+	oauth   oauthUsageFetcher
+	webAuth oauthUsageFetcher
+	// ownWebAuth serves only the first account's explicit Auth selection.
+	ownWebAuth     oauthUsageFetcher
 	minimumVersion string
 	state          *model.StateMachine
 	groups         [sourceSelectionCount]process.Group[model.UsageSnapshot]
 	webGroup       process.Group[model.UsageSnapshot]
+	ownWebGroup    process.Group[model.UsageSnapshot]
 	webProvider    *WebProvider
 	// accounts are the third and later Claude accounts, each with a browser
-	// fetcher of its own. The second account stays on webProvider, which shares
-	// the root provider's browser profile as it always has.
+	// fetcher of its own. The second account stays on the shared webProvider.
 	accounts map[model.ProviderID]*WebProvider
 	source   atomic.Uint32
 	now      func() time.Time
@@ -94,9 +96,9 @@ func (p *Provider) sourceSelection() sourceSelection {
 	return selection
 }
 
-// SetWebAuth attaches the embedded-browser fetcher used by Auth mode, the
-// independent Auth lane, and Auto's final fallback. In Auto it never displaces
-// a working CLI: the order stays credential, CLI auth-status, then web.
+// SetWebAuth attaches the shared browser fetcher used by the second account,
+// the first account's Auto fallback, and Auth when no own fetcher is attached.
+// In Auto it never displaces a working CLI.
 func (p *Provider) SetWebAuth(webAuth oauthUsageFetcher) {
 	p.webAuth = webAuth
 	if webAuth == nil {
@@ -107,13 +109,14 @@ func (p *Provider) SetWebAuth(webAuth oauthUsageFetcher) {
 	p.webProvider.SetSourceMode(string(SourceModeAuth))
 }
 
-// SetAccountWebAuth attaches a browser fetcher for one of the further Claude
-// accounts, the third onward. Each of those has a profile folder and a fetch
-// group of its own: a profile takes one writer, and two accounts sharing one
-// would race each other the way the two requests of a single read once did.
-// The first two accounts are not accepted here; they keep sharing the root
-// provider's profile through SetWebAuth.
+// SetAccountWebAuth attaches the first account's explicit Auth fetcher or a
+// further account's browser fetcher. The second account keeps the shared
+// fetcher, and the first is never exposed as an additional lane.
 func (p *Provider) SetAccountWebAuth(id model.ProviderID, webAuth oauthUsageFetcher) {
+	if id == model.ProviderClaude {
+		p.ownWebAuth = webAuth
+		return
+	}
 	if model.ClaudeAccountIndex(id) < 3 {
 		return
 	}
@@ -219,7 +222,11 @@ func (p *Provider) inspectOAuthState(ctx context.Context, sources OAuthCredentia
 
 func (p *Provider) inspectWebOnly() model.ConnectionState {
 	state := model.ConnectionState{Status: model.StatusLoggedOut, Error: model.ErrNotLoggedIn, ErrorKey: "error.not_logged_in", Source: model.SourceWebSignIn}
-	if p.webAuth != nil && p.webAuth.Available() {
+	fetcher := p.ownWebAuth
+	if fetcher == nil {
+		fetcher = p.webAuth
+	}
+	if fetcher != nil && fetcher.Available() {
 		state = model.ConnectionState{Status: model.StatusConnected, Source: model.SourceWebSignIn}
 	}
 	return p.setState(state)
@@ -394,7 +401,22 @@ func (p *Provider) refreshOtherOnly(ctx context.Context) (model.UsageSnapshot, e
 }
 
 func (p *Provider) refreshWebOnly(ctx context.Context) (model.UsageSnapshot, error) {
-	snapshot, err := p.fetchWebAuth(ctx)
+	var snapshot model.UsageSnapshot
+	var err error
+	if p.ownWebAuth != nil {
+		snapshot, err = p.ownWebGroup.Do(ctx, func() (model.UsageSnapshot, error) {
+			if !p.ownWebAuth.Available() {
+				return model.UsageSnapshot{}, errOAuthCredentialsUnavailable
+			}
+			result, fetchErr := p.ownWebAuth.Fetch(ctx)
+			if fetchErr != nil {
+				return model.UsageSnapshot{}, fetchErr
+			}
+			return NormalizeOAuthUsage(result.raw, result.rateLimitTier, result.subscriptionType, p.now())
+		})
+	} else {
+		snapshot, err = p.fetchWebAuth(ctx)
+	}
 	if err != nil {
 		return p.failSelectedSource(err, model.SourceWebSignIn)
 	}
