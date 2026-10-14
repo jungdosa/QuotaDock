@@ -429,7 +429,9 @@ func validateProcessIdentity(executablePath, commandLine string) bool {
 	path := strings.ReplaceAll(strings.ToLower(filepath.Clean(executablePath)), "\\", "/")
 	command := strings.ReplaceAll(strings.ToLower(commandLine), "\\", "/")
 	belongs := func(value string) bool {
-		return strings.Contains(value, "/programs/antigravity ide/") || strings.Contains(value, "/antigravity ide/resources/app/extensions/antigravity/")
+		return strings.Contains(value, "/programs/antigravity ide/") ||
+			strings.Contains(value, "/programs/antigravity/resources/bin/") ||
+			strings.Contains(value, "/antigravity ide/resources/app/extensions/antigravity/")
 	}
 	return belongs(path) || belongs(command)
 }

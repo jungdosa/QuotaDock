@@ -107,6 +107,12 @@ func TestAntigravityProcessIdentityAndTokenParsing(t *testing.T) {
 	if !validateProcessIdentity(`C:\\Programs\\Antigravity IDE\\language_server_windows_x64.exe`, "") {
 		t.Fatal("Antigravity executable path was rejected")
 	}
+	if !validateProcessIdentity(`C:\\Users\\test\\AppData\\Local\\Programs\\Antigravity\\resources\\bin\\language_server.exe`, "") {
+		t.Fatal("current Antigravity language server path was rejected")
+	}
+	if validateProcessIdentity(`C:\\Users\\test\\AppData\\Local\\Programs\\Antigravity\\resources\\bin-malicious\\language_server.exe`, "") {
+		t.Fatal("sibling path resembling Antigravity language server was accepted")
+	}
 	tokens := csrfTokens(`language_server_windows_x64.exe --csrf_token first-secret --extension_server_csrf_token="second-secret"`)
 	if len(tokens) != 2 || tokens[0] != "first-secret" || tokens[1] != "second-secret" {
 		t.Fatalf("token flags were not parsed")
