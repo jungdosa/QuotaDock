@@ -40,6 +40,7 @@ type LaneState struct {
 	CLIPath    string
 	CLIVersion string
 	Source     string
+	FetchedAt  time.Time
 	// Credits is the provider's paid extra-usage balance when it reports one
 	// (currently Codex only).
 	Credits *model.Credits
@@ -221,6 +222,7 @@ func (c *Controller) Refresh(ctx context.Context) ViewState {
 				lane.Plan = kept.Plan
 				lane.Credits = kept.Credits
 				lane.Rows = append([]UsageRowState(nil), kept.Rows...)
+				lane.FetchedAt = kept.FetchedAt
 				lane.StaleFor = kept.StaleFor + 1
 				continue
 			}
@@ -230,6 +232,7 @@ func (c *Controller) Refresh(ctx context.Context) ViewState {
 			continue
 		}
 		lane.Status = model.StatusConnected
+		lane.FetchedAt = outcome.Snapshot.FetchedAt
 		lane.Credits = outcome.Snapshot.Credits
 		for _, limit := range outcome.Snapshot.Limits {
 			// A limit only reads as "unknown" when the provider says so; Grok

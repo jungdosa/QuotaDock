@@ -232,6 +232,23 @@ func TestCLIFailedRefreshKeepsOnlyFreshSuccess(t *testing.T) {
 	}
 }
 
+func TestCachedCLIQuotaKeepsOriginalMeasurementTime(t *testing.T) {
+	cli, _, now := fakeCLI(t)
+	client, _, _ := fakeCLILocalClient(t, cli)
+	if _, err := client.RetrieveUserQuotaSummary(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	waitCLI(t, cli)
+	measuredAt := *now
+	*now = now.Add(2 * time.Minute)
+	provider := New(client)
+	provider.now = func() time.Time { return *now }
+	snapshot, err := provider.Refresh(context.Background())
+	if err != nil || client.Source() != "CLI" || !snapshot.FetchedAt.Equal(measuredAt) {
+		t.Fatalf("cached CLI measurement time=%s source=%q err=%v; want %s", snapshot.FetchedAt, client.Source(), err, measuredAt)
+	}
+}
+
 func TestCLISlowProbeDoesNotConsumeRefreshBudgetOrDuplicate(t *testing.T) {
 	cli, runner, _ := fakeCLI(t)
 	started := make(chan struct{}, 16)

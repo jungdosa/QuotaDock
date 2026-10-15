@@ -1877,6 +1877,9 @@ func (v *View) connectionDetailParts(lane LaneState) []string {
 		}
 	}
 	if lane.Provider == model.ProviderAntigravity {
+		if !lane.FetchedAt.IsZero() {
+			lastRefresh = v.formatTimestamp(lane.FetchedAt)
+		}
 		source := lane.Source
 		if source == "" || source == "Local LSP" {
 			source = v.text(i18n.KeyLocalLSP)

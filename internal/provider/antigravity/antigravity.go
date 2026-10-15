@@ -79,7 +79,13 @@ func (p *Provider) Refresh(ctx context.Context) (model.UsageSnapshot, error) {
 			}
 			return model.UsageSnapshot{}, model.SafeError{Code: model.ErrUnavailable, Key: "error.unavailable"}
 		}
-		snapshot, err := NormalizeQuota(raw, p.now())
+		fetchedAt := p.now()
+		if source, ok := p.client.(interface{ QuotaFetchedAt() time.Time }); ok {
+			if measuredAt := source.QuotaFetchedAt(); !measuredAt.IsZero() {
+				fetchedAt = measuredAt
+			}
+		}
+		snapshot, err := NormalizeQuota(raw, fetchedAt)
 		if err != nil {
 			return model.UsageSnapshot{}, model.SafeError{Code: model.ErrInvalidResponse, Key: "error.invalid_response"}
 		}

@@ -18,6 +18,15 @@ if (-not $GoRoot -or -not (Test-Path (Join-Path $GoRoot "bin\go.exe"))) {
 }
 $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $dist = Join-Path $repo "dist"
+$metadata = Get-Content (Join-Path $repo "FyneApp.toml") | Select-String -Pattern '^\s*Version\s*=\s*"([^"]+)"\s*$'
+if (@($metadata).Count -ne 1) { throw "FyneApp.toml Version 항목을 정확히 하나 찾지 못했습니다." }
+$metadataVersion = $metadata.Matches[0].Groups[1].Value
+if ($Version -ne $metadataVersion) {
+    throw "빌드 버전 $Version 이 FyneApp.toml 버전 $metadataVersion 과 다릅니다."
+}
+if (-not (Test-Path -LiteralPath $ISCC -PathType Leaf)) {
+    throw "설치기 빌드에 필요한 Inno Setup ISCC.exe를 찾지 못했습니다: $ISCC"
+}
 $env:GOROOT = $GoRoot
 $env:CGO_ENABLED = "1"
 $env:Path = "$GoRoot\bin;$MinGW;$env:Path"
@@ -65,13 +74,11 @@ Write-Host "  $(Split-Path $portable -Leaf)" -ForegroundColor Green
 
 # 4. Setup.exe (Inno Setup)
 Write-Host "[3/5] Setup.exe 생성..."
-if (Test-Path $ISCC) {
-    & $ISCC "/DAppVersion=$Version" "$PSScriptRoot\installer.iss" 2>&1 | Select-Object -Last 5
-    if ($LASTEXITCODE -ne 0) { throw "Inno Setup 컴파일 실패" }
-    Write-Host "  QuotaDock-$Version-win-x64-Setup.exe" -ForegroundColor Green
-} else {
-    Write-Host "  ISCC 미발견 ($ISCC) — Setup 건너뜀" -ForegroundColor Yellow
-}
+& $ISCC "/DAppVersion=$Version" "$PSScriptRoot\installer.iss" 2>&1 | Select-Object -Last 5
+if ($LASTEXITCODE -ne 0) { throw "Inno Setup 컴파일 실패" }
+$setup = Join-Path $dist "QuotaDock-$Version-win-x64-Setup.exe"
+if (-not (Test-Path -LiteralPath $setup -PathType Leaf)) { throw "설치기 산출물 누락: $setup" }
+Write-Host "  QuotaDock-$Version-win-x64-Setup.exe" -ForegroundColor Green
 
 # 5. SHA-256 + 빌드 보고서
 Write-Host "[4/5] SHA-256 계산..."

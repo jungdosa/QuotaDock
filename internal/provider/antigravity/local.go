@@ -50,12 +50,13 @@ type endpointCandidate struct {
 type discoverFunc func() ([]endpointCandidate, error)
 
 type LocalClient struct {
-	mu       sync.Mutex
-	discover discoverFunc
-	current  *endpointCandidate
-	tier     string
-	cli      *cliClient
-	usingCLI bool
+	mu             sync.Mutex
+	discover       discoverFunc
+	current        *endpointCandidate
+	tier           string
+	cli            *cliClient
+	usingCLI       bool
+	quotaFetchedAt time.Time
 }
 
 func NewLocalClient() *LocalClient {
@@ -63,7 +64,7 @@ func NewLocalClient() *LocalClient {
 }
 
 func (c *LocalClient) Status(ctx context.Context) (bool, bool, error) {
-	if _, ok := c.fetchCLI(ctx); ok {
+	if _, _, ok := c.fetchCLI(ctx); ok {
 		return true, true, nil
 	}
 	candidates, err := c.discover()
@@ -127,7 +128,7 @@ func statusTier(raw json.RawMessage) string {
 }
 
 func (c *LocalClient) RetrieveUserQuotaSummary(ctx context.Context) (json.RawMessage, error) {
-	if raw, ok := c.fetchCLI(ctx); ok {
+	if raw, _, ok := c.fetchCLI(ctx); ok {
 		return raw, nil
 	}
 	// Rediscover on fallback so a stale endpoint cannot hide an IDE change.
@@ -303,25 +304,34 @@ func (c *LocalClient) Close() error {
 
 // A completed, fresh CLI result takes priority. The CLI probe never consumes
 // the caller's refresh budget; a pending probe falls through to the IDE.
-func (c *LocalClient) fetchCLI(ctx context.Context) (json.RawMessage, bool) {
+func (c *LocalClient) fetchCLI(ctx context.Context) (json.RawMessage, time.Time, bool) {
 	if c.cli != nil && ctx.Err() == nil {
-		if raw, ok := c.cli.cachedOrStart(); ok {
-			c.selectSource(true)
-			return raw, true
+		if raw, fetchedAt, ok := c.cli.cachedOrStartAt(); ok {
+			c.selectSource(true, fetchedAt)
+			return raw, fetchedAt, true
 		}
 	}
-	c.selectSource(false)
-	return nil, false
+	c.selectSource(false, time.Time{})
+	return nil, time.Time{}, false
 }
 
-func (c *LocalClient) selectSource(cli bool) {
+func (c *LocalClient) selectSource(cli bool, fetchedAt time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.usingCLI = cli && c.cli != nil
+	c.quotaFetchedAt = fetchedAt
 	if cli {
 		c.current = nil
 		c.tier = ""
 	}
+}
+
+// QuotaFetchedAt is the measurement time when a cached CLI response served it.
+// A zero value means the IDE response was obtained during this refresh.
+func (c *LocalClient) QuotaFetchedAt() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.quotaFetchedAt
 }
 
 func (c *LocalClient) Source() string {

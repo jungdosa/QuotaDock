@@ -56,6 +56,11 @@ type cliClient struct {
 // cachedOrStart never waits for a CLI process or its safety-state mutex.
 // The process owns its own deadline and publishes only a completed result.
 func (c *cliClient) cachedOrStart() (json.RawMessage, bool) {
+	raw, _, ok := c.cachedOrStartAt()
+	return raw, ok
+}
+
+func (c *cliClient) cachedOrStartAt() (json.RawMessage, time.Time, bool) {
 	c.asyncMu.Lock()
 	defer c.asyncMu.Unlock()
 	now := c.now()
@@ -67,9 +72,9 @@ func (c *cliClient) cachedOrStart() (json.RawMessage, bool) {
 		go c.fetchInBackground(ctx, cancel)
 	}
 	if c.asyncResult == nil || now.Sub(c.asyncSuccess) >= cliCacheLifetime {
-		return nil, false
+		return nil, time.Time{}, false
 	}
-	return append(json.RawMessage(nil), c.asyncResult...), true
+	return append(json.RawMessage(nil), c.asyncResult...), c.asyncSuccess, true
 }
 
 func (c *cliClient) fetchInBackground(ctx context.Context, cancel context.CancelFunc) {

@@ -71,6 +71,29 @@ func sampleState() ViewState {
 	}}
 }
 
+func TestAntigravityConnectionDetailUsesMeasurementTime(t *testing.T) {
+	measuredAt := time.Date(2026, 7, 25, 13, 2, 0, 0, time.Local)
+	controller := NewController(provider.Coordinator{Providers: map[model.ProviderID]model.Provider{
+		model.ProviderAntigravity: phase2Provider{
+			id:       model.ProviderAntigravity,
+			snapshot: model.UsageSnapshot{Provider: model.ProviderAntigravity, FetchedAt: measuredAt},
+		},
+	}}, settings.Default())
+	state := controller.Refresh(context.Background())
+	lane := state.Lanes[2]
+	if !lane.FetchedAt.Equal(measuredAt) {
+		t.Fatalf("Antigravity lane measurement time=%s, want %s", lane.FetchedAt, measuredAt)
+	}
+	v, window := newTestView(t)
+	defer window.Close()
+	v.SetState(state)
+	details := v.connectionDetailParts(lane)
+	last := details[len(details)-1]
+	if !strings.Contains(last, v.formatTimestamp(measuredAt)) || strings.Contains(last, v.formatTimestamp(state.LastRefresh)) {
+		t.Fatalf("Antigravity detail shows refresh time instead of measurement time: %q", last)
+	}
+}
+
 func newTestView(t *testing.T) (*View, fyne.Window) {
 	return newTestViewWithActions(t, Actions{})
 }
