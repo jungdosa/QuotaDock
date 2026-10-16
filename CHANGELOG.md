@@ -7,6 +7,36 @@ plus checksums for its binaries.
 Versions follow [Semantic Versioning](https://semver.org/). The project reaches 1.0.0 once
 Windows feature verification is finished.
 
+## [0.7.77] — 2026-10-16
+
+This release accumulates the work since 0.7.59.
+
+### Added
+
+- The first Claude account gets its own browser profile when Auth is selected explicitly, so
+  signing in to another Claude account does not replace its session. Existing profile data is
+  migrated when applicable.
+- Each Codex account can select the shared CLI login or an isolated browser sign-in. Only one
+  account uses the shared CLI login at a time.
+- First-run and connection cards explain missing installations, sign-in and reconnection, with
+  copy and rescan actions.
+- Runtime diagnostics record CPU time, heap size and goroutine count every ten minutes.
+
+### Fixed
+
+- Antigravity recognizes the current IDE language-server installation path and can use its
+  local quota endpoint again.
+- The Antigravity connection detail shows when the quota was actually measured, including
+  while a cached CLI reading is being displayed.
+- The widget schedules redraws after a monitor reconnect or display change to recover a blank
+  window.
+- Windows release builds reject a version that differs from `FyneApp.toml` and fail if the
+  installer compiler or Setup artifact is missing.
+
+### Changed
+
+- Connection settings use a wider, responsive layout, with more compact controls and guides.
+
 ## [0.7.59] — 2026-10-06
 
 ### Fixed
